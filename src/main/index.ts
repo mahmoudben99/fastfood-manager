@@ -1,10 +1,19 @@
 import { app, BrowserWindow, shell, protocol, dialog } from 'electron'
 import { join } from 'path'
+import { writeFileSync } from 'fs'
 import { autoUpdater } from 'electron-updater'
 import { initDatabase, closeDatabase } from './database/connection'
 import { registerAllHandlers } from './ipc'
 import { startBot, stopBot } from './telegram/bot'
 import { settingsRepo } from './database/repositories/settings.repo'
+
+// Catch any uncaught errors and write to a log file
+process.on('uncaughtException', (err) => {
+  const logPath = join(app.getPath('userData'), 'crash.log')
+  writeFileSync(logPath, `${new Date().toISOString()}\n${err.stack || err.message}\n`)
+  dialog.showErrorBox('Fast Food Manager Error', err.message)
+  app.exit(1)
+})
 
 let mainWindow: BrowserWindow | null = null
 
@@ -88,7 +97,9 @@ function setupAutoUpdater(): void {
 
   // Check for updates silently after 5 seconds
   setTimeout(() => {
-    autoUpdater.checkForUpdates().catch(() => {})
+    autoUpdater.checkForUpdates().catch(() => {
+      // Silently fail — app-update.yml missing in dev or no internet
+    })
   }, 5000)
 }
 

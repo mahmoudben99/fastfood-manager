@@ -1,11 +1,10 @@
-import { Bot } from 'grammy'
 import { settingsRepo } from '../database/repositories/settings.repo'
 import { ordersRepo } from '../database/repositories/orders.repo'
 import { stockRepo } from '../database/repositories/stock.repo'
 import { workersRepo } from '../database/repositories/workers.repo'
 import { analyticsRepo } from '../database/repositories/analytics.repo'
 
-let bot: Bot | null = null
+let bot: any = null
 let isRunning = false
 
 export function startBot(): { success: boolean; error?: string } {
@@ -21,6 +20,7 @@ export function startBot(): { success: boolean; error?: string } {
   }
 
   try {
+    const { Bot } = require('grammy')
     bot = new Bot(token)
 
     // Security: only respond to authorized chat ID
@@ -67,7 +67,7 @@ function getCurrency(): string {
   return settingsRepo.get('currency_symbol') || '$'
 }
 
-function registerCommands(bot: Bot): void {
+function registerCommands(bot: any): void {
   bot.command('start', async (ctx) => {
     await ctx.reply('Welcome! Use /help to see available commands.')
   })
