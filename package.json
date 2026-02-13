@@ -1,0 +1,49 @@
+{
+  "name": "fastfood-manager",
+  "version": "1.0.0",
+  "description": "Fast Food Restaurant Management System",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "postinstall": "electron-builder install-app-deps",
+    "package": "electron-vite build && electron-builder --win --config",
+    "lint": "eslint . --ext .ts,.tsx"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.18",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.4",
+    "autoprefixer": "^10.4.24",
+    "electron": "^33.4.11",
+    "electron-builder": "^26.7.0",
+    "electron-vite": "^5.0.0",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.18",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^12.6.2",
+    "date-fns": "^4.1.0",
+    "electron-updater": "^6.7.3",
+    "grammy": "^1.40.0",
+    "i18next": "^25.8.6",
+    "lucide-react": "^0.563.0",
+    "node-thermal-printer": "^4.6.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-i18next": "^16.5.4",
+    "react-router-dom": "^7.13.0",
+    "recharts": "^3.7.0",
+    "xlsx": "^0.18.5",
+    "zustand": "^5.0.11"
+  }
+}

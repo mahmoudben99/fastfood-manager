@@ -1,0 +1,28 @@
+appId: com.fastfood.manager
+productName: Fast Food Manager
+directories:
+  buildResources: build
+  output: dist
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.*'
+  - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+asarUnpack:
+  - '**/*.node'
+  - '**/better-sqlite3/**'
+win:
+  target: nsis
+  icon: build/icon.ico
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  artifactName: FastFoodManager-Setup-${version}.${ext}
+extraResources:
+  - from: build/
+    to: resources/
+publish:
+  provider: github
+  owner: mahmoudben99
+  repo: fastfood-manager

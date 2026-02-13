@@ -1,0 +1,9 @@
+node_modules
+dist
+out
+*.db
+.DS_Store
+nul
+build-log.txt
+_test_electron.js
+*.zip

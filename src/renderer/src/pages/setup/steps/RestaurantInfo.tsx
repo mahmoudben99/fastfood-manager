@@ -1,0 +1,114 @@
+import { useTranslation } from 'react-i18next'
+import { Upload, Image } from 'lucide-react'
+import { Input } from '../../../components/ui/Input'
+import { Select } from '../../../components/ui/Select'
+import { Button } from '../../../components/ui/Button'
+import type { SetupData } from '../SetupWizard'
+
+interface Props {
+  data: SetupData
+  updateData: (partial: Partial<SetupData>) => void
+}
+
+const currencies = [
+  { value: 'DZD', label: 'DZD - Algerian Dinar (DA)', symbol: 'DA' },
+  { value: 'USD', label: 'USD - US Dollar ($)', symbol: '$' },
+  { value: 'EUR', label: 'EUR - Euro (EUR)', symbol: 'EUR' },
+  { value: 'GBP', label: 'GBP - British Pound (£)', symbol: '£' },
+  { value: 'MAD', label: 'MAD - Moroccan Dirham (DH)', symbol: 'DH' },
+  { value: 'TND', label: 'TND - Tunisian Dinar (DT)', symbol: 'DT' },
+  { value: 'SAR', label: 'SAR - Saudi Riyal (SR)', symbol: 'SR' },
+  { value: 'AED', label: 'AED - UAE Dirham (AED)', symbol: 'AED' },
+  { value: 'TRY', label: 'TRY - Turkish Lira (TL)', symbol: 'TL' }
+]
+
+export function RestaurantInfo({ data, updateData }: Props) {
+  const { t } = useTranslation()
+
+  const handleUploadLogo = async () => {
+    const path = await window.api.settings.uploadLogo()
+    if (path) {
+      updateData({ logoPath: path })
+    }
+  }
+
+  const handleCurrencyChange = (value: string) => {
+    const curr = currencies.find((c) => c.value === value)
+    updateData({
+      currency: value,
+      currencySymbol: curr?.symbol || value
+    })
+  }
+
+  const logoSrc = data.logoPath
+    ? `app-image://${data.logoPath}`
+    : ''
+
+  return (
+    <div className="space-y-6">
+      <div className="text-center">
+        <h2 className="text-2xl font-bold text-gray-900">{t('setup.restaurant.title')}</h2>
+      </div>
+
+      <div className="bg-white rounded-xl p-6 space-y-5 shadow-sm">
+        {/* Logo */}
+        <div className="flex flex-col items-center">
+          <div
+            className="w-24 h-24 rounded-xl bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center mb-3 overflow-hidden cursor-pointer hover:border-orange-400 transition-colors"
+            onClick={handleUploadLogo}
+          >
+            {data.logoPath ? (
+              <img
+                src={logoSrc}
+                alt="Logo"
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <Image className="h-8 w-8 text-gray-400" />
+            )}
+          </div>
+          <Button variant="ghost" size="sm" onClick={handleUploadLogo}>
+            <Upload className="h-4 w-4" />
+            {data.logoPath ? t('setup.restaurant.changeLogo') : t('setup.restaurant.uploadLogo')}
+          </Button>
+        </div>
+
+        <Input
+          label={t('setup.restaurant.name')}
+          value={data.restaurantName}
+          onChange={(e) => updateData({ restaurantName: e.target.value })}
+          placeholder={t('setup.restaurant.namePlaceholder')}
+        />
+
+        <div className="grid grid-cols-2 gap-4">
+          <Input
+            label={t('setup.restaurant.phone')}
+            value={data.phone}
+            onChange={(e) => updateData({ phone: e.target.value })}
+            placeholder={t('setup.restaurant.phonePlaceholder')}
+          />
+          <Input
+            label={t('setup.restaurant.phone2')}
+            value={data.phone2}
+            onChange={(e) => updateData({ phone2: e.target.value })}
+            placeholder={t('setup.restaurant.phone2Placeholder')}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <Select
+            label={t('setup.restaurant.currency')}
+            value={data.currency}
+            onChange={(e) => handleCurrencyChange(e.target.value)}
+            options={currencies.map((c) => ({ value: c.value, label: c.label }))}
+          />
+          <Input
+            label={t('setup.restaurant.currencySymbol')}
+            value={data.currencySymbol}
+            onChange={(e) => updateData({ currencySymbol: e.target.value })}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
