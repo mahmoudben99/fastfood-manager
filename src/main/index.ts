@@ -88,7 +88,7 @@ function setupAutoUpdater(): void {
   })
 
   ipcMain.handle('updater:install', () => {
-    autoUpdater.quitAndInstall()
+    autoUpdater.quitAndInstall(true, true)
   })
 
   ipcMain.handle('updater:check', async () => {
