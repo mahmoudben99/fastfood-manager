@@ -8,6 +8,7 @@ export interface MenuItem {
   price: number
   category_id: number
   image_path: string | null
+  emoji: string | null
   is_active: number
   created_at: string
   updated_at: string
@@ -32,6 +33,7 @@ export interface CreateMenuItemInput {
   price: number
   category_id: number
   image_path?: string
+  emoji?: string
   ingredients?: { stock_item_id: number; quantity: number; unit: string }[]
 }
 
@@ -83,8 +85,8 @@ export const menuRepo = {
     const transaction = getDb().transaction(() => {
       const result = getDb()
         .prepare(
-          `INSERT INTO menu_items (name, name_ar, name_fr, price, category_id, image_path)
-           VALUES (?, ?, ?, ?, ?, ?)`
+          `INSERT INTO menu_items (name, name_ar, name_fr, price, category_id, image_path, emoji)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           input.name,
@@ -92,7 +94,8 @@ export const menuRepo = {
           input.name_fr ?? null,
           input.price,
           input.category_id,
-          input.image_path ?? null
+          input.image_path ?? null,
+          input.emoji ?? null
         )
 
       const menuItemId = result.lastInsertRowid as number
@@ -125,7 +128,7 @@ export const menuRepo = {
       getDb()
         .prepare(
           `UPDATE menu_items SET name = ?, name_ar = ?, name_fr = ?, price = ?,
-           category_id = ?, image_path = ?, updated_at = datetime('now')
+           category_id = ?, image_path = ?, emoji = ?, updated_at = datetime('now')
            WHERE id = ?`
         )
         .run(
@@ -135,6 +138,7 @@ export const menuRepo = {
           input.price ?? current.price,
           input.category_id ?? current.category_id,
           input.image_path ?? current.image_path,
+          input.emoji !== undefined ? input.emoji : current.emoji,
           id
         )
 

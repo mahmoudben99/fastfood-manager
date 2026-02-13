@@ -16,6 +16,7 @@ interface MenuItemData {
   price: number
   category_id: number
   image_path: string | null
+  emoji: string | null
   category_name: string
 }
 
@@ -495,7 +496,7 @@ export function OrderScreen() {
                 onClick={() => handleAddItem(item)}
                 className="bg-white rounded-xl border border-gray-200 p-3 text-start hover:shadow-md hover:border-orange-300 transition-all group"
               >
-                {item.image_path && (
+                {item.image_path ? (
                   <div className="aspect-square rounded-lg bg-gray-100 mb-2 overflow-hidden">
                     <img
                       src={`app-image://${item.image_path}`}
@@ -503,7 +504,11 @@ export function OrderScreen() {
                       className="w-full h-full object-cover"
                     />
                   </div>
-                )}
+                ) : (item.emoji || categories.find(c => c.id === item.category_id)?.icon) ? (
+                  <div className="aspect-square rounded-lg bg-gradient-to-br from-orange-50 to-amber-50 mb-2 flex items-center justify-center">
+                    <span className="text-3xl">{item.emoji || categories.find(c => c.id === item.category_id)?.icon}</span>
+                  </div>
+                ) : null}
                 <h3 className="font-medium text-gray-900 text-sm truncate">
                   {getItemName(item)}
                 </h3>

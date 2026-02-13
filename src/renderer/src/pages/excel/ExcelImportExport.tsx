@@ -17,6 +17,7 @@ Food categories for your menu (e.g., Tacos, Burger, Pizza, Drinks).
 | Name | Category name in English | Yes | "Tacos" |
 | Name_AR | Category name in Arabic | No | "تاكوس" |
 | Name_FR | Category name in French | No | "Tacos" |
+| Emoji | A single emoji representing this category | No | "🌮" |
 
 ## Sheet 2: Menu Items
 Each menu item (food/drink) that customers can order.
@@ -27,7 +28,7 @@ Each menu item (food/drink) that customers can order.
 | Name_FR | Item name in French | No | "Burger Classique" |
 | Price | Selling price (number only, no currency symbol) | Yes | 450 |
 | Category_Name | Must match a name from the Categories sheet exactly | Yes | "Burger" |
-| Image_Filename | Filename of the image (place images in a folder) | No | "classic-burger.jpg" |
+| Emoji | A single emoji representing this item | No | "🍔" |
 
 ## Sheet 3: Stock Items
 Raw ingredients/supplies used to make menu items.
@@ -61,6 +62,13 @@ Links menu items to stock items (what ingredients each dish needs).
 | Quantity | Amount needed per dish | Yes | 0.15 |
 | Unit | Display unit: g (grams), ml (milliliters), unit | Yes | "kg" |
 
+## Emoji Guide
+Use food emojis to visually represent categories and items. Common ones:
+🍔 Burger | 🍕 Pizza | 🌮 Taco | 🥪 Sandwich | 🌯 Wrap | 🥙 Pita
+🍗 Chicken | 🍟 Fries | 🥗 Salad | 🍝 Pasta | 🥘 Rice/Stew | 🍲 Soup
+🧆 Falafel | 🍰 Cake | 🍩 Donut | 🥤 Drink | ☕ Coffee | 🧃 Juice
+🍦 Ice Cream | 🥚 Egg | 🧀 Cheese | 🥩 Steak | 🐟 Fish | 🍣 Sushi
+
 ## Important Notes
 - Fill Categories BEFORE Menu Items (menu items reference categories by name)
 - Fill Stock Items BEFORE Ingredients (ingredients reference stock items by name)
@@ -79,12 +87,12 @@ export function ExcelImportExport() {
     const wb = XLSX.utils.book_new()
 
     // Categories sheet
-    const catHeaders = [['Name', 'Name_AR', 'Name_FR']]
+    const catHeaders = [['Name', 'Name_AR', 'Name_FR', 'Emoji']]
     const catWs = XLSX.utils.aoa_to_sheet(catHeaders)
     XLSX.utils.book_append_sheet(wb, catWs, 'Categories')
 
     // Menu Items sheet
-    const menuHeaders = [['Name', 'Name_AR', 'Name_FR', 'Price', 'Category_Name', 'Image_Filename']]
+    const menuHeaders = [['Name', 'Name_AR', 'Name_FR', 'Price', 'Category_Name', 'Emoji']]
     const menuWs = XLSX.utils.aoa_to_sheet(menuHeaders)
     XLSX.utils.book_append_sheet(wb, menuWs, 'Menu Items')
 
@@ -117,13 +125,13 @@ export function ExcelImportExport() {
     const wb = XLSX.utils.book_new()
 
     // Categories
-    const catData = categories.map((c: any) => ({ Name: c.name, Name_AR: c.name_ar || '', Name_FR: c.name_fr || '' }))
+    const catData = categories.map((c: any) => ({ Name: c.name, Name_AR: c.name_ar || '', Name_FR: c.name_fr || '', Emoji: c.icon || '' }))
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catData), 'Categories')
 
     // Menu Items
     const menuData = menuItems.map((m: any) => ({
       Name: m.name, Name_AR: m.name_ar || '', Name_FR: m.name_fr || '',
-      Price: m.price, Category_Name: m.category_name || '', Image_Filename: ''
+      Price: m.price, Category_Name: m.category_name || '', Emoji: m.emoji || ''
     }))
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(menuData), 'Menu Items')
 
@@ -175,7 +183,8 @@ export function ExcelImportExport() {
               for (const cat of cats) {
                 if (cat.Name) {
                   await window.api.categories.create({
-                    name: cat.Name, name_ar: cat.Name_AR, name_fr: cat.Name_FR
+                    name: cat.Name, name_ar: cat.Name_AR, name_fr: cat.Name_FR,
+                    icon: cat.Emoji || undefined
                   })
                   imported++
                 }
@@ -213,7 +222,8 @@ export function ExcelImportExport() {
                   if (cat) {
                     await window.api.menu.create({
                       name: m.Name, name_ar: m.Name_AR, name_fr: m.Name_FR,
-                      price: Number(m.Price), category_id: cat.id
+                      price: Number(m.Price), category_id: cat.id,
+                      emoji: m.Emoji || undefined
                     })
                     imported++
                   }

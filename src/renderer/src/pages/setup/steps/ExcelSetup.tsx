@@ -15,6 +15,7 @@ Send this guide along with the empty template to an AI assistant and it will hel
 | Name | Yes | "Tacos" |
 | Name_AR | No | "تاكوس" |
 | Name_FR | No | "Tacos" |
+| Emoji | No | "🌮" |
 
 ## Sheet 2: Menu Items
 | Column | Required | Example |
@@ -24,6 +25,7 @@ Send this guide along with the empty template to an AI assistant and it will hel
 | Name_FR | No | "Burger Classique" |
 | Price | Yes | 450 |
 | Category_Name | Yes | "Burger" |
+| Emoji | No | "🍔" |
 
 ## Sheet 3: Stock Items
 | Column | Required | Example |
@@ -72,10 +74,10 @@ export function ExcelSetup({ onImported }: Props) {
   const exportTemplate = () => {
     const wb = XLSX.utils.book_new()
 
-    const catWs = XLSX.utils.aoa_to_sheet([['Name', 'Name_AR', 'Name_FR']])
+    const catWs = XLSX.utils.aoa_to_sheet([['Name', 'Name_AR', 'Name_FR', 'Emoji']])
     XLSX.utils.book_append_sheet(wb, catWs, 'Categories')
 
-    const menuWs = XLSX.utils.aoa_to_sheet([['Name', 'Name_AR', 'Name_FR', 'Price', 'Category_Name']])
+    const menuWs = XLSX.utils.aoa_to_sheet([['Name', 'Name_AR', 'Name_FR', 'Price', 'Category_Name', 'Emoji']])
     XLSX.utils.book_append_sheet(wb, menuWs, 'Menu Items')
 
     const stockWs = XLSX.utils.aoa_to_sheet([['Name', 'Name_AR', 'Name_FR', 'Unit_Type (kg/liter/unit)', 'Initial_Quantity', 'Price_Per_Unit', 'Alert_Threshold']])
@@ -120,7 +122,8 @@ export function ExcelSetup({ onImported }: Props) {
               for (const cat of cats) {
                 if (cat.Name) {
                   await window.api.categories.create({
-                    name: cat.Name, name_ar: cat.Name_AR, name_fr: cat.Name_FR
+                    name: cat.Name, name_ar: cat.Name_AR, name_fr: cat.Name_FR,
+                    icon: cat.Emoji || undefined
                   })
                   imported++
                 }
@@ -158,7 +161,8 @@ export function ExcelSetup({ onImported }: Props) {
                   if (cat) {
                     await window.api.menu.create({
                       name: m.Name, name_ar: m.Name_AR, name_fr: m.Name_FR,
-                      price: Number(m.Price), category_id: cat.id
+                      price: Number(m.Price), category_id: cat.id,
+                      emoji: m.Emoji || undefined
                     })
                     imported++
                   }

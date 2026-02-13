@@ -27,6 +27,7 @@ export function MenuManagement() {
   const [formPrice, setFormPrice] = useState('')
   const [formCategory, setFormCategory] = useState('')
   const [formImagePath, setFormImagePath] = useState('')
+  const [formEmoji, setFormEmoji] = useState('')
   const [formIngredients, setFormIngredients] = useState<
     { stock_item_id: number; quantity: number; unit: string }[]
   >([])
@@ -69,6 +70,7 @@ export function MenuManagement() {
       setFormPrice(String(full.price))
       setFormCategory(String(full.category_id))
       setFormImagePath(full.image_path || '')
+      setFormEmoji(full.emoji || '')
       setFormIngredients(
         full.ingredients?.map((i: any) => ({
           stock_item_id: i.stock_item_id,
@@ -84,6 +86,7 @@ export function MenuManagement() {
       setFormPrice('')
       setFormCategory(categories[0]?.id?.toString() || '')
       setFormImagePath('')
+      setFormEmoji('')
       setFormIngredients([])
     }
     setShowForm(true)
@@ -98,6 +101,7 @@ export function MenuManagement() {
       price: Number(formPrice),
       category_id: Number(formCategory),
       image_path: formImagePath || undefined,
+      emoji: formEmoji || undefined,
       ingredients: formIngredients
     }
 
@@ -182,7 +186,7 @@ export function MenuManagement() {
               </div>
             ) : (
               <div className="aspect-video rounded-lg bg-gradient-to-br from-orange-50 to-amber-50 mb-3 flex items-center justify-center">
-                <span className="text-4xl">{categories.find((c: any) => c.id === item.category_id)?.icon || '🍔'}</span>
+                <span className="text-4xl">{item.emoji || categories.find((c: any) => c.id === item.category_id)?.icon || '🍔'}</span>
               </div>
             )}
             <h3 className="font-semibold text-gray-900">{getName(item)}</h3>
@@ -247,6 +251,21 @@ export function MenuManagement() {
               onChange={(e) => setFormCategory(e.target.value)}
               options={categories.map((c: any) => ({ value: String(c.id), label: `${c.icon ? c.icon + ' ' : ''}${getName(c)}` }))}
             />
+          </div>
+
+          {/* Emoji */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Emoji</label>
+            <div className="flex items-center gap-2">
+              <input
+                value={formEmoji}
+                onChange={(e) => setFormEmoji(e.target.value)}
+                placeholder="🍔"
+                className="w-16 h-10 border rounded-lg text-center text-xl focus:outline-none focus:ring-2 focus:ring-orange-500"
+                maxLength={2}
+              />
+              <span className="text-xs text-gray-400">Paste or type a food emoji</span>
+            </div>
           </div>
 
           {/* Image */}
