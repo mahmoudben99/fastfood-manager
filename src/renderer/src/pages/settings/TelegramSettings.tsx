@@ -10,6 +10,7 @@ export function TelegramSettings() {
   const [token, setToken] = useState('')
   const [chatId, setChatId] = useState('')
   const [autoStart, setAutoStart] = useState(false)
+  const [orderNotifications, setOrderNotifications] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
   const [showToken, setShowToken] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -25,11 +26,12 @@ export function TelegramSettings() {
     setToken(config.token)
     setChatId(config.chatId)
     setAutoStart(config.autoStart)
+    setOrderNotifications(config.orderNotifications)
     setIsRunning(config.isRunning)
   }
 
   const saveConfig = async () => {
-    await window.api.telegram.saveConfig({ token, chatId, autoStart })
+    await window.api.telegram.saveConfig({ token, chatId, autoStart, orderNotifications })
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -38,7 +40,7 @@ export function TelegramSettings() {
     setStartError('')
     setLoading(true)
     // Save config first
-    await window.api.telegram.saveConfig({ token, chatId, autoStart })
+    await window.api.telegram.saveConfig({ token, chatId, autoStart, orderNotifications })
     const result = await window.api.telegram.start()
     if (result.success) {
       setIsRunning(true)
@@ -124,6 +126,28 @@ export function TelegramSettings() {
               defaultValue: 'Auto-start bot when app launches'
             })}
           </span>
+        </label>
+
+        {/* Order Notifications */}
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={orderNotifications}
+            onChange={(e) => setOrderNotifications(e.target.checked)}
+            className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+          />
+          <div>
+            <span className="text-sm text-gray-700">
+              {t('settings.telegramOrderNotify', {
+                defaultValue: 'Send order notifications'
+              })}
+            </span>
+            <p className="text-xs text-gray-400">
+              {t('settings.telegramOrderNotifyDesc', {
+                defaultValue: 'Get a Telegram message every time a new order is placed'
+              })}
+            </p>
+          </div>
         </label>
 
         {/* Buttons */}

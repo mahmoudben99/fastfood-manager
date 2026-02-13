@@ -111,18 +111,26 @@ const api = {
     removePath: (path: string) => ipcRenderer.invoke('backup:removePath', path),
     createNow: () => ipcRenderer.invoke('backup:createNow'),
     restore: () => ipcRenderer.invoke('backup:restore'),
-    listAvailable: () => ipcRenderer.invoke('backup:listAvailable')
+    listAvailable: () => ipcRenderer.invoke('backup:listAvailable'),
+    getSchedule: () => ipcRenderer.invoke('backup:getSchedule'),
+    setSchedule: (config: { enabled: boolean; time: string }) =>
+      ipcRenderer.invoke('backup:setSchedule', config)
   },
   printer: {
     getPrinters: () => ipcRenderer.invoke('printer:getPrinters'),
     printReceipt: (orderId: number) => ipcRenderer.invoke('printer:printReceipt', orderId),
     printKitchen: (orderId: number) => ipcRenderer.invoke('printer:printKitchen', orderId),
+    previewReceipt: (orderId: number) => ipcRenderer.invoke('printer:previewReceipt', orderId),
     testPrint: () => ipcRenderer.invoke('printer:testPrint')
   },
   telegram: {
     getConfig: () => ipcRenderer.invoke('telegram:getConfig'),
-    saveConfig: (config: { token: string; chatId: string; autoStart: boolean }) =>
-      ipcRenderer.invoke('telegram:saveConfig', config),
+    saveConfig: (config: {
+      token: string
+      chatId: string
+      autoStart: boolean
+      orderNotifications: boolean
+    }) => ipcRenderer.invoke('telegram:saveConfig', config),
     start: () => ipcRenderer.invoke('telegram:start'),
     stop: () => ipcRenderer.invoke('telegram:stop'),
     status: () => ipcRenderer.invoke('telegram:status')
@@ -132,16 +140,29 @@ const api = {
   },
   updater: {
     onUpdateAvailable: (cb: (version: string) => void) => {
-      ipcRenderer.on('updater:update-available', (_, version) => cb(version))
+      const handler = (_: any, version: string) => cb(version)
+      ipcRenderer.on('updater:update-available', handler)
+      return () => { ipcRenderer.removeListener('updater:update-available', handler) }
     },
     onDownloadProgress: (cb: (percent: number) => void) => {
-      ipcRenderer.on('updater:download-progress', (_, percent) => cb(percent))
+      const handler = (_: any, percent: number) => cb(percent)
+      ipcRenderer.on('updater:download-progress', handler)
+      return () => { ipcRenderer.removeListener('updater:download-progress', handler) }
     },
     onUpdateDownloaded: (cb: () => void) => {
-      ipcRenderer.on('updater:update-downloaded', () => cb())
+      const handler = () => cb()
+      ipcRenderer.on('updater:update-downloaded', handler)
+      return () => { ipcRenderer.removeListener('updater:update-downloaded', handler) }
+    },
+    onUpdateError: (cb: (msg: string) => void) => {
+      const handler = (_: any, msg: string) => cb(msg)
+      ipcRenderer.on('updater:error', handler)
+      return () => { ipcRenderer.removeListener('updater:error', handler) }
     },
     onUpToDate: (cb: () => void) => {
-      ipcRenderer.on('updater:up-to-date', () => cb())
+      const handler = () => cb()
+      ipcRenderer.on('updater:up-to-date', handler)
+      return () => { ipcRenderer.removeListener('updater:up-to-date', handler) }
     },
     check: () => ipcRenderer.invoke('updater:check'),
     download: () => ipcRenderer.invoke('updater:download'),

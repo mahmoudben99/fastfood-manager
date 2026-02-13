@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { FolderPlus, Trash2, HardDrive, RotateCcw, Check, AlertCircle } from 'lucide-react'
+import { FolderPlus, Trash2, HardDrive, RotateCcw, Check, AlertCircle, Clock } from 'lucide-react'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 
@@ -11,17 +11,30 @@ export function BackupRestore() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [loading, setLoading] = useState(false)
 
+  // Scheduled backup
+  const [schedEnabled, setSchedEnabled] = useState(false)
+  const [schedTime, setSchedTime] = useState('23:00')
+
   useEffect(() => {
     loadData()
   }, [])
 
   const loadData = async () => {
-    const [p, b] = await Promise.all([
+    const [p, b, sched] = await Promise.all([
       window.api.backup.getPaths(),
-      window.api.backup.listAvailable()
+      window.api.backup.listAvailable(),
+      window.api.backup.getSchedule()
     ])
     setPaths(p)
     setBackups(b)
+    setSchedEnabled(sched.enabled)
+    setSchedTime(sched.time)
+  }
+
+  const saveSchedule = async (enabled: boolean, time: string) => {
+    setSchedEnabled(enabled)
+    setSchedTime(time)
+    await window.api.backup.setSchedule({ enabled, time })
   }
 
   const addPath = async () => {
@@ -106,6 +119,35 @@ export function BackupRestore() {
               {t('backup.backupNow')}
             </Button>
           </div>
+        </Card>
+
+        {/* Scheduled Backup */}
+        <Card>
+          <div className="flex items-center gap-2 mb-4">
+            <Clock className="h-5 w-5 text-blue-500" />
+            <h3 className="font-semibold">{t('backup.scheduledBackup')}</h3>
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer mb-3">
+            <input
+              type="checkbox"
+              checked={schedEnabled}
+              onChange={(e) => saveSchedule(e.target.checked, schedTime)}
+              className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+            />
+            <span className="text-sm text-gray-700">{t('backup.enableSchedule')}</span>
+          </label>
+          {schedEnabled && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">{t('backup.backupAt')}</span>
+              <input
+                type="time"
+                value={schedTime}
+                onChange={(e) => saveSchedule(true, e.target.value)}
+                className="border rounded-lg px-3 py-1.5 text-sm"
+              />
+            </div>
+          )}
+          <p className="text-xs text-gray-400 mt-2">{t('backup.scheduleHint')}</p>
         </Card>
 
         {/* Restore */}

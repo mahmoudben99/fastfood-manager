@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Lock, ShoppingCart, Trash2, Minus, Plus, Phone, MessageSquare, Check, Printer, Moon, Sun, Search, ClipboardList, X, Hash, Pencil, AlertTriangle, LogOut } from 'lucide-react'
@@ -105,11 +105,80 @@ export function OrderScreen() {
     if (cats.length > 0) setActiveCategory(cats[0].id)
   }
 
+  const searchRef = useRef<HTMLInputElement>(null)
+
   const loadOngoingCount = async () => {
     const orders = await window.api.orders.getToday()
     const count = orders.filter((o: any) => o.status === 'preparing' || o.status === 'pending').length
     setOngoingCount(count)
   }
+
+  // Keyboard shortcuts
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    // Don't fire shortcuts when typing in input fields (except for F-keys and Escape)
+    const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)
+
+    if (e.key === 'Escape') {
+      if (noteModal) { setNoteModal(null); return }
+      if (priceModal) { setPriceModal(null); return }
+      if (orderSuccess) { setOrderSuccess(null); return }
+      if (cancelConfirm) { setCancelConfirm(null); return }
+      if (logoutModal) { setLogoutModal(false); return }
+      if (showHistory) { setShowHistory(false); setSelectedOrder(null); setEditMode(false); return }
+      if (store.items.length > 0) { store.clearOrder(); return }
+      return
+    }
+
+    if (e.key === 'F1') {
+      e.preventDefault()
+      const types = ['local', 'takeout', 'delivery'] as const
+      const idx = types.indexOf(store.orderType as any)
+      store.setOrderType(types[(idx + 1) % 3])
+      return
+    }
+
+    if (e.key === 'F2') {
+      e.preventDefault()
+      if (store.items.length > 0 && !placing) {
+        handlePlaceOrder()
+      }
+      return
+    }
+
+    if (e.key === 'F3') {
+      e.preventDefault()
+      if (!showHistory) openHistory()
+      return
+    }
+
+    if (e.key === 'F4') {
+      e.preventDefault()
+      searchRef.current?.focus()
+      return
+    }
+
+    if (e.key === 'Delete' && !isInput) {
+      e.preventDefault()
+      store.clearOrder()
+      return
+    }
+
+    // Number keys 1-9 to select category (when not in input)
+    if (!isInput && e.key >= '1' && e.key <= '9' && !e.ctrlKey && !e.altKey) {
+      const idx = parseInt(e.key) - 1
+      if (idx === 0) {
+        setActiveCategory(null) // "All"
+      } else if (idx - 1 < categories.length) {
+        setActiveCategory(categories[idx - 1].id)
+      }
+      return
+    }
+  }, [store, noteModal, priceModal, orderSuccess, cancelConfirm, logoutModal, showHistory, placing, categories])
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [handleKeyDown])
 
   const handleLogout = async () => {
     if (!logoutPassword.trim()) return
@@ -380,10 +449,11 @@ export function OrderScreen() {
           <div className="relative">
             <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
+              ref={searchRef}
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={t('menu.search')}
+              placeholder={`${t('menu.search')} (F4)`}
               className="w-full ps-10 pe-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
             />
           </div>
@@ -606,7 +676,7 @@ export function OrderScreen() {
             className="w-full"
             size="lg"
           >
-            {t('orders.placeOrder')}
+            {t('orders.placeOrder')} (F2)
           </Button>
         </div>
       </div>

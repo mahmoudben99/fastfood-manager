@@ -13,7 +13,9 @@
     "restartNow": "Redemarrer et mettre a jour",
     "forceTitle": "Mise a jour critique requise",
     "forceDesc": "La version {{version}} contient des correctifs de securite importants et doit etre installee",
-    "forceDownloading": "Telechargement de la mise a jour critique... {{progress}}%"
+    "forceDownloading": "Telechargement de la mise a jour critique... {{progress}}%",
+    "errorTitle": "Echec de la mise a jour",
+    "errorDesc": "Impossible de telecharger la mise a jour. Veuillez reessayer plus tard."
   },
   "setup": {
     "title": "Bienvenue ! Configurons votre restaurant",
@@ -119,6 +121,9 @@
     "cancelWarning": "Cela annulera la commande et restaurera le stock. Cette action est irreversible.",
     "confirmCancel": "Oui, annuler",
     "editPrice": "Modifier le prix",
+    "searchOrders": "Rechercher des commandes...",
+    "ordersFound": "{{count}} commandes trouvees",
+    "previewReceipt": "Apercu du recu",
     "status": {
       "pending": "⏳ En attente",
       "preparing": "🔥 En preparation",
@@ -253,7 +258,11 @@
     "restoreConfirm": "Cela remplacera toutes les donnees actuelles. Etes-vous sur ?",
     "success": "Sauvegarde creee avec succes !",
     "restoreSuccess": "Restauration terminee avec succes !",
-    "noPaths": "Aucun dossier de sauvegarde configure"
+    "noPaths": "Aucun dossier de sauvegarde configure",
+    "scheduledBackup": "Sauvegarde programmee",
+    "enableSchedule": "Activer la sauvegarde automatique quotidienne",
+    "backupAt": "Sauvegarder a",
+    "scheduleHint": "Les sauvegardes seront effectuees quotidiennement a l'heure programmee pendant que l'application est ouverte"
   },
   "activation": {
     "title": "Activer Fast Food Manager",
@@ -294,7 +303,19 @@
     "updates": "Mises a jour",
     "currentVersion": "Version actuelle : v{{version}}",
     "checkUpdates": "Rechercher les mises a jour",
-    "upToDate": "Vous utilisez la derniere version"
+    "upToDate": "Vous utilisez la derniere version",
+    "telegramRunning": "En marche",
+    "telegramStopped": "Arrete",
+    "telegramToken": "Token du bot",
+    "telegramTokenPlaceholder": "Collez le token de @BotFather",
+    "telegramChatId": "ID du chat",
+    "telegramChatIdPlaceholder": "Votre ID de chat Telegram",
+    "telegramAutoStart": "Demarrer le bot automatiquement au lancement",
+    "telegramStartBot": "Demarrer le bot",
+    "telegramStopBot": "Arreter le bot",
+    "telegramOrderNotify": "Envoyer les notifications de commandes",
+    "telegramOrderNotifyDesc": "Recevoir un message Telegram a chaque nouvelle commande",
+    "telegramInstructions": "Comment configurer :"
   },
   "common": {
     "save": "Enregistrer",

@@ -1,12 +1,15 @@
 import { ipcMain } from 'electron'
 import { ordersRepo, type CreateOrderInput } from '../database/repositories/orders.repo'
 import { performAutoBackup } from './backup.ipc'
+import { sendOrderNotification } from '../telegram/bot'
 
 export function registerOrdersHandlers(): void {
   ipcMain.handle('orders:create', (_, input: CreateOrderInput) => {
     const order = ordersRepo.create(input)
     // Auto-backup after each order (overwrites today's file)
     performAutoBackup()
+    // Send Telegram notification
+    sendOrderNotification(order)
     return order
   })
 

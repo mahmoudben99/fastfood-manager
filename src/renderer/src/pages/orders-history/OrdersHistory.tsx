@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle, X, Check, Pencil, Minus, Plus, Trash2 } from 'lucide-react'
+import { AlertTriangle, X, Check, Pencil, Minus, Plus, Trash2, Search } from 'lucide-react'
 import { useAppStore } from '../../store/appStore'
 import { Badge } from '../../components/ui/Badge'
 import { Modal } from '../../components/ui/Modal'
@@ -15,6 +15,13 @@ export function OrdersHistory() {
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0])
   const [selectedOrder, setSelectedOrder] = useState<any>(null)
   const [cancelConfirm, setCancelConfirm] = useState<any>(null)
+
+  // Search & filter
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+
+  // Receipt preview
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null)
 
   // Edit state
   const [editMode, setEditMode] = useState(false)
@@ -122,13 +129,34 @@ export function OrdersHistory() {
     return map[status] || 'default'
   }
 
+  const previewReceipt = async (orderId: number) => {
+    const html = await window.api.printer.previewReceipt(orderId)
+    if (html) setPreviewHtml(html)
+  }
+
   const isOngoing = (status: string) => status === 'preparing' || status === 'pending'
+
+  const filteredOrders = useMemo(() => {
+    return orders.filter((order) => {
+      // Status filter
+      if (statusFilter !== 'all' && order.status !== statusFilter) return false
+      // Search by order number, phone, or table
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase()
+        const matchesNumber = String(order.daily_number).includes(q)
+        const matchesPhone = order.customer_phone?.toLowerCase().includes(q)
+        const matchesTable = order.table_number?.toLowerCase().includes(q)
+        if (!matchesNumber && !matchesPhone && !matchesTable) return false
+      }
+      return true
+    })
+  }, [orders, searchQuery, statusFilter])
 
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900 mb-6">{t('nav.ordersHistory')}</h1>
 
-      <div className="flex gap-3 mb-4">
+      <div className="flex flex-wrap gap-3 mb-4">
         <input
           type="date"
           value={startDate}
@@ -142,6 +170,32 @@ export function OrdersHistory() {
           onChange={(e) => setEndDate(e.target.value)}
           className="border rounded-lg px-3 py-2 text-sm"
         />
+
+        <div className="relative">
+          <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={t('orders.searchOrders')}
+            className="ps-10 pe-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 w-48"
+          />
+        </div>
+
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="border rounded-lg px-3 py-2 text-sm"
+        >
+          <option value="all">{t('common.all')}</option>
+          <option value="preparing">{t('orders.status.preparing')}</option>
+          <option value="completed">{t('orders.status.completed')}</option>
+          <option value="cancelled">{t('orders.status.cancelled')}</option>
+        </select>
+
+        <span className="self-center text-sm text-gray-400">
+          {filteredOrders.length} {t('orders.ordersFound')}
+        </span>
       </div>
 
       <div className="bg-white rounded-xl border overflow-hidden">
@@ -157,7 +211,7 @@ export function OrdersHistory() {
             </tr>
           </thead>
           <tbody>
-            {orders.map((order) => (
+            {filteredOrders.map((order) => (
               <tr key={order.id} className="border-b last:border-0 hover:bg-gray-50 cursor-pointer" onClick={() => viewOrder(order.id)}>
                 <td className="px-4 py-3 font-medium">#{order.daily_number}</td>
                 <td className="px-4 py-3 text-gray-500">{order.created_at}</td>
@@ -179,7 +233,7 @@ export function OrdersHistory() {
             ))}
           </tbody>
         </table>
-        {orders.length === 0 && (
+        {filteredOrders.length === 0 && (
           <div className="text-center py-12 text-gray-400">{t('orders.noOrders')}</div>
         )}
       </div>
@@ -304,6 +358,13 @@ export function OrdersHistory() {
                   <Button
                     variant="secondary"
                     size="sm"
+                    onClick={() => previewReceipt(selectedOrder.id)}
+                  >
+                    {t('orders.previewReceipt')}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={() => window.api.printer.printReceipt(selectedOrder.id)}
                   >
                     {t('orders.printReceipt')}
@@ -334,6 +395,28 @@ export function OrdersHistory() {
                   </div>
                 )}
               </>
+            )}
+          </div>
+        </Modal>
+      )}
+
+      {/* Receipt Preview Modal */}
+      {previewHtml && (
+        <Modal isOpen onClose={() => setPreviewHtml(null)} title={t('orders.previewReceipt')} size="sm">
+          <div className="flex justify-center">
+            <div
+              className="bg-white border rounded-lg p-2 shadow-inner max-h-[70vh] overflow-y-auto"
+              dangerouslySetInnerHTML={{ __html: previewHtml }}
+            />
+          </div>
+          <div className="flex gap-2 mt-4">
+            <Button variant="secondary" onClick={() => setPreviewHtml(null)} className="flex-1">
+              {t('common.close')}
+            </Button>
+            {selectedOrder && (
+              <Button onClick={() => { window.api.printer.printReceipt(selectedOrder.id); setPreviewHtml(null) }} className="flex-1">
+                {t('orders.printReceipt')}
+              </Button>
             )}
           </div>
         </Modal>

@@ -136,6 +136,13 @@ export function registerPrinterHandlers(): void {
     return printOrder(orderId, 'kitchen')
   })
 
+  ipcMain.handle('printer:previewReceipt', (_, orderId: number) => {
+    const settings = settingsRepo.getAll()
+    const order = ordersRepo.getById(orderId)
+    if (!order) return null
+    return getReceiptHTML(order, settings, 'receipt')
+  })
+
   ipcMain.handle('printer:testPrint', async () => {
     const settings = settingsRepo.getAll()
     const printerName = settings.printer_name

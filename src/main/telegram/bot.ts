@@ -63,6 +63,37 @@ export function isBotRunning(): boolean {
   return isRunning
 }
 
+export function sendOrderNotification(order: any): void {
+  if (!bot || !isRunning) return
+  const notifyEnabled = settingsRepo.get('telegram_order_notifications') === 'true'
+  if (!notifyEnabled) return
+
+  const chatId = settingsRepo.get('telegram_chat_id')
+  if (!chatId) return
+
+  try {
+    const c = getCurrency()
+    const items = (order.items || [])
+      .map((i: any) => `  ${i.quantity}x ${i.menu_item_name}`)
+      .join('\n')
+
+    const typeEmoji = order.order_type === 'delivery' ? '🛵' : order.order_type === 'takeout' ? '🥡' : '🍽️'
+    const typeName = order.order_type === 'delivery' ? 'Delivery' : order.order_type === 'takeout' ? 'Take Out' : 'At Table'
+
+    let msg = `🔔 *New Order #${order.daily_number}*\n`
+    msg += `${typeEmoji} ${typeName}`
+    if (order.table_number) msg += ` — Table ${order.table_number}`
+    if (order.customer_phone) msg += `\n📞 ${order.customer_phone}`
+    msg += `\n\n${items}\n\n`
+    msg += `💰 *Total: ${Number(order.total || 0).toFixed(2)} ${c}*`
+    if (order.notes) msg += `\n📝 ${order.notes}`
+
+    bot.api.sendMessage(chatId, msg, { parse_mode: 'Markdown' }).catch(() => {})
+  } catch {
+    // Silent fail — don't block order creation
+  }
+}
+
 function getCurrency(): string {
   return settingsRepo.get('currency_symbol') || '$'
 }

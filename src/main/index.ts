@@ -90,6 +90,10 @@ function setupAutoUpdater(): void {
     mainWindow?.webContents.send('updater:up-to-date')
   })
 
+  autoUpdater.on('error', (err) => {
+    mainWindow?.webContents.send('updater:error', err?.message || 'Update error')
+  })
+
   ipcMain.handle('updater:download', () => {
     autoUpdater.downloadUpdate()
   })

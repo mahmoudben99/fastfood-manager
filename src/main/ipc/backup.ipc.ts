@@ -4,6 +4,9 @@ import { join } from 'path'
 import { getDbPath, closeDatabase, initDatabase } from '../database/connection'
 import { settingsRepo } from '../database/repositories/settings.repo'
 
+let scheduledBackupInterval: ReturnType<typeof setInterval> | null = null
+let lastScheduledBackupDate: string | null = null
+
 function getTodayBackupName(): string {
   const today = new Date().toISOString().split('T')[0]
   return `fastfood-backup-${today}.db`
@@ -137,4 +140,54 @@ export function registerBackupHandlers(): void {
 
     return backups.sort((a, b) => b.date.localeCompare(a.date))
   })
+
+  // Scheduled backup settings
+  ipcMain.handle('backup:getSchedule', () => {
+    return {
+      enabled: settingsRepo.get('backup_schedule_enabled') === 'true',
+      time: settingsRepo.get('backup_schedule_time') || '23:00'
+    }
+  })
+
+  ipcMain.handle('backup:setSchedule', (_, config: { enabled: boolean; time: string }) => {
+    settingsRepo.setMultiple({
+      backup_schedule_enabled: config.enabled ? 'true' : 'false',
+      backup_schedule_time: config.time
+    })
+    setupScheduledBackup()
+    return true
+  })
+
+  // Start scheduled backup checker on registration
+  setupScheduledBackup()
+}
+
+export function setupScheduledBackup(): void {
+  if (scheduledBackupInterval) {
+    clearInterval(scheduledBackupInterval)
+    scheduledBackupInterval = null
+  }
+
+  const enabled = settingsRepo.get('backup_schedule_enabled') === 'true'
+  if (!enabled) return
+
+  // Check every minute if it's time for the scheduled backup
+  scheduledBackupInterval = setInterval(() => {
+    try {
+      const schedEnabled = settingsRepo.get('backup_schedule_enabled') === 'true'
+      if (!schedEnabled) return
+
+      const schedTime = settingsRepo.get('backup_schedule_time') || '23:00'
+      const now = new Date()
+      const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+      const today = now.toISOString().split('T')[0]
+
+      if (currentTime === schedTime && lastScheduledBackupDate !== today) {
+        lastScheduledBackupDate = today
+        performAutoBackup()
+      }
+    } catch {
+      // Silent fail
+    }
+  }, 60000) // Check every minute
 }

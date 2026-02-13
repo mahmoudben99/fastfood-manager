@@ -13,7 +13,9 @@
     "restartNow": "Restart & Update",
     "forceTitle": "Critical Update Required",
     "forceDesc": "Version {{version}} contains important security fixes and must be installed",
-    "forceDownloading": "Downloading critical update... {{progress}}%"
+    "forceDownloading": "Downloading critical update... {{progress}}%",
+    "errorTitle": "Update Failed",
+    "errorDesc": "Could not download the update. Please try again later."
   },
   "setup": {
     "title": "Welcome! Let's set up your restaurant",
@@ -119,6 +121,9 @@
     "cancelWarning": "This will cancel the order and restore the stock. This action cannot be undone.",
     "confirmCancel": "Yes, Cancel",
     "editPrice": "Edit Price",
+    "searchOrders": "Search orders...",
+    "ordersFound": "{{count}} orders found",
+    "previewReceipt": "Preview Receipt",
     "status": {
       "pending": "⏳ Pending",
       "preparing": "🔥 Preparing",
@@ -253,7 +258,11 @@
     "restoreConfirm": "This will replace all current data. Are you sure?",
     "success": "Backup created successfully!",
     "restoreSuccess": "Restore completed successfully!",
-    "noPaths": "No backup folders configured"
+    "noPaths": "No backup folders configured",
+    "scheduledBackup": "Scheduled Backup",
+    "enableSchedule": "Enable daily automatic backup",
+    "backupAt": "Backup at",
+    "scheduleHint": "Backups will run daily at the scheduled time while the app is open"
   },
   "activation": {
     "title": "Activate Fast Food Manager",
@@ -294,7 +303,19 @@
     "updates": "Software Updates",
     "currentVersion": "Current version: v{{version}}",
     "checkUpdates": "Check for Updates",
-    "upToDate": "You're running the latest version"
+    "upToDate": "You're running the latest version",
+    "telegramRunning": "Running",
+    "telegramStopped": "Stopped",
+    "telegramToken": "Bot Token",
+    "telegramTokenPlaceholder": "Paste your bot token from @BotFather",
+    "telegramChatId": "Chat ID",
+    "telegramChatIdPlaceholder": "Your Telegram chat ID",
+    "telegramAutoStart": "Auto-start bot when app launches",
+    "telegramStartBot": "Start Bot",
+    "telegramStopBot": "Stop Bot",
+    "telegramOrderNotify": "Send order notifications",
+    "telegramOrderNotifyDesc": "Get a Telegram message every time a new order is placed",
+    "telegramInstructions": "How to set up:"
   },
   "common": {
     "save": "Save",
