@@ -92,3 +92,9 @@ html[dir="rtl"] ::-webkit-scrollbar { direction: rtl; }
   to { transform: translateY(0); opacity: 1; }
 }
 .animate-slide-up { animation: slide-up 0.4s ease-out; }
+
+@keyframes slide-down {
+  from { transform: translate(-50%, -100px); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
+}
+.animate-slide-down { animation: slide-down 0.4s ease-out; }
