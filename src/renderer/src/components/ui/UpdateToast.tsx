@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Download, RefreshCw, X, ArrowDownToLine, ShieldAlert } from 'lucide-react'
+import { Download, RefreshCw, X, ArrowDownToLine } from 'lucide-react'
 
 type UpdateState = 'available' | 'downloading' | 'ready'
 
@@ -10,23 +10,17 @@ export function UpdateToast() {
   const [version, setVersion] = useState('')
   const [progress, setProgress] = useState(0)
   const [dismissed, setDismissed] = useState(false)
-  const [forced, setForced] = useState(false)
 
   useEffect(() => {
-    window.api.updater.onUpdateAvailable((v, isForced) => {
+    window.api.updater.onUpdateAvailable((v) => {
       setVersion(v)
-      setForced(!!isForced)
       setState('available')
       setDismissed(false)
-      // Auto-download forced updates
-      if (isForced) {
-        window.api.updater.download()
-      }
     })
 
     window.api.updater.onDownloadProgress((percent) => {
       setProgress(percent)
-      if (state === 'available') setState('downloading')
+      setState('downloading')
     })
 
     window.api.updater.onUpdateDownloaded(() => {
@@ -46,59 +40,6 @@ export function UpdateToast() {
     window.api.updater.install()
   }
 
-  // Forced update: full-screen blocking overlay
-  if (forced) {
-    return (
-      <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden w-96 animate-slide-up">
-          {/* Progress bar */}
-          {(state === 'downloading' || state === 'available') && (
-            <div className="h-1.5 bg-gray-100">
-              <div
-                className="h-full bg-gradient-to-r from-red-400 to-red-500 transition-all duration-300"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          )}
-
-          <div className="p-6">
-            <div className="flex flex-col items-center text-center">
-              <div className="w-16 h-16 rounded-2xl bg-red-100 flex items-center justify-center mb-4">
-                <ShieldAlert className="h-8 w-8 text-red-600" />
-              </div>
-              <h3 className="text-lg font-bold text-gray-900">
-                {t('update.forceTitle')}
-              </h3>
-              <p className="text-sm text-gray-500 mt-2">
-                {state === 'ready'
-                  ? t('update.readyDesc')
-                  : state === 'downloading'
-                    ? t('update.forceDownloading', { progress })
-                    : t('update.forceDesc', { version })}
-              </p>
-            </div>
-
-            {state === 'ready' && (
-              <button
-                onClick={handleInstall}
-                className="mt-5 w-full py-3 rounded-xl bg-gradient-to-r from-red-500 to-red-600 text-white font-medium hover:from-red-600 hover:to-red-700 transition-all shadow-sm"
-              >
-                {t('update.restartNow')}
-              </button>
-            )}
-
-            {state === 'downloading' && (
-              <div className="mt-4 text-center text-sm text-gray-400">
-                {progress}%
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // Normal update: bottom-right toast
   return (
     <div className="fixed bottom-6 right-6 z-[100] animate-slide-up">
       <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden w-80">
@@ -151,7 +92,7 @@ export function UpdateToast() {
               </p>
             </div>
 
-            {/* Dismiss — only for non-downloading states */}
+            {/* Dismiss */}
             {state !== 'downloading' && (
               <button
                 onClick={() => setDismissed(true)}

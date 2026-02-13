@@ -68,7 +68,14 @@ function setupAutoUpdater(): void {
   autoUpdater.on('update-available', (info) => {
     const notes = typeof info.releaseNotes === 'string' ? info.releaseNotes : ''
     const forced = notes.includes('[FORCE]') || info.releaseName?.includes('[FORCE]')
-    mainWindow?.webContents.send('updater:update-available', info.version, forced)
+
+    if (forced) {
+      // Forced: silently download, will auto-install on next app restart
+      autoUpdater.downloadUpdate()
+    } else {
+      // Normal: notify renderer to show the update toast
+      mainWindow?.webContents.send('updater:update-available', info.version)
+    }
   })
 
   autoUpdater.on('download-progress', (progress) => {

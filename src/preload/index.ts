@@ -131,8 +131,8 @@ const api = {
     clearForImport: () => ipcRenderer.invoke('data:clearForImport')
   },
   updater: {
-    onUpdateAvailable: (cb: (version: string, forced: boolean) => void) => {
-      ipcRenderer.on('updater:update-available', (_, version, forced) => cb(version, forced))
+    onUpdateAvailable: (cb: (version: string) => void) => {
+      ipcRenderer.on('updater:update-available', (_, version) => cb(version))
     },
     onDownloadProgress: (cb: (percent: number) => void) => {
       ipcRenderer.on('updater:download-progress', (_, percent) => cb(percent))
