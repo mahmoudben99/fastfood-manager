@@ -10,7 +10,10 @@
     "readyTitle": "Mise a jour prete",
     "readyDesc": "Redemarrez l'application pour appliquer la mise a jour",
     "downloadNow": "Telecharger maintenant",
-    "restartNow": "Redemarrer et mettre a jour"
+    "restartNow": "Redemarrer et mettre a jour",
+    "forceTitle": "Mise a jour critique requise",
+    "forceDesc": "La version {{version}} contient des correctifs de securite importants et doit etre installee",
+    "forceDownloading": "Telechargement de la mise a jour critique... {{progress}}%"
   },
   "setup": {
     "title": "Bienvenue ! Configurons votre restaurant",
@@ -287,7 +290,11 @@
     "currentPassword": "Mot de passe actuel",
     "newPassword": "Nouveau mot de passe",
     "confirmPassword": "Confirmer le nouveau mot de passe",
-    "saved": "Parametres enregistres !"
+    "saved": "Parametres enregistres !",
+    "updates": "Mises a jour",
+    "updatesDesc": "Verifier si une nouvelle version est disponible",
+    "checkUpdates": "Rechercher les mises a jour",
+    "upToDate": "Vous utilisez la derniere version"
   },
   "common": {
     "save": "Enregistrer",

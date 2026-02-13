@@ -66,7 +66,9 @@ function setupAutoUpdater(): void {
   autoUpdater.autoInstallOnAppQuit = true
 
   autoUpdater.on('update-available', (info) => {
-    mainWindow?.webContents.send('updater:update-available', info.version)
+    const notes = typeof info.releaseNotes === 'string' ? info.releaseNotes : ''
+    const forced = notes.includes('[FORCE]') || info.releaseName?.includes('[FORCE]')
+    mainWindow?.webContents.send('updater:update-available', info.version, forced)
   })
 
   autoUpdater.on('download-progress', (progress) => {
@@ -77,12 +79,25 @@ function setupAutoUpdater(): void {
     mainWindow?.webContents.send('updater:update-downloaded')
   })
 
+  autoUpdater.on('update-not-available', () => {
+    mainWindow?.webContents.send('updater:up-to-date')
+  })
+
   ipcMain.handle('updater:download', () => {
     autoUpdater.downloadUpdate()
   })
 
   ipcMain.handle('updater:install', () => {
     autoUpdater.quitAndInstall()
+  })
+
+  ipcMain.handle('updater:check', async () => {
+    try {
+      const result = await autoUpdater.checkForUpdates()
+      return { hasUpdate: !!result?.updateInfo }
+    } catch {
+      return { hasUpdate: false }
+    }
   })
 
   // Check for updates silently after 5 seconds

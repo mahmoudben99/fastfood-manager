@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check, Printer, AlertCircle } from 'lucide-react'
+import { Check, Printer, AlertCircle, RefreshCw } from 'lucide-react'
 import { useAppStore } from '../../store/appStore'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
@@ -43,6 +43,10 @@ export function SettingsPage() {
   const [paperWidth, setPaperWidth] = useState('80')
   const [testResult, setTestResult] = useState<{ success: boolean; error?: string } | null>(null)
   const [testingPrint, setTestingPrint] = useState(false)
+
+  // Updates
+  const [checking, setChecking] = useState(false)
+  const [updateStatus, setUpdateStatus] = useState<'none' | 'available' | 'upToDate' | null>(null)
 
   // Security
   const [currentPass, setCurrentPass] = useState('')
@@ -135,6 +139,35 @@ export function SettingsPage() {
     flashSaved()
   }
 
+  const checkForUpdates = async () => {
+    setChecking(true)
+    setUpdateStatus(null)
+    try {
+      await window.api.updater.check()
+      // Listen for response — if update-available fires, the toast handles it
+      // We just need to handle the "up to date" case
+      const timeout = setTimeout(() => {
+        setUpdateStatus('upToDate')
+        setChecking(false)
+      }, 8000)
+
+      const handler = () => {
+        clearTimeout(timeout)
+        setUpdateStatus('available')
+        setChecking(false)
+      }
+      window.api.updater.onUpdateAvailable(handler)
+      window.api.updater.onUpToDate(() => {
+        clearTimeout(timeout)
+        setUpdateStatus('upToDate')
+        setChecking(false)
+      })
+    } catch {
+      setUpdateStatus('upToDate')
+      setChecking(false)
+    }
+  }
+
   const flashSaved = () => {
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
@@ -214,6 +247,26 @@ export function SettingsPage() {
               ]}
             />
             <Button onClick={saveGeneral}>{t('common.save')}</Button>
+
+            {/* Check for Updates */}
+            <div className="pt-4 mt-4 border-t border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-medium text-gray-900">{t('settings.updates')}</h4>
+                  <p className="text-xs text-gray-500 mt-0.5">{t('settings.updatesDesc')}</p>
+                </div>
+                <Button variant="secondary" onClick={checkForUpdates} loading={checking}>
+                  <RefreshCw className={`h-4 w-4 ${checking ? 'animate-spin' : ''}`} />
+                  {t('settings.checkUpdates')}
+                </Button>
+              </div>
+              {updateStatus === 'upToDate' && (
+                <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
+                  <Check className="h-3.5 w-3.5" />
+                  {t('settings.upToDate')}
+                </p>
+              )}
+            </div>
           </div>
         </Card>
       )}

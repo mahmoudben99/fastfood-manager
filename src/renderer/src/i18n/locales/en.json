@@ -10,7 +10,10 @@
     "readyTitle": "Update Ready",
     "readyDesc": "Restart the app to apply the update",
     "downloadNow": "Download Now",
-    "restartNow": "Restart & Update"
+    "restartNow": "Restart & Update",
+    "forceTitle": "Critical Update Required",
+    "forceDesc": "Version {{version}} contains important security fixes and must be installed",
+    "forceDownloading": "Downloading critical update... {{progress}}%"
   },
   "setup": {
     "title": "Welcome! Let's set up your restaurant",
@@ -287,7 +290,11 @@
     "currentPassword": "Current Password",
     "newPassword": "New Password",
     "confirmPassword": "Confirm New Password",
-    "saved": "Settings saved!"
+    "saved": "Settings saved!",
+    "updates": "Software Updates",
+    "updatesDesc": "Check if a newer version is available",
+    "checkUpdates": "Check for Updates",
+    "upToDate": "You're running the latest version"
   },
   "common": {
     "save": "Save",

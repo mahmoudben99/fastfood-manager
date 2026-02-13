@@ -131,8 +131,8 @@ const api = {
     clearForImport: () => ipcRenderer.invoke('data:clearForImport')
   },
   updater: {
-    onUpdateAvailable: (cb: (version: string) => void) => {
-      ipcRenderer.on('updater:update-available', (_, version) => cb(version))
+    onUpdateAvailable: (cb: (version: string, forced: boolean) => void) => {
+      ipcRenderer.on('updater:update-available', (_, version, forced) => cb(version, forced))
     },
     onDownloadProgress: (cb: (percent: number) => void) => {
       ipcRenderer.on('updater:download-progress', (_, percent) => cb(percent))
@@ -140,6 +140,10 @@ const api = {
     onUpdateDownloaded: (cb: () => void) => {
       ipcRenderer.on('updater:update-downloaded', () => cb())
     },
+    onUpToDate: (cb: () => void) => {
+      ipcRenderer.on('updater:up-to-date', () => cb())
+    },
+    check: () => ipcRenderer.invoke('updater:check'),
     download: () => ipcRenderer.invoke('updater:download'),
     install: () => ipcRenderer.invoke('updater:install')
   }
