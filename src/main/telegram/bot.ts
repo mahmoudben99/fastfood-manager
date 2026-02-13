@@ -65,8 +65,9 @@ export function isBotRunning(): boolean {
 
 export function sendOrderNotification(order: any): void {
   if (!bot || !isRunning) return
-  const notifyEnabled = settingsRepo.get('telegram_order_notifications') === 'true'
-  if (!notifyEnabled) return
+  const notifySetting = settingsRepo.get('telegram_order_notifications')
+  // Default to enabled if setting was never explicitly set (backward compat)
+  if (notifySetting === 'false') return
 
   const chatId = settingsRepo.get('telegram_chat_id')
   if (!chatId) return

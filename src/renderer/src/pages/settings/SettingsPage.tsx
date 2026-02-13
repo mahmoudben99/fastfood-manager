@@ -41,6 +41,8 @@ export function SettingsPage() {
   const [printers, setPrinters] = useState<{ name: string; isDefault: boolean }[]>([])
   const [printerName, setPrinterName] = useState('')
   const [paperWidth, setPaperWidth] = useState('80')
+  const [autoPrintReceipt, setAutoPrintReceipt] = useState(false)
+  const [autoPrintKitchen, setAutoPrintKitchen] = useState(false)
   const [testResult, setTestResult] = useState<{ success: boolean; error?: string } | null>(null)
   const [testingPrint, setTestingPrint] = useState(false)
 
@@ -68,6 +70,8 @@ export function SettingsPage() {
     setLang(settings.language || 'en')
     setPrinterName(settings.printer_name || '')
     setPaperWidth(settings.printer_width || '80')
+    setAutoPrintReceipt(settings.auto_print_receipt === 'true')
+    setAutoPrintKitchen(settings.auto_print_kitchen === 'true')
 
     const sched = await window.api.settings.getSchedule()
     setSchedule(sched)
@@ -98,7 +102,9 @@ export function SettingsPage() {
   const savePrinter = async () => {
     await window.api.settings.setMultiple({
       printer_name: printerName,
-      printer_width: paperWidth
+      printer_width: paperWidth,
+      auto_print_receipt: autoPrintReceipt ? 'true' : 'false',
+      auto_print_kitchen: autoPrintKitchen ? 'true' : 'false'
     })
     flashSaved()
   }
@@ -326,6 +332,35 @@ export function SettingsPage() {
                 { value: '80', label: '80mm' }
               ]}
             />
+
+            {/* Auto-print toggles */}
+            <div className="pt-3 mt-3 border-t border-gray-200 space-y-3">
+              <h4 className="text-sm font-medium text-gray-700">{t('settings.autoPrint', { defaultValue: 'Auto-Print on New Order' })}</h4>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={autoPrintReceipt}
+                  onChange={(e) => setAutoPrintReceipt(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+                />
+                <div>
+                  <span className="text-sm text-gray-700">{t('settings.autoPrintReceipt', { defaultValue: 'Auto-print receipt' })}</span>
+                  <p className="text-xs text-gray-400">{t('settings.autoPrintReceiptDesc', { defaultValue: 'Automatically print customer receipt when a new order is placed' })}</p>
+                </div>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={autoPrintKitchen}
+                  onChange={(e) => setAutoPrintKitchen(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+                />
+                <div>
+                  <span className="text-sm text-gray-700">{t('settings.autoPrintKitchen', { defaultValue: 'Auto-print kitchen ticket' })}</span>
+                  <p className="text-xs text-gray-400">{t('settings.autoPrintKitchenDesc', { defaultValue: 'Automatically print kitchen ticket when a new order is placed' })}</p>
+                </div>
+              </label>
+            </div>
 
             <div className="flex gap-3">
               <Button onClick={savePrinter}>{t('common.save')}</Button>

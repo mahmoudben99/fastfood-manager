@@ -2,6 +2,8 @@ import { ipcMain } from 'electron'
 import { ordersRepo, type CreateOrderInput } from '../database/repositories/orders.repo'
 import { performAutoBackup } from './backup.ipc'
 import { sendOrderNotification } from '../telegram/bot'
+import { printOrder } from './printer.ipc'
+import { settingsRepo } from '../database/repositories/settings.repo'
 
 export function registerOrdersHandlers(): void {
   ipcMain.handle('orders:create', (_, input: CreateOrderInput) => {
@@ -10,6 +12,11 @@ export function registerOrdersHandlers(): void {
     performAutoBackup()
     // Send Telegram notification
     sendOrderNotification(order)
+    // Auto-print if enabled
+    const autoPrintReceipt = settingsRepo.get('auto_print_receipt') === 'true'
+    const autoPrintKitchen = settingsRepo.get('auto_print_kitchen') === 'true'
+    if (autoPrintReceipt) printOrder(order.id, 'receipt').catch(() => {})
+    if (autoPrintKitchen) printOrder(order.id, 'kitchen').catch(() => {})
     return order
   })
 

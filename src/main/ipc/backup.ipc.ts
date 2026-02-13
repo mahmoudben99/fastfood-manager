@@ -143,8 +143,10 @@ export function registerBackupHandlers(): void {
 
   // Scheduled backup settings
   ipcMain.handle('backup:getSchedule', () => {
+    const enabledSetting = settingsRepo.get('backup_schedule_enabled')
     return {
-      enabled: settingsRepo.get('backup_schedule_enabled') === 'true',
+      // Default to enabled if never explicitly set
+      enabled: enabledSetting !== 'false',
       time: settingsRepo.get('backup_schedule_time') || '23:00'
     }
   })
@@ -168,14 +170,15 @@ export function setupScheduledBackup(): void {
     scheduledBackupInterval = null
   }
 
-  const enabled = settingsRepo.get('backup_schedule_enabled') === 'true'
-  if (!enabled) return
+  const enabledSetting = settingsRepo.get('backup_schedule_enabled')
+  // Default to enabled if never explicitly set
+  if (enabledSetting === 'false') return
 
   // Check every minute if it's time for the scheduled backup
   scheduledBackupInterval = setInterval(() => {
     try {
-      const schedEnabled = settingsRepo.get('backup_schedule_enabled') === 'true'
-      if (!schedEnabled) return
+      const schedSetting = settingsRepo.get('backup_schedule_enabled')
+      if (schedSetting === 'false') return
 
       const schedTime = settingsRepo.get('backup_schedule_time') || '23:00'
       const now = new Date()

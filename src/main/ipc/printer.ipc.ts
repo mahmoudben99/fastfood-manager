@@ -175,7 +175,7 @@ export function registerPrinterHandlers(): void {
   })
 }
 
-async function printOrder(orderId: number, type: 'receipt' | 'kitchen'): Promise<{ success: boolean; error?: string }> {
+export async function printOrder(orderId: number, type: 'receipt' | 'kitchen'): Promise<{ success: boolean; error?: string }> {
   const settings = settingsRepo.getAll()
   const printerName = settings.printer_name
   if (!printerName) return { success: false, error: 'No printer configured' }
