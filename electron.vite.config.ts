@@ -2,6 +2,7 @@ import { resolve } from 'path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import pkg from './package.json'
 
 // Fix for VS Code terminal leaking ELECTRON_RUN_AS_NODE=1
 delete process.env.ELECTRON_RUN_AS_NODE
@@ -26,6 +27,9 @@ export default defineConfig({
       alias: {
         '@': resolve('src/renderer/src')
       }
+    },
+    define: {
+      APP_VERSION: JSON.stringify(pkg.version)
     },
     plugins: [react(), tailwindcss()],
     build: {

@@ -292,7 +292,7 @@
     "confirmPassword": "تأكيد كلمة المرور الجديدة",
     "saved": "تم حفظ الإعدادات!",
     "updates": "تحديثات البرنامج",
-    "updatesDesc": "تحقق من توفر إصدار جديد",
+    "currentVersion": "الإصدار الحالي: v{{version}}",
     "checkUpdates": "البحث عن تحديثات",
     "upToDate": "أنت تستخدم أحدث إصدار"
   },

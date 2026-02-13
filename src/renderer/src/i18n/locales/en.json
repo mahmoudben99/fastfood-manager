@@ -292,7 +292,7 @@
     "confirmPassword": "Confirm New Password",
     "saved": "Settings saved!",
     "updates": "Software Updates",
-    "updatesDesc": "Check if a newer version is available",
+    "currentVersion": "Current version: v{{version}}",
     "checkUpdates": "Check for Updates",
     "upToDate": "You're running the latest version"
   },

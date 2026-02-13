@@ -292,7 +292,7 @@
     "confirmPassword": "Confirmer le nouveau mot de passe",
     "saved": "Parametres enregistres !",
     "updates": "Mises a jour",
-    "updatesDesc": "Verifier si une nouvelle version est disponible",
+    "currentVersion": "Version actuelle : v{{version}}",
     "checkUpdates": "Rechercher les mises a jour",
     "upToDate": "Vous utilisez la derniere version"
   },

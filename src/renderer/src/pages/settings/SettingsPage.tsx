@@ -253,12 +253,18 @@ export function SettingsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <h4 className="text-sm font-medium text-gray-900">{t('settings.updates')}</h4>
-                  <p className="text-xs text-gray-500 mt-0.5">{t('settings.updatesDesc')}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {t('settings.currentVersion', { version: APP_VERSION })}
+                  </p>
                 </div>
-                <Button variant="secondary" onClick={checkForUpdates} loading={checking}>
+                <button
+                  onClick={checkForUpdates}
+                  disabled={checking}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors disabled:opacity-50"
+                >
                   <RefreshCw className={`h-4 w-4 ${checking ? 'animate-spin' : ''}`} />
                   {t('settings.checkUpdates')}
-                </Button>
+                </button>
               </div>
               {updateStatus === 'upToDate' && (
                 <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
