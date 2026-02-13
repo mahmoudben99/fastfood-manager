@@ -143,27 +143,11 @@ export function SettingsPage() {
     setChecking(true)
     setUpdateStatus(null)
     try {
-      await window.api.updater.check()
-      // Listen for response — if update-available fires, the toast handles it
-      // We just need to handle the "up to date" case
-      const timeout = setTimeout(() => {
-        setUpdateStatus('upToDate')
-        setChecking(false)
-      }, 8000)
-
-      const handler = () => {
-        clearTimeout(timeout)
-        setUpdateStatus('available')
-        setChecking(false)
-      }
-      window.api.updater.onUpdateAvailable(handler)
-      window.api.updater.onUpToDate(() => {
-        clearTimeout(timeout)
-        setUpdateStatus('upToDate')
-        setChecking(false)
-      })
+      const result = await window.api.updater.check()
+      setUpdateStatus(result.hasUpdate ? 'available' : 'upToDate')
     } catch {
       setUpdateStatus('upToDate')
+    } finally {
       setChecking(false)
     }
   }
@@ -270,6 +254,12 @@ export function SettingsPage() {
                 <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
                   <Check className="h-3.5 w-3.5" />
                   {t('settings.upToDate')}
+                </p>
+              )}
+              {updateStatus === 'available' && (
+                <p className="text-xs text-orange-600 mt-2 flex items-center gap-1">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  {t('update.availableTitle')}
                 </p>
               )}
             </div>

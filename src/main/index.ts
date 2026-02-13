@@ -101,7 +101,10 @@ function setupAutoUpdater(): void {
   ipcMain.handle('updater:check', async () => {
     try {
       const result = await autoUpdater.checkForUpdates()
-      return { hasUpdate: !!result?.updateInfo }
+      if (!result?.updateInfo) return { hasUpdate: false }
+      const current = app.getVersion()
+      const latest = result.updateInfo.version
+      return { hasUpdate: latest !== current }
     } catch {
       return { hasUpdate: false }
     }
