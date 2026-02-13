@@ -3,6 +3,15 @@
     "name": "Gestionnaire Fast Food",
     "loading": "Chargement..."
   },
+  "update": {
+    "availableTitle": "Mise a jour disponible",
+    "availableDesc": "La version {{version}} est prete a telecharger",
+    "downloading": "Telechargement en cours...",
+    "readyTitle": "Mise a jour prete",
+    "readyDesc": "Redemarrez l'application pour appliquer la mise a jour",
+    "downloadNow": "Telecharger maintenant",
+    "restartNow": "Redemarrer et mettre a jour"
+  },
   "setup": {
     "title": "Bienvenue ! Configurons votre restaurant",
     "step": "Etape {{current}} sur {{total}}",

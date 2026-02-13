@@ -13,6 +13,7 @@ import { AnalyticsDashboard } from './pages/analytics/AnalyticsDashboard'
 import { ExcelImportExport } from './pages/excel/ExcelImportExport'
 import { BackupRestore } from './pages/backup/BackupRestore'
 import { SettingsPage } from './pages/settings/SettingsPage'
+import { UpdateToast } from './components/ui/UpdateToast'
 
 export default function App() {
   const [loading, setLoading] = useState(true)
@@ -35,6 +36,7 @@ export default function App() {
 
   return (
     <HashRouter>
+      <UpdateToast />
       <Routes>
         <Route path="/activate" element={<ActivationPage />} />
         <Route path="/setup" element={<SetupWizard />} />

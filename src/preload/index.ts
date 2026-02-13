@@ -129,6 +129,19 @@ const api = {
   },
   data: {
     clearForImport: () => ipcRenderer.invoke('data:clearForImport')
+  },
+  updater: {
+    onUpdateAvailable: (cb: (version: string) => void) => {
+      ipcRenderer.on('updater:update-available', (_, version) => cb(version))
+    },
+    onDownloadProgress: (cb: (percent: number) => void) => {
+      ipcRenderer.on('updater:download-progress', (_, percent) => cb(percent))
+    },
+    onUpdateDownloaded: (cb: () => void) => {
+      ipcRenderer.on('updater:update-downloaded', () => cb())
+    },
+    download: () => ipcRenderer.invoke('updater:download'),
+    install: () => ipcRenderer.invoke('updater:install')
   }
 }
 

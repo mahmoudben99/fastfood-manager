@@ -3,6 +3,15 @@
     "name": "مدير المطعم السريع",
     "loading": "جاري التحميل..."
   },
+  "update": {
+    "availableTitle": "تحديث متاح",
+    "availableDesc": "الإصدار {{version}} جاهز للتحميل",
+    "downloading": "جاري تحميل التحديث...",
+    "readyTitle": "التحديث جاهز",
+    "readyDesc": "أعد تشغيل التطبيق لتطبيق التحديث",
+    "downloadNow": "تحميل الآن",
+    "restartNow": "إعادة التشغيل والتحديث"
+  },
   "setup": {
     "title": "مرحبا! لنقم بإعداد مطعمك",
     "step": "الخطوة {{current}} من {{total}}",

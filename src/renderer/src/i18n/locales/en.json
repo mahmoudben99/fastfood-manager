@@ -3,6 +3,15 @@
     "name": "Fast Food Manager",
     "loading": "Loading..."
   },
+  "update": {
+    "availableTitle": "Update Available",
+    "availableDesc": "Version {{version}} is ready to download",
+    "downloading": "Downloading Update...",
+    "readyTitle": "Update Ready",
+    "readyDesc": "Restart the app to apply the update",
+    "downloadNow": "Download Now",
+    "restartNow": "Restart & Update"
+  },
   "setup": {
     "title": "Welcome! Let's set up your restaurant",
     "step": "Step {{current}} of {{total}}",

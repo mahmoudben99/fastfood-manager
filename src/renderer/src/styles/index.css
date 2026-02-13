@@ -85,3 +85,10 @@ html[dir="rtl"] ::-webkit-scrollbar { direction: rtl; }
 .dark .hover\:bg-red-100:hover { background-color: #7f1d1d !important; }
 .dark ::-webkit-scrollbar-thumb { background: #4b5563; }
 .dark ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+
+/* ===== Animations ===== */
+@keyframes slide-up {
+  from { transform: translateY(100px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.animate-slide-up { animation: slide-up 0.4s ease-out; }

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, protocol, dialog } from 'electron'
+import { app, BrowserWindow, shell, protocol, dialog, ipcMain } from 'electron'
 import { join } from 'path'
 import { writeFileSync } from 'fs'
 import { autoUpdater } from 'electron-updater'
@@ -66,33 +66,23 @@ function setupAutoUpdater(): void {
   autoUpdater.autoInstallOnAppQuit = true
 
   autoUpdater.on('update-available', (info) => {
-    dialog
-      .showMessageBox(mainWindow!, {
-        type: 'info',
-        title: 'Update Available',
-        message: `Version ${info.version} is available. Download now?`,
-        buttons: ['Yes', 'Later']
-      })
-      .then((result) => {
-        if (result.response === 0) {
-          autoUpdater.downloadUpdate()
-        }
-      })
+    mainWindow?.webContents.send('updater:update-available', info.version)
+  })
+
+  autoUpdater.on('download-progress', (progress) => {
+    mainWindow?.webContents.send('updater:download-progress', Math.round(progress.percent))
   })
 
   autoUpdater.on('update-downloaded', () => {
-    dialog
-      .showMessageBox(mainWindow!, {
-        type: 'info',
-        title: 'Update Ready',
-        message: 'Update downloaded. The app will restart to install it.',
-        buttons: ['Restart Now', 'Later']
-      })
-      .then((result) => {
-        if (result.response === 0) {
-          autoUpdater.quitAndInstall()
-        }
-      })
+    mainWindow?.webContents.send('updater:update-downloaded')
+  })
+
+  ipcMain.handle('updater:download', () => {
+    autoUpdater.downloadUpdate()
+  })
+
+  ipcMain.handle('updater:install', () => {
+    autoUpdater.quitAndInstall()
   })
 
   // Check for updates silently after 5 seconds
