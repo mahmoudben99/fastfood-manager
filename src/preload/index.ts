@@ -4,7 +4,10 @@ const api = {
   activation: {
     getMachineId: () => ipcRenderer.invoke('activation:getMachineId'),
     isActivated: () => ipcRenderer.invoke('activation:isActivated'),
-    activate: (serialCode: string) => ipcRenderer.invoke('activation:activate', serialCode)
+    activate: (serialCode: string) => ipcRenderer.invoke('activation:activate', serialCode),
+    validateUnlockCode: (code: string) => ipcRenderer.invoke('activation:validateUnlockCode', code),
+    resetPassword: (unlockCode: string, newPassword: string) =>
+      ipcRenderer.invoke('activation:resetPassword', unlockCode, newPassword)
   },
   settings: {
     get: (key: string) => ipcRenderer.invoke('settings:get', key),

@@ -254,6 +254,16 @@
     "invalidCode": "Invalid activation code for this machine",
     "contact": "Contact the seller with your Machine ID to get an activation code"
   },
+  "forgotPassword": {
+    "link": "Forgot Password?",
+    "title": "Forgot Password",
+    "subtitle": "Send your Machine ID to the vendor to get an unlock code",
+    "codeLabel": "Unlock Code",
+    "codePlaceholder": "Enter unlock code",
+    "invalidCode": "Invalid unlock code",
+    "newPasswordTitle": "Set New Password",
+    "resetButton": "Reset Password"
+  },
   "settings": {
     "title": "Settings",
     "general": "General",

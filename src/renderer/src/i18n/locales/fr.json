@@ -254,6 +254,16 @@
     "invalidCode": "Code d'activation invalide pour cette machine",
     "contact": "Contactez le vendeur avec votre ID machine pour obtenir un code d'activation"
   },
+  "forgotPassword": {
+    "link": "Mot de passe oublié ?",
+    "title": "Mot de passe oublié",
+    "subtitle": "Envoyez votre ID machine au vendeur pour obtenir un code de déverrouillage",
+    "codeLabel": "Code de déverrouillage",
+    "codePlaceholder": "Entrez le code de déverrouillage",
+    "invalidCode": "Code de déverrouillage invalide",
+    "newPasswordTitle": "Nouveau mot de passe",
+    "resetButton": "Réinitialiser le mot de passe"
+  },
   "settings": {
     "title": "Parametres",
     "general": "General",

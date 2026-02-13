@@ -3,6 +3,7 @@ import { cpus, hostname, userInfo } from 'os'
 import { settingsRepo } from '../database/repositories/settings.repo'
 
 const SECRET_KEY = 'FFM-2024-SERIAL-KEY-DO-NOT-SHARE'
+const UNLOCK_KEY = 'FFM-2024-UNLOCK-KEY-DO-NOT-SHARE'
 
 export function getMachineId(): string {
   const cpuModel = cpus()[0]?.model || 'unknown'
@@ -40,4 +41,15 @@ export function activate(
   settingsRepo.set('activation_code', serialCode.toUpperCase().trim())
   settingsRepo.set('machine_id', machineId)
   return { success: true, machineId }
+}
+
+export function generateUnlockCode(machineId: string): string {
+  const hmac = createHmac('sha256', UNLOCK_KEY).update(machineId.toUpperCase()).digest('hex')
+  return hmac.substring(0, 8).toUpperCase()
+}
+
+export function validateUnlockCode(code: string): boolean {
+  const machineId = getMachineId()
+  const expected = generateUnlockCode(machineId)
+  return code.toUpperCase().trim() === expected
 }
