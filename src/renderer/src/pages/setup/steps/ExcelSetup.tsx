@@ -3,6 +3,24 @@ import { useTranslation } from 'react-i18next'
 import { Upload, FileSpreadsheet, Check, AlertCircle } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
+// SheetJS/XLSX corrupts emoji codepoints by dropping the high surrogate,
+// turning U+1F96A into U+F96A. This repairs them by adding 0x10000 back.
+function fixEmoji(str: string | undefined): string | undefined {
+  if (!str) return str
+  return [...str].map(ch => {
+    const code = ch.codePointAt(0)!
+    // Private Use Area (U+E000–U+F8FF) and CJK chars that are actually broken emojis
+    if (code >= 0xE000 && code <= 0xFFFF) {
+      const fixed = code + 0x10000
+      // Only fix if the result falls in a known emoji range
+      if (fixed >= 0x1F300 && fixed <= 0x1FAFF) {
+        return String.fromCodePoint(fixed)
+      }
+    }
+    return ch
+  }).join('')
+}
+
 interface Props {
   onImported: () => void
 }
@@ -43,7 +61,7 @@ export function ExcelSetup({ onImported }: Props) {
                 if (cat.Name) {
                   await window.api.categories.create({
                     name: cat.Name, name_ar: cat.Name_AR, name_fr: cat.Name_FR,
-                    icon: cat.Emoji || undefined
+                    icon: fixEmoji(cat.Emoji) || undefined
                   })
                   imported++
                 }
@@ -82,7 +100,7 @@ export function ExcelSetup({ onImported }: Props) {
                     await window.api.menu.create({
                       name: m.Name, name_ar: m.Name_AR, name_fr: m.Name_FR,
                       price: Number(m.Price), category_id: cat.id,
-                      emoji: m.Emoji || undefined
+                      emoji: fixEmoji(m.Emoji) || undefined
                     })
                     imported++
                   }
