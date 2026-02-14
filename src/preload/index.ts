@@ -136,7 +136,11 @@ const api = {
     status: () => ipcRenderer.invoke('telegram:status')
   },
   data: {
-    clearForImport: () => ipcRenderer.invoke('data:clearForImport')
+    clearForImport: () => ipcRenderer.invoke('data:clearForImport'),
+    saveVersion: (label: string) => ipcRenderer.invoke('data:saveVersion', label),
+    listVersions: () => ipcRenderer.invoke('data:listVersions'),
+    restoreVersion: (versionId: number) => ipcRenderer.invoke('data:restoreVersion', versionId),
+    deleteVersion: (versionId: number) => ipcRenderer.invoke('data:deleteVersion', versionId)
   },
   updater: {
     onUpdateAvailable: (cb: (version: string) => void) => {
