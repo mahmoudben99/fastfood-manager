@@ -1,65 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Download, Upload, FileSpreadsheet, Check, AlertCircle, Copy } from 'lucide-react'
-import { Button } from '../../../components/ui/Button'
+import { Upload, FileSpreadsheet, Check, AlertCircle } from 'lucide-react'
 import * as XLSX from 'xlsx'
-
-const TEMPLATE_GUIDE = `# Fast Food Manager - Excel Template Guide
-
-This template has 5 sheets. Fill them in order (Categories first, then the rest).
-Send this guide along with the empty template to an AI assistant and it will help you fill it.
-
-## Sheet 1: Categories
-| Column | Required | Example |
-|--------|----------|---------|
-| Name | Yes | "Tacos" |
-| Name_AR | No | "تاكوس" |
-| Name_FR | No | "Tacos" |
-| Emoji | No | "🌮" |
-
-## Sheet 2: Menu Items
-| Column | Required | Example |
-|--------|----------|---------|
-| Name | Yes | "Classic Burger" |
-| Name_AR | No | "برغر كلاسيك" |
-| Name_FR | No | "Burger Classique" |
-| Price | Yes | 450 |
-| Category_Name | Yes | "Burger" |
-| Emoji | No | "🍔" |
-
-## Sheet 3: Stock Items
-| Column | Required | Example |
-|--------|----------|---------|
-| Name | Yes | "Ground Beef" |
-| Name_AR | No | "لحم مفروم" |
-| Name_FR | No | "Boeuf Haché" |
-| Unit_Type | Yes | "kg" or "liter" or "unit" |
-| Initial_Quantity | Yes | 50 |
-| Price_Per_Unit | Yes | 800 |
-| Alert_Threshold | Yes | 5 |
-
-## Sheet 4: Workers
-| Column | Required | Example |
-|--------|----------|---------|
-| Name | Yes | "Ahmed Benali" |
-| Role | Yes | "cook" or "server" or "cleaner" or "cashier" or "other" |
-| Pay_Full_Day | Yes | 2000 |
-| Pay_Half_Day | Yes | 1200 |
-| Phone | No | "0555123456" |
-
-## Sheet 5: Ingredients
-| Column | Required | Example |
-|--------|----------|---------|
-| Menu_Item_Name | Yes | "Classic Burger" |
-| Stock_Item_Name | Yes | "Ground Beef" |
-| Quantity | Yes | 0.15 |
-
-## Rules
-- Category names in Menu Items must match Sheet 1 exactly
-- Stock item names in Ingredients must match Sheet 3 exactly
-- Menu item names in Ingredients must match Sheet 2 exactly
-- Prices are numbers only (no currency symbols)
-`
 
 interface Props {
   onImported: () => void
@@ -69,28 +11,6 @@ export function ExcelSetup({ onImported }: Props) {
   const { t } = useTranslation()
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<{ success: boolean; message: string } | null>(null)
-  const [copied, setCopied] = useState(false)
-
-  const exportTemplate = () => {
-    const wb = XLSX.utils.book_new()
-
-    const catWs = XLSX.utils.aoa_to_sheet([['Name', 'Name_AR', 'Name_FR', 'Emoji']])
-    XLSX.utils.book_append_sheet(wb, catWs, 'Categories')
-
-    const menuWs = XLSX.utils.aoa_to_sheet([['Name', 'Name_AR', 'Name_FR', 'Price', 'Category_Name', 'Emoji']])
-    XLSX.utils.book_append_sheet(wb, menuWs, 'Menu Items')
-
-    const stockWs = XLSX.utils.aoa_to_sheet([['Name', 'Name_AR', 'Name_FR', 'Unit_Type (kg/liter/unit)', 'Initial_Quantity', 'Price_Per_Unit', 'Alert_Threshold']])
-    XLSX.utils.book_append_sheet(wb, stockWs, 'Stock Items')
-
-    const workerWs = XLSX.utils.aoa_to_sheet([['Name', 'Role (cook/server/cleaner/cashier/other)', 'Pay_Full_Day', 'Pay_Half_Day', 'Phone']])
-    XLSX.utils.book_append_sheet(wb, workerWs, 'Workers')
-
-    const ingWs = XLSX.utils.aoa_to_sheet([['Menu_Item_Name', 'Stock_Item_Name', 'Quantity']])
-    XLSX.utils.book_append_sheet(wb, ingWs, 'Ingredients')
-
-    XLSX.writeFile(wb, 'fastfood-template.xlsx')
-  }
 
   const handleImport = async () => {
     setImporting(true)
@@ -188,7 +108,7 @@ export function ExcelSetup({ onImported }: Props) {
               }
             }
 
-            // Import Ingredients — group by menu item, then update each with its ingredients
+            // Import Ingredients
             const ingSheet = wb.Sheets['Ingredients']
             if (ingSheet) {
               const allMenuItems = await window.api.menu.getAll()
@@ -237,58 +157,31 @@ export function ExcelSetup({ onImported }: Props) {
     }
   }
 
-  const copyGuide = () => {
-    navigator.clipboard.writeText(TEMPLATE_GUIDE)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
   return (
     <div className="space-y-6">
       <div className="text-center">
         <h2 className="text-2xl font-bold text-gray-900">{t('setup.excel.title', { defaultValue: 'Import Your Data' })}</h2>
-        <p className="text-gray-500 mt-1">{t('setup.excel.subtitle', { defaultValue: 'Set up your menu, stock, and workers from an Excel file' })}</p>
+        <p className="text-gray-500 mt-1">{t('setup.excel.subtitle', { defaultValue: 'Do you have a prepared Excel file with your menu data?' })}</p>
       </div>
 
-      <div className="bg-white rounded-xl p-6 shadow-sm space-y-5">
-        {/* Step 1: Download template */}
-        <div className="flex items-start gap-4 p-4 bg-orange-50 rounded-lg border border-orange-200">
-          <div className="w-8 h-8 rounded-full bg-orange-500 text-white flex items-center justify-center font-bold text-sm shrink-0">1</div>
-          <div className="flex-1">
-            <h3 className="font-semibold text-gray-900 text-sm">{t('setup.excel.step1', { defaultValue: 'Download the empty template' })}</h3>
-            <p className="text-xs text-gray-500 mt-1">{t('setup.excel.step1Desc', { defaultValue: 'Get the Excel file with all the sheets you need to fill' })}</p>
-            <Button variant="secondary" size="sm" onClick={exportTemplate} className="mt-2">
-              <Download className="h-4 w-4" />
-              {t('excel.exportTemplate', { defaultValue: 'Download Template' })}
-            </Button>
+      <div className="bg-white rounded-xl p-6 shadow-sm space-y-4">
+        {/* Import Excel option */}
+        <button
+          onClick={handleImport}
+          disabled={importing}
+          className="w-full flex items-center gap-4 p-5 rounded-xl border-2 border-gray-200 hover:border-orange-400 hover:bg-orange-50 transition-all text-left"
+        >
+          <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
+            <Upload className="h-6 w-6 text-orange-600" />
           </div>
-        </div>
-
-        {/* Step 2: Copy guide for AI */}
-        <div className="flex items-start gap-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-          <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-sm shrink-0">2</div>
           <div className="flex-1">
-            <h3 className="font-semibold text-gray-900 text-sm">{t('setup.excel.step2', { defaultValue: 'Copy the guide & fill with AI' })}</h3>
-            <p className="text-xs text-gray-500 mt-1">{t('setup.excel.step2Desc', { defaultValue: 'Send this guide + the template to ChatGPT or Claude along with your menu' })}</p>
-            <Button variant="secondary" size="sm" onClick={copyGuide} className="mt-2">
-              <Copy className="h-4 w-4" />
-              {copied ? 'Copied!' : t('setup.excel.copyGuide', { defaultValue: 'Copy Guide for AI' })}
-            </Button>
+            <h3 className="font-semibold text-gray-900">{t('setup.excel.importOption', { defaultValue: 'Import Excel File' })}</h3>
+            <p className="text-xs text-gray-500 mt-0.5">{t('setup.excel.importOptionDesc', { defaultValue: 'Upload a prepared Excel file with your categories, menu, stock, and workers' })}</p>
           </div>
-        </div>
-
-        {/* Step 3: Import */}
-        <div className="flex items-start gap-4 p-4 bg-green-50 rounded-lg border border-green-200">
-          <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center font-bold text-sm shrink-0">3</div>
-          <div className="flex-1">
-            <h3 className="font-semibold text-gray-900 text-sm">{t('setup.excel.step3', { defaultValue: 'Import the filled file' })}</h3>
-            <p className="text-xs text-gray-500 mt-1">{t('setup.excel.step3Desc', { defaultValue: 'Upload the completed Excel file to set up everything at once' })}</p>
-            <Button size="sm" onClick={handleImport} loading={importing} className="mt-2">
-              <Upload className="h-4 w-4" />
-              {t('excel.importFile', { defaultValue: 'Import Excel File' })}
-            </Button>
-          </div>
-        </div>
+          {importing && (
+            <div className="animate-spin h-5 w-5 border-2 border-orange-500 border-t-transparent rounded-full shrink-0" />
+          )}
+        </button>
 
         {importResult && (
           <div className={`flex items-center gap-2 p-3 rounded-lg text-sm ${
@@ -299,8 +192,26 @@ export function ExcelSetup({ onImported }: Props) {
           </div>
         )}
 
+        {/* Divider */}
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-px bg-gray-200" />
+          <span className="text-xs text-gray-400 font-medium">{t('setup.excel.or', { defaultValue: 'OR' })}</span>
+          <div className="flex-1 h-px bg-gray-200" />
+        </div>
+
+        {/* Skip / default menu option */}
+        <div className="flex items-center gap-4 p-5 rounded-xl border-2 border-gray-200 bg-gray-50">
+          <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center shrink-0">
+            <FileSpreadsheet className="h-6 w-6 text-gray-500" />
+          </div>
+          <div className="flex-1">
+            <h3 className="font-semibold text-gray-900">{t('setup.excel.skipOption', { defaultValue: 'Continue with default menu' })}</h3>
+            <p className="text-xs text-gray-500 mt-0.5">{t('setup.excel.skipOptionDesc', { defaultValue: 'Start with a basic menu and customize it later from the admin panel' })}</p>
+          </div>
+        </div>
+
         <p className="text-xs text-gray-400 text-center">
-          {t('setup.excel.skipNote', { defaultValue: 'This step is optional — you can skip it and add data manually later' })}
+          {t('setup.excel.skipNote', { defaultValue: 'You can always import or edit your data later from the admin panel' })}
         </p>
       </div>
     </div>

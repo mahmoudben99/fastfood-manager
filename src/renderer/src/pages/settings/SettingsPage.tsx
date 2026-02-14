@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check, Printer, AlertCircle, RefreshCw } from 'lucide-react'
+import { Check, Printer, AlertCircle, RefreshCw, LogOut } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '../../store/appStore'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
@@ -22,7 +23,8 @@ const currencies = [
 
 export function SettingsPage() {
   const { t } = useTranslation()
-  const { setLanguage, loadSettings } = useAppStore()
+  const navigate = useNavigate()
+  const { setLanguage, setSetupComplete, loadSettings } = useAppStore()
   const [tab, setTab] = useState<'general' | 'schedule' | 'printer' | 'telegram' | 'security'>('general')
   const [saved, setSaved] = useState(false)
 
@@ -55,6 +57,11 @@ export function SettingsPage() {
   const [newPass, setNewPass] = useState('')
   const [confirmPass, setConfirmPass] = useState('')
   const [passError, setPassError] = useState('')
+
+  // Logout
+  const [logoutPassword, setLogoutPassword] = useState('')
+  const [logoutError, setLogoutError] = useState('')
+  const [loggingOut, setLoggingOut] = useState(false)
 
   useEffect(() => {
     loadCurrentSettings()
@@ -143,6 +150,27 @@ export function SettingsPage() {
     setNewPass('')
     setConfirmPass('')
     flashSaved()
+  }
+
+  const handleLogout = async () => {
+    if (!logoutPassword.trim()) return
+    setLoggingOut(true)
+    setLogoutError('')
+    try {
+      const valid = await window.api.settings.verifyPassword(logoutPassword)
+      if (!valid) {
+        setLogoutError(t('nav.wrongPassword'))
+        setLoggingOut(false)
+        return
+      }
+      await window.api.settings.set('setup_complete', 'false')
+      setSetupComplete(false)
+      navigate('/setup')
+    } catch {
+      setLogoutError(t('nav.wrongPassword'))
+    } finally {
+      setLoggingOut(false)
+    }
   }
 
   const checkForUpdates = async () => {
@@ -401,6 +429,38 @@ export function SettingsPage() {
             <Input type="password" label={t('settings.newPassword')} value={newPass} onChange={(e) => setNewPass(e.target.value)} />
             <Input type="password" label={t('settings.confirmPassword')} value={confirmPass} onChange={(e) => setConfirmPass(e.target.value)} error={passError} />
             <Button onClick={changePassword} disabled={!currentPass || !newPass || !confirmPass}>{t('common.save')}</Button>
+          </div>
+
+          {/* Logout Section */}
+          <div className="pt-6 mt-6 border-t border-gray-200">
+            <div className="flex items-center gap-2 mb-2">
+              <LogOut className="h-5 w-5 text-red-500" />
+              <h3 className="font-semibold text-red-600">{t('nav.logout')}</h3>
+            </div>
+            <p className="text-xs text-gray-500 mb-1">{t('nav.logoutConfirm')}</p>
+            <p className="text-xs text-orange-600 mb-4">{t('nav.logoutWarning')}</p>
+            <div className="max-w-md space-y-3">
+              <input
+                type="password"
+                value={logoutPassword}
+                onChange={(e) => { setLogoutPassword(e.target.value); setLogoutError('') }}
+                onKeyDown={(e) => e.key === 'Enter' && handleLogout()}
+                placeholder="••••••••"
+                className="w-full border rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              />
+              {logoutError && (
+                <p className="text-red-500 text-xs">{logoutError}</p>
+              )}
+              <Button
+                variant="danger"
+                onClick={handleLogout}
+                loading={loggingOut}
+                disabled={!logoutPassword.trim()}
+              >
+                <LogOut className="h-4 w-4" />
+                {t('nav.logout')}
+              </Button>
+            </div>
           </div>
         </Card>
       )}

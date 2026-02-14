@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Lock, ShoppingCart, Trash2, Minus, Plus, Phone, MessageSquare, Check, Printer, Moon, Sun, Search, ClipboardList, X, Hash, Pencil, AlertTriangle, LogOut } from 'lucide-react'
+import { Lock, ShoppingCart, Trash2, Minus, Plus, Phone, MessageSquare, Check, Printer, Moon, Sun, Search, ClipboardList, X, Hash, Pencil, AlertTriangle } from 'lucide-react'
 import { useOrderStore, type CartItem } from '../../store/orderStore'
 import { useAppStore } from '../../store/appStore'
 import { Button } from '../../components/ui/Button'
@@ -55,7 +55,7 @@ interface OrderData {
 export function OrderScreen() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { language, foodLanguage, darkMode, toggleDarkMode, setSetupComplete } = useAppStore()
+  const { language, foodLanguage, darkMode, toggleDarkMode } = useAppStore()
   const store = useOrderStore()
 
   const [categories, setCategories] = useState<CategoryData[]>([])
@@ -84,12 +84,6 @@ export function OrderScreen() {
 
   // Ongoing order count for badge
   const [ongoingCount, setOngoingCount] = useState(0)
-
-  // Logout state
-  const [logoutModal, setLogoutModal] = useState(false)
-  const [logoutPassword, setLogoutPassword] = useState('')
-  const [logoutError, setLogoutError] = useState('')
-  const [loggingOut, setLoggingOut] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -124,7 +118,6 @@ export function OrderScreen() {
       if (priceModal) { setPriceModal(null); return }
       if (orderSuccess) { setOrderSuccess(null); return }
       if (cancelConfirm) { setCancelConfirm(null); return }
-      if (logoutModal) { setLogoutModal(false); return }
       if (showHistory) { setShowHistory(false); setSelectedOrder(null); setEditMode(false); return }
       if (store.items.length > 0) { store.clearOrder(); return }
       return
@@ -174,34 +167,12 @@ export function OrderScreen() {
       }
       return
     }
-  }, [store, noteModal, priceModal, orderSuccess, cancelConfirm, logoutModal, showHistory, placing, categories])
+  }, [store, noteModal, priceModal, orderSuccess, cancelConfirm, showHistory, placing, categories])
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [handleKeyDown])
-
-  const handleLogout = async () => {
-    if (!logoutPassword.trim()) return
-    setLoggingOut(true)
-    setLogoutError('')
-    try {
-      const valid = await window.api.settings.verifyPassword(logoutPassword)
-      if (!valid) {
-        setLogoutError(t('nav.wrongPassword'))
-        setLoggingOut(false)
-        return
-      }
-      await window.api.settings.set('setup_complete', 'false')
-      setSetupComplete(false)
-      setLogoutModal(false)
-      navigate('/setup')
-    } catch {
-      setLogoutError(t('nav.wrongPassword'))
-    } finally {
-      setLoggingOut(false)
-    }
-  }
 
   const loadTodayOrders = async () => {
     const orders = await window.api.orders.getToday()
@@ -434,13 +405,6 @@ export function OrderScreen() {
             >
               <Lock className="h-4 w-4" />
               {t('nav.admin')}
-            </button>
-            <button
-              onClick={() => { setLogoutModal(true); setLogoutPassword(''); setLogoutError('') }}
-              className="p-2 rounded-lg hover:bg-red-100 text-gray-400 hover:text-red-600 transition-colors"
-              title={t('nav.logout')}
-            >
-              <LogOut className="h-5 w-5" />
             </button>
           </div>
         </div>
@@ -813,46 +777,6 @@ export function OrderScreen() {
             </Button>
             <Button variant="danger" onClick={confirmCancel} className="flex-1">
               {t('orders.confirmCancel')}
-            </Button>
-          </div>
-        </Modal>
-      )}
-
-      {/* Logout Modal */}
-      {logoutModal && (
-        <Modal isOpen onClose={() => setLogoutModal(false)} title={t('nav.logout')} size="sm">
-          <div className="text-center py-4">
-            <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <LogOut className="h-7 w-7 text-red-600" />
-            </div>
-            <p className="text-sm text-gray-600 mb-1">{t('nav.logoutConfirm')}</p>
-            <p className="text-xs text-orange-600 mb-4">{t('nav.logoutWarning')}</p>
-            <input
-              type="password"
-              value={logoutPassword}
-              onChange={(e) => { setLogoutPassword(e.target.value); setLogoutError('') }}
-              onKeyDown={(e) => e.key === 'Enter' && handleLogout()}
-              placeholder="••••••••"
-              className="w-full border rounded-lg p-3 text-sm text-center focus:outline-none focus:ring-2 focus:ring-red-500"
-              autoFocus
-            />
-            {logoutError && (
-              <p className="text-red-500 text-xs mt-2">{logoutError}</p>
-            )}
-          </div>
-          <div className="flex gap-2 pt-4 border-t">
-            <Button variant="secondary" onClick={() => setLogoutModal(false)} className="flex-1">
-              {t('common.cancel')}
-            </Button>
-            <Button
-              variant="danger"
-              onClick={handleLogout}
-              loading={loggingOut}
-              disabled={!logoutPassword.trim()}
-              className="flex-1"
-            >
-              <LogOut className="h-4 w-4" />
-              {t('nav.logout')}
             </Button>
           </div>
         </Modal>

@@ -71,6 +71,7 @@ export function RestaurantInfo({ data, updateData }: Props) {
             <Upload className="h-4 w-4" />
             {data.logoPath ? t('setup.restaurant.changeLogo') : t('setup.restaurant.uploadLogo')}
           </Button>
+          <p className="text-xs text-gray-400">{t('setup.restaurant.logoOptional', { defaultValue: 'Optional — you can add this later in settings' })}</p>
         </div>
 
         <Input
