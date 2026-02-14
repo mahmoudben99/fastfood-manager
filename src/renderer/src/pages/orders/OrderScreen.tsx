@@ -461,24 +461,36 @@ export function OrderScreen() {
                 className="bg-white rounded-xl border border-gray-200 p-3 text-start hover:shadow-md hover:border-orange-300 transition-all group"
               >
                 {item.image_path ? (
-                  <div className="aspect-square rounded-lg bg-gray-100 mb-2 overflow-hidden">
-                    <img
-                      src={`app-image://${item.image_path}`}
-                      alt={item.name}
-                      className="w-full h-full object-cover"
-                    />
+                  <>
+                    <div className="aspect-square rounded-lg bg-gray-100 mb-2 overflow-hidden">
+                      <img
+                        src={`app-image://${item.image_path}`}
+                        alt={item.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <h3 className="font-medium text-gray-900 text-sm truncate">
+                      {getItemName(item)}
+                    </h3>
+                    <p className="text-orange-600 font-bold text-sm mt-1">
+                      {formatCurrency(item.price)}
+                    </p>
+                  </>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    {(item.emoji || categories.find(c => c.id === item.category_id)?.icon) && (
+                      <span className="text-xl shrink-0">{item.emoji || categories.find(c => c.id === item.category_id)?.icon}</span>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-medium text-gray-900 text-sm truncate">
+                        {getItemName(item)}
+                      </h3>
+                      <p className="text-orange-600 font-bold text-sm">
+                        {formatCurrency(item.price)}
+                      </p>
+                    </div>
                   </div>
-                ) : (item.emoji || categories.find(c => c.id === item.category_id)?.icon) ? (
-                  <div className="aspect-square rounded-lg bg-gradient-to-br from-orange-50 to-amber-50 mb-2 flex items-center justify-center">
-                    <span className="text-3xl">{item.emoji || categories.find(c => c.id === item.category_id)?.icon}</span>
-                  </div>
-                ) : null}
-                <h3 className="font-medium text-gray-900 text-sm truncate">
-                  {getItemName(item)}
-                </h3>
-                <p className="text-orange-600 font-bold text-sm mt-1">
-                  {formatCurrency(item.price)}
-                </p>
+                )}
               </button>
             ))}
           </div>
