@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Lock, ShoppingCart, Trash2, Minus, Plus, Phone, MessageSquare, Check, Printer, Moon, Sun, Search, ClipboardList, X, Hash, Pencil, AlertTriangle } from 'lucide-react'
@@ -84,6 +84,9 @@ export function OrderScreen() {
 
   // Ongoing order count for badge
   const [ongoingCount, setOngoingCount] = useState(0)
+
+  // Size group expansion
+  const [expandedGroup, setExpandedGroup] = useState<string | null>(null)
 
   useEffect(() => {
     loadData()
@@ -227,6 +230,63 @@ export function OrderScreen() {
     }
     return true
   })
+
+  // Size suffixes to detect (order matters — check longer patterns first)
+  const SIZE_PATTERNS = /\s+(XXL|XL|XS|S|M|L|Grande|Grand|Petit|Small|Medium|Large)\s*$/i
+
+  // Group items that share the same base name but differ by size suffix (3+ variants only)
+  const groupedItems = useMemo(() => {
+    const groups: Record<string, { baseName: string; items: MenuItemData[] }> = {}
+    const ungrouped: MenuItemData[] = []
+
+    for (const item of filteredItems) {
+      const name = getItemName(item)
+      const match = name.match(SIZE_PATTERNS)
+      if (match) {
+        const baseName = name.slice(0, match.index!).trim()
+        const key = `${item.category_id}::${baseName.toLowerCase()}`
+        if (!groups[key]) groups[key] = { baseName, items: [] }
+        groups[key].items.push(item)
+      } else {
+        ungrouped.push(item)
+      }
+    }
+
+    // Build final list: groups with 3+ sizes become grouped, rest stay individual
+    type GridEntry = { type: 'single'; item: MenuItemData } | { type: 'group'; key: string; baseName: string; emoji: string | null; categoryIcon: string | null; items: MenuItemData[] }
+    const result: GridEntry[] = []
+
+    const groupedIds = new Set<number>()
+    for (const [key, group] of Object.entries(groups)) {
+      if (group.items.length >= 3) {
+        const first = group.items[0]
+        result.push({
+          type: 'group',
+          key,
+          baseName: group.baseName,
+          emoji: first.emoji,
+          categoryIcon: categories.find(c => c.id === first.category_id)?.icon || null,
+          items: group.items.sort((a, b) => a.price - b.price)
+        })
+        group.items.forEach(i => groupedIds.add(i.id))
+      }
+    }
+
+    // Add ungrouped and items from groups with < 3 variants
+    for (const item of filteredItems) {
+      if (!groupedIds.has(item.id)) {
+        result.push({ type: 'single', item })
+      }
+    }
+
+    return result
+  }, [filteredItems, categories, foodLanguage])
+
+  const getSizeLabel = (item: MenuItemData): string => {
+    const name = getItemName(item)
+    const match = name.match(SIZE_PATTERNS)
+    return match ? match[1].toUpperCase() : name
+  }
 
   const handleAddItem = (item: MenuItemData) => {
     store.addItem({
@@ -417,7 +477,7 @@ export function OrderScreen() {
               ref={searchRef}
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => { setSearchQuery(e.target.value); setExpandedGroup(null) }}
               placeholder={`${t('menu.search')} (F4)`}
               className="w-full ps-10 pe-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
             />
@@ -427,7 +487,7 @@ export function OrderScreen() {
         {/* Category tabs */}
         <div className="bg-white border-b px-4 py-2 flex gap-2 overflow-x-auto shrink-0">
           <button
-            onClick={() => setActiveCategory(null)}
+            onClick={() => { setActiveCategory(null); setExpandedGroup(null) }}
             className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
               activeCategory === null
                 ? 'bg-orange-500 text-white'
@@ -439,7 +499,7 @@ export function OrderScreen() {
           {categories.map((cat) => (
             <button
               key={cat.id}
-              onClick={() => setActiveCategory(cat.id)}
+              onClick={() => { setActiveCategory(cat.id); setExpandedGroup(null) }}
               className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
                 activeCategory === cat.id
                   ? 'bg-orange-500 text-white'
@@ -454,45 +514,111 @@ export function OrderScreen() {
         {/* Menu items grid */}
         <div className="flex-1 overflow-y-auto p-4">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-            {filteredItems.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => handleAddItem(item)}
-                className="bg-white rounded-xl border border-gray-200 p-3 text-start hover:shadow-md hover:border-orange-300 transition-all group"
-              >
-                {item.image_path ? (
-                  <>
-                    <div className="aspect-square rounded-lg bg-gray-100 mb-2 overflow-hidden">
-                      <img
-                        src={`app-image://${item.image_path}`}
-                        alt={item.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <h3 className="font-medium text-gray-900 text-sm truncate">
-                      {getItemName(item)}
-                    </h3>
-                    <p className="text-orange-600 font-bold text-sm mt-1">
-                      {formatCurrency(item.price)}
-                    </p>
-                  </>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    {(item.emoji || categories.find(c => c.id === item.category_id)?.icon) && (
-                      <span className="text-xl shrink-0">{item.emoji || categories.find(c => c.id === item.category_id)?.icon}</span>
+            {groupedItems.map((entry) => {
+              if (entry.type === 'single') {
+                const item = entry.item
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleAddItem(item)}
+                    className="bg-white rounded-xl border border-gray-200 p-3 text-start hover:shadow-md hover:border-orange-300 transition-all"
+                  >
+                    {item.image_path ? (
+                      <>
+                        <div className="aspect-square rounded-lg bg-gray-100 mb-2 overflow-hidden">
+                          <img
+                            src={`app-image://${item.image_path}`}
+                            alt={item.name}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <h3 className="font-medium text-gray-900 text-sm truncate">
+                          {getItemName(item)}
+                        </h3>
+                        <p className="text-orange-600 font-bold text-sm mt-1">
+                          {formatCurrency(item.price)}
+                        </p>
+                      </>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        {(item.emoji || categories.find(c => c.id === item.category_id)?.icon) && (
+                          <span className="text-xl shrink-0">{item.emoji || categories.find(c => c.id === item.category_id)?.icon}</span>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-medium text-gray-900 text-sm truncate">
+                            {getItemName(item)}
+                          </h3>
+                          <p className="text-orange-600 font-bold text-sm">
+                            {formatCurrency(item.price)}
+                          </p>
+                        </div>
+                      </div>
                     )}
-                    <div className="min-w-0 flex-1">
-                      <h3 className="font-medium text-gray-900 text-sm truncate">
-                        {getItemName(item)}
-                      </h3>
-                      <p className="text-orange-600 font-bold text-sm">
-                        {formatCurrency(item.price)}
-                      </p>
+                  </button>
+                )
+              }
+
+              // Grouped item (3+ sizes)
+              const isExpanded = expandedGroup === entry.key
+              return (
+                <div key={entry.key} className="relative">
+                  {!isExpanded ? (
+                    <button
+                      onClick={() => setExpandedGroup(entry.key)}
+                      className="w-full bg-white rounded-xl border-2 border-orange-200 p-3 text-start hover:shadow-md hover:border-orange-400 transition-all"
+                    >
+                      <div className="flex items-center gap-2">
+                        {(entry.emoji || entry.categoryIcon) && (
+                          <span className="text-xl shrink-0">{entry.emoji || entry.categoryIcon}</span>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-medium text-gray-900 text-sm truncate">{entry.baseName}</h3>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <span className="text-orange-600 font-bold text-xs">{formatCurrency(entry.items[0].price)}</span>
+                            <span className="text-gray-400 text-xs">-</span>
+                            <span className="text-orange-600 font-bold text-xs">{formatCurrency(entry.items[entry.items.length - 1].price)}</span>
+                          </div>
+                        </div>
+                        <div className="flex gap-0.5">
+                          {entry.items.map((_, i) => (
+                            <div key={i} className="w-1.5 h-1.5 rounded-full bg-orange-400" />
+                          ))}
+                        </div>
+                      </div>
+                    </button>
+                  ) : (
+                    <div className="bg-white rounded-xl border-2 border-orange-400 p-2 shadow-lg animate-slide-up">
+                      <div className="flex items-center justify-between mb-2 px-1">
+                        <div className="flex items-center gap-1.5">
+                          {(entry.emoji || entry.categoryIcon) && (
+                            <span className="text-base">{entry.emoji || entry.categoryIcon}</span>
+                          )}
+                          <span className="font-semibold text-gray-900 text-xs truncate">{entry.baseName}</span>
+                        </div>
+                        <button
+                          onClick={() => setExpandedGroup(null)}
+                          className="p-0.5 rounded hover:bg-gray-100 text-gray-400"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      <div className="flex gap-1.5">
+                        {entry.items.map((sizeItem) => (
+                          <button
+                            key={sizeItem.id}
+                            onClick={() => { handleAddItem(sizeItem); setExpandedGroup(null) }}
+                            className="flex-1 py-2 px-1 rounded-lg bg-orange-50 hover:bg-orange-100 border border-orange-200 hover:border-orange-400 transition-all text-center"
+                          >
+                            <div className="font-bold text-gray-900 text-xs">{getSizeLabel(sizeItem)}</div>
+                            <div className="text-orange-600 font-bold text-xs mt-0.5">{formatCurrency(sizeItem.price)}</div>
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </button>
-            ))}
+                  )}
+                </div>
+              )
+            })}
           </div>
 
           {filteredItems.length === 0 && (
