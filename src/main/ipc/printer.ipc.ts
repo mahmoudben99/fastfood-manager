@@ -191,14 +191,56 @@ export function registerPrinterHandlers(): void {
 
 export async function printOrder(orderId: number, type: 'receipt' | 'kitchen'): Promise<{ success: boolean; error?: string }> {
   const settings = settingsRepo.getAll()
-  const printerName = settings.printer_name
-  if (!printerName) return { success: false, error: 'No printer configured' }
-
   const order = ordersRepo.getById(orderId)
   if (!order) return { success: false, error: 'Order not found' }
 
-  const html = getReceiptHTML(order, settings, type)
-  return doPrint(html, printerName)
+  // Receipt printing - use receipt printer or fallback to default
+  if (type === 'receipt') {
+    const printerName = printerAssignmentsRepo.getReceiptPrinter() || settings.printer_name
+    if (!printerName) return { success: false, error: 'No printer configured' }
+    const html = getReceiptHTML(order, settings, type)
+    return doPrint(html, printerName)
+  }
+
+  // Kitchen printing - check if split by worker is enabled
+  const splitEnabled = settings.split_kitchen_tickets === 'true'
+
+  if (!splitEnabled || !order.items || order.items.length === 0) {
+    // Print single kitchen ticket to kitchen printer
+    const printerName = printerAssignmentsRepo.getKitchenAllPrinter() || settings.kitchen_printer_name || settings.printer_name
+    if (!printerName) return { success: false, error: 'No printer configured' }
+    const html = getReceiptHTML(order, settings, type)
+    return doPrint(html, printerName)
+  }
+
+  // Split kitchen tickets by worker
+  const itemsByWorker = new Map<number | null, any[]>()
+  for (const item of order.items) {
+    const workerId = item.worker_id
+    if (!itemsByWorker.has(workerId)) {
+      itemsByWorker.set(workerId, [])
+    }
+    itemsByWorker.get(workerId)!.push(item)
+  }
+
+  // Print separate ticket for each worker
+  let allSuccess = true
+  for (const [workerId, items] of itemsByWorker) {
+    const workerOrder = { ...order, items }
+    const printerName = workerId
+      ? printerAssignmentsRepo.getPrinterForWorker(workerId)
+      : printerAssignmentsRepo.getKitchenAllPrinter()
+
+    // Fallback to default if no printer found
+    const finalPrinter = printerName || settings.kitchen_printer_name || settings.printer_name
+    if (!finalPrinter) continue
+
+    const html = getReceiptHTML(workerOrder, settings, type)
+    const result = await doPrint(html, finalPrinter)
+    if (!result.success) allSuccess = false
+  }
+
+  return { success: allSuccess }
 }
 
 async function doPrint(html: string, printerName: string): Promise<{ success: boolean; error?: string }> {

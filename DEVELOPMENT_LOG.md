@@ -1,6 +1,6 @@
 # Fast Food Manager - Development Log
 
-**Current Version:** 1.2.0
+**Current Version:** 1.2.1
 **Last Updated:** 2026-02-15
 **Repository:** https://github.com/mahmoudben99/fastfood-manager
 
@@ -35,6 +35,23 @@ src/
 ---
 
 ## Recent Changes
+
+### v1.2.1 (2026-02-15) - Foundation & Fixes
+**Foundation for Future Features:**
+- 🔧 Added printer_assignments table and repository (foundation for advanced printer management)
+- 📋 Prepared infrastructure for worker-specific printer assignments (UI coming in v1.3.0)
+- 🔄 Added fallback chain: worker → kitchen_all → default printer
+
+**Bug Fixes:**
+- 🐛 Fixed duplicate Windows startup entry preventing app launch
+- 🐛 Removed incorrect dev path from auto-launch registry
+
+**Database:**
+- Migration 009: printer_assignments table with assignment types
+
+**Technical:**
+- `printer-assignments.repo.ts`: Repository with smart fallback logic
+- Prepared for auto-split kitchen tickets per worker (v1.3.0)
 
 ### v1.2.0 (2026-02-15) - CRITICAL BUG FIXES
 **Bug Fixes:**
@@ -203,4 +220,4 @@ unset ELECTRON_RUN_AS_NODE
 4. Create GitHub release for updates
 5. Copy new build to `C:\Users\MahmoudBen\Desktop\FFM Final\`
 
-**Last context:** Fixing timezone bug - app registering orders 1 hour behind actual time (UTC vs local time issue).
+**Last context:** v1.2.1 shipped with printer assignments foundation. Fixed startup registry bug. Full printer UI + auto-split features planned for v1.3.0.
