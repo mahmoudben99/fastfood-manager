@@ -389,6 +389,16 @@ export function OrderScreen() {
     }
   }
 
+  const restoreOrder = async (id: number) => {
+    await window.api.orders.updateStatus(id, 'preparing')
+    await loadTodayOrders()
+    loadOngoingCount()
+    if (selectedOrder?.id === id) {
+      const updated = await window.api.orders.getById(id)
+      setSelectedOrder(updated)
+    }
+  }
+
   // --- Edit helpers ---
   const startEdit = () => {
     if (!selectedOrder?.items) return
@@ -928,7 +938,7 @@ export function OrderScreen() {
 
       {/* Cancel Confirmation Modal */}
       {cancelConfirm && (
-        <Modal isOpen onClose={() => setCancelConfirm(null)} title={t('orders.cancelConfirm')} size="sm">
+        <Modal isOpen onClose={() => setCancelConfirm(null)} title={t('orders.cancelConfirm')} size="sm" zIndex={60}>
           <div className="text-center py-4">
             <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertTriangle className="h-7 w-7 text-red-600" />
@@ -1074,15 +1084,26 @@ export function OrderScreen() {
                   {(selectedOrder.status === 'preparing' || selectedOrder.status === 'pending') && (
                     <div className="flex gap-2 pt-3 border-t">
                       <Button variant="secondary" size="sm" onClick={startEdit} className="flex-1">
-                        <Pencil className="h-4 w-4" />
+                        <Pencil className="h-4 w-4 me-1" />
                         {t('orders.editOrder')}
                       </Button>
-                      <Button size="sm" onClick={() => markDone(selectedOrder.id)} className="flex-1">
-                        <Check className="h-4 w-4" />
+                      <Button size="sm" onClick={() => markDone(selectedOrder.id)} className="flex-1 bg-green-600 hover:bg-green-700">
+                        <Check className="h-4 w-4 me-1" />
                         {t('orders.markDone')}
                       </Button>
                       <Button variant="danger" size="sm" onClick={() => setCancelConfirm(selectedOrder)}>
-                        <X className="h-4 w-4" />
+                        <X className="h-4 w-4 me-1" />
+                        {t('orders.cancelOrder')}
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Action buttons for completed/canceled orders (allow restore) */}
+                  {(selectedOrder.status === 'completed' || selectedOrder.status === 'cancelled') && (
+                    <div className="flex gap-2 pt-3 border-t">
+                      <Button variant="secondary" size="sm" onClick={() => restoreOrder(selectedOrder.id)} className="flex-1">
+                        <RefreshCw className="h-4 w-4 me-1" />
+                        {t('orders.restoreOrder')}
                       </Button>
                     </div>
                   )}

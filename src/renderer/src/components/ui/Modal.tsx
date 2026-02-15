@@ -6,6 +6,7 @@ interface ModalProps {
   onClose: () => void
   title?: string
   size?: 'sm' | 'md' | 'lg' | 'xl'
+  zIndex?: number
   children: ReactNode
 }
 
@@ -16,7 +17,7 @@ const sizeClasses = {
   xl: 'max-w-4xl'
 }
 
-export function Modal({ isOpen, onClose, title, size = 'md', children }: ModalProps) {
+export function Modal({ isOpen, onClose, title, size = 'md', zIndex = 50, children }: ModalProps) {
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
@@ -34,7 +35,7 @@ export function Modal({ isOpen, onClose, title, size = 'md', children }: ModalPr
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex }}>
       <div className="fixed inset-0 bg-black/50" onClick={onClose} />
       <div
         className={`relative bg-white rounded-xl shadow-xl ${sizeClasses[size]} w-full mx-4 max-h-[90vh] flex flex-col`}
