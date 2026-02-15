@@ -108,7 +108,7 @@ export const workersRepo = {
       getDb()
         .prepare(
           `UPDATE workers SET name = ?, role = ?, pay_full_day = ?, pay_half_day = ?,
-           phone = ?, updated_at = datetime('now') WHERE id = ?`
+           phone = ?, printer_name = ?, updated_at = datetime('now') WHERE id = ?`
         )
         .run(
           input.name ?? current.name,
@@ -116,6 +116,7 @@ export const workersRepo = {
           input.pay_full_day ?? current.pay_full_day,
           input.pay_half_day ?? current.pay_half_day,
           input.phone ?? current.phone,
+          (input as any).printer_name ?? current.printer_name,
           id
         )
 

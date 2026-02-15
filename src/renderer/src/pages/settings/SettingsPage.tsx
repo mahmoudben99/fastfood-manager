@@ -53,6 +53,8 @@ export function SettingsPage() {
   const [splitKitchenTickets, setSplitKitchenTickets] = useState(true)
   const [testResult, setTestResult] = useState<{ success: boolean; error?: string } | null>(null)
   const [testingPrint, setTestingPrint] = useState(false)
+  const [workers, setWorkers] = useState<any[]>([])
+  const [workerPrinters, setWorkerPrinters] = useState<Record<number, string>>({})
 
   // Updates
   const [checking, setChecking] = useState(false)
@@ -99,6 +101,24 @@ export function SettingsPage() {
     const printerList = await window.api.printer.getPrinters()
     setPrinters(printerList)
 
+    // Load workers for printer assignment
+    try {
+      const workersList = await window.api.workers.getAll()
+      setWorkers(workersList)
+
+      // Load current printer assignments (we'll implement this IPC handler)
+      const assignments: Record<number, string> = {}
+      for (const worker of workersList) {
+        if (worker.printer_name) {
+          assignments[worker.id] = worker.printer_name
+        }
+      }
+      setWorkerPrinters(assignments)
+    } catch {
+      // Workers API might not be available
+      setWorkers([])
+    }
+
     // Load auto-launch setting
     const autoLaunchEnabled = await window.api.settings.getAutoLaunch()
     setAutoLaunch(autoLaunchEnabled)
@@ -136,7 +156,21 @@ export function SettingsPage() {
       kitchen_font_size: kitchenFontSize,
       split_kitchen_tickets: splitKitchenTickets ? 'true' : 'false'
     })
+
+    // Save worker printer assignments
+    for (const worker of workers) {
+      const printerName = workerPrinters[worker.id] || null
+      await window.api.workers.update(worker.id, { printer_name: printerName })
+    }
+
     flashSaved()
+  }
+
+  const handleWorkerPrinterChange = (workerId: number, printerName: string) => {
+    setWorkerPrinters(prev => ({
+      ...prev,
+      [workerId]: printerName || undefined
+    }))
   }
 
   const handleTestPrint = async () => {
@@ -459,6 +493,38 @@ export function SettingsPage() {
                 </div>
               </label>
             </div>
+
+            {/* Worker Printer Assignments */}
+            {workers.length > 0 && (
+              <div className="pt-3 mt-3 border-t border-gray-200 space-y-3">
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700">{t('settings.workerPrinters', { defaultValue: 'Worker Printer Assignments' })}</h4>
+                  <p className="text-xs text-gray-400 mt-1">{t('settings.workerPrintersDesc', { defaultValue: 'Assign specific printers to workers for kitchen ticket printing' })}</p>
+                </div>
+                {workers.map(worker => (
+                  <div key={worker.id} className="flex items-center gap-3">
+                    <label className="w-32 text-sm text-gray-700">{worker.name}:</label>
+                    <select
+                      value={workerPrinters[worker.id] || ''}
+                      onChange={(e) => handleWorkerPrinterChange(worker.id, e.target.value)}
+                      className="flex-1 border rounded-lg px-3 py-1.5 text-sm"
+                    >
+                      <option value="">{t('settings.noAssignment', { defaultValue: '-- Use Default --' })}</option>
+                      {printers.map(printer => (
+                        <option key={printer.name} value={printer.name}>
+                          {printer.name}{printer.isDefault ? ' (Default)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+                <div className="mt-2 p-3 bg-blue-50 rounded-lg">
+                  <p className="text-xs text-blue-700">
+                    💡 {t('settings.workerPrintersHint', { defaultValue: 'When split kitchen tickets is enabled, each worker\'s items will print to their assigned printer.' })}
+                  </p>
+                </div>
+              </div>
+            )}
 
             <div className="flex gap-3">
               <Button onClick={savePrinter}>{t('common.save')}</Button>

@@ -1,6 +1,6 @@
 # Fast Food Manager - Development Log
 
-**Current Version:** 1.2.2
+**Current Version:** 1.2.5
 **Last Updated:** 2026-02-15
 **Repository:** https://github.com/mahmoudben99/fastfood-manager
 
@@ -30,6 +30,7 @@ src/
 │   ├── pages/      # Main app pages
 │   ├── components/ # Reusable UI components
 │   ├── store/      # Zustand stores
+│   ├── utils/      # removeRepeatedPrefix helper
 │   └── i18n/       # Translation files
 └── preload/        # Preload script (IPC bridge)
 ```
@@ -37,6 +38,57 @@ src/
 ---
 
 ## Recent Changes
+
+### v1.2.5 (2026-02-15) - Critical UI/UX Fixes
+**Bug Fixes:**
+- 🐛 **CRITICAL**: Fixed orders counter showing "{{count}}" template text instead of actual number
+- 🐛 **CRITICAL**: Fixed Save button not saving worker printer assignments
+
+**Technical:**
+- `OrdersHistory.tsx`: Added count parameter to `t('orders.ordersFound')` translation
+- `workers.repo.ts`: Added `printer_name` field to UPDATE query (was missing from v1.2.4)
+
+### v1.2.4 (2026-02-15) - UI Improvements & Worker Printer Assignment
+**New Features:**
+- 🖨️ **Worker Printer Assignment UI** - Complete UI for assigning printers to specific workers
+- 📊 **Live Backup Status UI** - Replaced confusing scheduled backup UI with clear live backup status
+
+**Improvements:**
+- ✨ Top Selling Items chart now uses simplified names (removes repeated prefixes)
+- ✨ Increased Y-axis width from 100px to 140px for better readability
+- ✨ Truncates long item names to 20 characters with "..." suffix
+- ✨ Live backup status shows: Active indicator, location, 7-day retention
+
+**UI Changes:**
+- Removed scheduled backup time settings (replaced with live backup info)
+- Added worker printer assignment dropdowns in Settings → Printer tab
+- Improved analytics chart text readability
+
+**Technical:**
+- `BackupRestore.tsx`: Replaced scheduled backup card with Live Backup Status
+- `SettingsPage.tsx`: Added worker printer assignment UI with state management
+- `AnalyticsDashboard.tsx`: Integrated removeRepeatedPrefix for chart names (40% threshold)
+
+### v1.2.3 (2026-02-15) - Menu Display Fixes
+**Bug Fixes:**
+- 🐛 **CRITICAL**: Fixed repeated word removal not working for Pizza items
+- 🐛 Fixed repeated word removal not working in "All" section
+- 🐛 Fixed grouped items (size variants) not using simplified names
+
+**Improvements:**
+- ✨ Per-category prefix detection even in "All" view
+- ✨ Lowered detection threshold from 60% to 50% for better accuracy
+- ✨ Simplified names now apply to grouped items (Pizza XL/L/M, etc.)
+
+**How It Works Now:**
+- Groups items by category first, then processes each category separately
+- Works correctly in "All" view (e.g., removes "Sandwich" from all sandwiches, "Pizza" from all pizzas)
+- Grouped size variants also get simplified names
+- Example: "Pizza Margherita XL/L/M" → "Margherita XL/L/M" (not "Pizza Margherita XL/L/M")
+
+**Technical:**
+- `OrderScreen.tsx`: Per-category simplified name processing with 50% threshold
+- `getSimplifiedBaseName()`: New helper for grouped item name simplification
 
 ### v1.2.2 (2026-02-15) - Live Backup System & Stability Fix
 **New Features:**

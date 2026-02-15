@@ -121,33 +121,28 @@ export function BackupRestore() {
           </div>
         </Card>
 
-        {/* Scheduled Backup */}
+        {/* Live Backup Status */}
         <Card>
           <div className="flex items-center gap-2 mb-4">
-            <Clock className="h-5 w-5 text-blue-500" />
-            <h3 className="font-semibold">{t('backup.scheduledBackup')}</h3>
+            <Check className="h-5 w-5 text-green-500" />
+            <h3 className="font-semibold">{t('backup.liveBackup', { defaultValue: 'Live Backup' })}</h3>
           </div>
-          <label className="flex items-center gap-2 cursor-pointer mb-3">
-            <input
-              type="checkbox"
-              checked={schedEnabled}
-              onChange={(e) => saveSchedule(e.target.checked, schedTime)}
-              className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
-            />
-            <span className="text-sm text-gray-700">{t('backup.enableSchedule')}</span>
-          </label>
-          {schedEnabled && (
+          <div className="space-y-3">
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">{t('backup.backupAt')}</span>
-              <input
-                type="time"
-                value={schedTime}
-                onChange={(e) => saveSchedule(true, e.target.value)}
-                className="border rounded-lg px-3 py-1.5 text-sm"
-              />
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              <span className="text-sm text-gray-700">{t('backup.liveActive', { defaultValue: 'Active - Backing up every 1 minute' })}</span>
             </div>
-          )}
-          <p className="text-xs text-gray-400 mt-2">{t('backup.scheduleHint')}</p>
+            <div className="text-sm text-gray-600">
+              <p><strong>{t('backup.location', { defaultValue: 'Location' })}:</strong> AppData/fastfood-manager/backups/</p>
+              <p><strong>{t('backup.retention', { defaultValue: 'Retention' })}:</strong> {t('backup.7days', { defaultValue: '7 days' })}</p>
+              <p><strong>{t('backup.format', { defaultValue: 'Format' })}:</strong> fastfood-manager-backup-YYYY-MM-DD.db</p>
+            </div>
+          </div>
+          <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+            <p className="text-xs text-blue-700">
+              💡 {t('backup.liveHint', { defaultValue: 'Your data is automatically backed up every minute. Maximum data loss: 1 minute if PC crashes.' })}
+            </p>
+          </div>
         </Card>
 
         {/* Restore */}

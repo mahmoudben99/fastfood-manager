@@ -300,14 +300,52 @@ export function OrderScreen() {
   })
 
   // Compute simplified names (remove repeated prefix words like "Pizza" in "Pizza Margherita")
+  // Apply per-category to ensure it works even in "All" view
   const simplifiedNames = useMemo(() => {
-    const names = filteredItems.map((item) => getItemName(item))
-    return removeRepeatedPrefix(names)
+    const result = new Map<string, string>()
+
+    // Group items by category for better prefix detection
+    const byCategory = new Map<number, MenuItemData[]>()
+    filteredItems.forEach(item => {
+      if (!byCategory.has(item.category_id)) {
+        byCategory.set(item.category_id, [])
+      }
+      byCategory.get(item.category_id)!.push(item)
+    })
+
+    // Process each category separately to ensure prefixes are detected even in "All" view
+    byCategory.forEach((items) => {
+      const names = items.map((item) => getItemName(item))
+      const simplified = removeRepeatedPrefix(names, 0.5) // Lower threshold to 50%
+      simplified.forEach((value, key) => {
+        result.set(key, value)
+      })
+    })
+
+    return result
   }, [filteredItems, foodLanguage])
 
   const getDisplayName = (item: MenuItemData): string => {
     const originalName = getItemName(item)
     return simplifiedNames.get(originalName) || originalName
+  }
+
+  // Also compute simplified base names for grouped items
+  const getSimplifiedBaseName = (baseName: string, items: MenuItemData[]): string => {
+    // Get the category-level simplified name for the first item in the group
+    const firstItem = items[0]
+    const fullName = getItemName(firstItem)
+    const simplified = simplifiedNames.get(fullName) || fullName
+
+    // Extract the base part by removing size suffix from simplified name
+    const match = simplified.match(SIZE_PATTERNS)
+    if (match) {
+      return simplified.slice(0, match.index!).trim()
+    }
+
+    // If no size pattern, try removing it from the base name directly
+    const baseSimplified = simplifiedNames.get(baseName)
+    return baseSimplified || baseName
   }
 
   // Size suffixes to detect (order matters — check longer patterns first)
@@ -674,7 +712,7 @@ export function OrderScreen() {
                           <span className="text-xl shrink-0">{entry.emoji || entry.categoryIcon}</span>
                         )}
                         <div className="min-w-0 flex-1">
-                          <h3 className="font-medium text-gray-900 text-sm truncate">{entry.baseName}</h3>
+                          <h3 className="font-medium text-gray-900 text-sm truncate">{getSimplifiedBaseName(entry.baseName, entry.items)}</h3>
                           <div className="flex items-center gap-1 mt-0.5">
                             <span className="text-orange-600 font-bold text-xs">{formatCurrency(entry.items[0].price)}</span>
                             <span className="text-gray-400 text-xs">-</span>

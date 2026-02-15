@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { TrendingUp, TrendingDown, DollarSign, ShoppingCart, CalendarRange } from 'lucide-react'
 import {
@@ -8,6 +8,7 @@ import {
 import { Card } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { formatCurrency } from '../../utils/formatCurrency'
+import { removeRepeatedPrefix } from '../../utils/removeRepeatedPrefix'
 
 const COLORS = ['#f97316', '#3b82f6', '#22c55e', '#eab308', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6']
 
@@ -232,11 +233,23 @@ export function AnalyticsDashboard() {
         <Card title={t('analytics.topItems')}>
           {topItems.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={topItems} layout="vertical">
+              <BarChart data={(() => {
+                // Simplify item names by removing repeated prefixes
+                const names = topItems.map(item => item.name)
+                const simplified = removeRepeatedPrefix(names, 0.4)
+                return topItems.map(item => ({
+                  ...item,
+                  displayName: simplified.get(item.name) || item.name,
+                  // Truncate if still too long (max 20 chars)
+                  name: (simplified.get(item.name) || item.name).length > 20
+                    ? (simplified.get(item.name) || item.name).substring(0, 17) + '...'
+                    : simplified.get(item.name) || item.name
+                }))
+              })()} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis type="number" tick={{ fontSize: 12 }} />
-                <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={100} />
-                <Tooltip />
+                <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={140} />
+                <Tooltip formatter={(value, name, props) => [value, props.payload.displayName]} />
                 <Bar dataKey="total_quantity" fill="#f97316" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>

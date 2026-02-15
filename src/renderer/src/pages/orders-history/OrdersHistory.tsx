@@ -194,7 +194,7 @@ export function OrdersHistory() {
         </select>
 
         <span className="self-center text-sm text-gray-400">
-          {filteredOrders.length} {t('orders.ordersFound')}
+          {t('orders.ordersFound', { count: filteredOrders.length })}
         </span>
       </div>
 
