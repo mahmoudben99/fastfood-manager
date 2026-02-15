@@ -1,19 +1,46 @@
 import { app, BrowserWindow, shell, protocol, dialog, ipcMain } from 'electron'
 import { join } from 'path'
-import { writeFileSync } from 'fs'
+import { writeFileSync, appendFileSync } from 'fs'
 import { autoUpdater } from 'electron-updater'
 import { initDatabase, closeDatabase } from './database/connection'
 import { registerAllHandlers } from './ipc'
 import { startBot, stopBot } from './telegram/bot'
 import { settingsRepo } from './database/repositories/settings.repo'
+import { startBackupSystem, stopBackupSystem } from './database/backup'
+
+// Enhanced logging function
+function log(message: string, isError = false): void {
+  const timestamp = new Date().toISOString()
+  const logMessage = `[${timestamp}] ${isError ? 'ERROR: ' : ''}${message}\n`
+  try {
+    const logPath = join(app.getPath('userData'), 'app.log')
+    appendFileSync(logPath, logMessage)
+    if (isError) console.error(logMessage)
+    else console.log(logMessage)
+  } catch (e) {
+    console.error('Failed to write log:', e)
+  }
+}
 
 // Catch any uncaught errors and write to a log file
 process.on('uncaughtException', (err) => {
-  const logPath = join(app.getPath('userData'), 'crash.log')
-  writeFileSync(logPath, `${new Date().toISOString()}\n${err.stack || err.message}\n`)
-  dialog.showErrorBox('Fast Food Manager Error', err.message)
+  try {
+    const logPath = join(app.getPath('userData'), 'crash.log')
+    const crashLog = `${new Date().toISOString()}\nUNCEPTED EXCEPTION:\n${err.stack || err.message}\n\n`
+    writeFileSync(logPath, crashLog)
+    log(`CRASH: ${err.message}`, true)
+    dialog.showErrorBox('Fast Food Manager Error', `The app crashed:\n\n${err.message}\n\nCheck crash.log for details.`)
+  } catch (logErr) {
+    console.error('Failed to write crash log:', logErr)
+  }
   app.exit(1)
 })
+
+process.on('unhandledRejection', (reason) => {
+  log(`Unhandled Promise Rejection: ${reason}`, true)
+})
+
+log('=== Fast Food Manager Starting ===')
 
 let mainWindow: BrowserWindow | null = null
 
@@ -123,31 +150,62 @@ function setupAutoUpdater(): void {
 }
 
 app.whenReady().then(() => {
-  registerImageProtocol()
-  initDatabase()
-  registerAllHandlers()
-  createWindow()
-  setupAutoUpdater()
+  try {
+    log('App ready - starting initialization')
 
-  // Enable auto-startup with Windows (default ON, can be changed in settings)
-  const autoLaunchSetting = settingsRepo.get('auto_launch')
-  const shouldAutoLaunch = autoLaunchSetting !== 'false' // Default to true if not set
-  app.setLoginItemSettings({
-    openAtLogin: shouldAutoLaunch,
-    openAsHidden: false,
-    name: 'Fast Food Manager'
-  })
+    log('Registering image protocol')
+    registerImageProtocol()
 
-  // Auto-start Telegram bot if configured
-  const autoStart = settingsRepo.get('telegram_auto_start')
-  const token = settingsRepo.get('telegram_bot_token')
-  if (autoStart === 'true' && token) {
-    startBot()
+    log('Initializing database')
+    initDatabase()
+
+    log('Starting backup system')
+    startBackupSystem()
+
+    log('Registering IPC handlers')
+    registerAllHandlers()
+
+    log('Creating main window')
+    createWindow()
+
+    log('Setting up auto-updater')
+    setupAutoUpdater()
+
+    // Enable auto-startup with Windows (default ON, can be changed in settings)
+    log('Configuring auto-launch')
+    const autoLaunchSetting = settingsRepo.get('auto_launch')
+    const shouldAutoLaunch = autoLaunchSetting !== 'false' // Default to true if not set
+    app.setLoginItemSettings({
+      openAtLogin: shouldAutoLaunch,
+      openAsHidden: false,
+      name: 'Fast Food Manager'
+    })
+    log(`Auto-launch set to: ${shouldAutoLaunch}`)
+
+    // Auto-start Telegram bot if configured
+    const autoStart = settingsRepo.get('telegram_auto_start')
+    const token = settingsRepo.get('telegram_bot_token')
+    if (autoStart === 'true' && token) {
+      log('Starting Telegram bot')
+      startBot()
+    }
+
+    log('Initialization complete')
+  } catch (err) {
+    const error = err as Error
+    log(`Fatal error during initialization: ${error.message}`, true)
+    dialog.showErrorBox('Initialization Error', `Failed to start the app:\n\n${error.message}\n\nStack: ${error.stack}`)
+    app.exit(1)
   }
+}).catch((err) => {
+  log(`App ready failed: ${err.message}`, true)
+  app.exit(1)
 })
 
 app.on('window-all-closed', () => {
+  log('App closing - cleaning up')
   stopBot()
+  stopBackupSystem()
   closeDatabase()
   app.quit()
 })

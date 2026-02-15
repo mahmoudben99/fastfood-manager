@@ -1,6 +1,6 @@
 # Fast Food Manager - Development Log
 
-**Current Version:** 1.2.1
+**Current Version:** 1.2.2
 **Last Updated:** 2026-02-15
 **Repository:** https://github.com/mahmoudben99/fastfood-manager
 
@@ -14,6 +14,7 @@
 - **i18n:** react-i18next (Arabic, English, French)
 - **Printing:** node-thermal-printer
 - **Auto-updates:** electron-updater (GitHub releases)
+- **Backup:** Live backup system with daily files
 
 ---
 
@@ -22,6 +23,7 @@
 src/
 ├── main/           # Electron main process
 │   ├── database/   # SQLite setup, migrations, repositories
+│   │   └── backup.ts  # Live backup system
 │   ├── ipc/        # IPC handlers
 │   └── telegram/   # Telegram bot integration
 ├── renderer/       # React frontend
@@ -35,6 +37,31 @@ src/
 ---
 
 ## Recent Changes
+
+### v1.2.2 (2026-02-15) - Live Backup System & Stability Fix
+**New Features:**
+- 💾 **Live backup system** - Automatic continuous backups every 1 minute
+- 📁 **Daily backup files** - Separate backup file for each day (format: fastfood-manager-backup-YYYY-MM-DD.db)
+- 🔄 **Auto-retention** - Keeps last 7 days of backups, auto-deletes older ones
+- 🛡️ **Data protection** - Prevents data loss if app crashes or PC turns off suddenly
+- 📝 **Enhanced logging** - Comprehensive error logging for easier troubleshooting
+
+**Bug Fixes:**
+- 🐛 **CRITICAL**: Fixed app not opening in production builds (enhanced error handling)
+- 🐛 Added comprehensive logging to main process for crash detection
+
+**How Live Backup Works:**
+- Creates initial backup on app start
+- Updates today's backup file every 1 minute
+- Creates new backup file each day
+- On app shutdown, creates final backup
+- Backups stored in: `%AppData%/fastfood-manager/backups/`
+- Maximum data loss: 1 minute (though main DB is always current due to WAL mode)
+
+**Technical:**
+- `backup.ts`: New live backup system with WAL checkpoint
+- `index.ts`: Enhanced error logging and backup integration
+- Backup files include both .db and -wal files for extra safety
 
 ### v1.2.1 (2026-02-15) - Auto-Split Kitchen Tickets & Printer Management
 **New Features:**
