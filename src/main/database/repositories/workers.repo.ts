@@ -7,6 +7,7 @@ export interface Worker {
   pay_full_day: number
   pay_half_day: number
   phone: string | null
+  printer_name: string | null
   is_active: number
   created_at: string
   updated_at: string

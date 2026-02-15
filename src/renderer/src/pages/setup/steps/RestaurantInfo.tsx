@@ -96,6 +96,13 @@ export function RestaurantInfo({ data, updateData }: Props) {
           />
         </div>
 
+        <Input
+          label={t('setup.restaurant.address')}
+          value={data.address || ''}
+          onChange={(e) => updateData({ address: e.target.value })}
+          placeholder={t('setup.restaurant.addressPlaceholder')}
+        />
+
         <div className="grid grid-cols-2 gap-4">
           <Select
             label={t('setup.restaurant.currency')}

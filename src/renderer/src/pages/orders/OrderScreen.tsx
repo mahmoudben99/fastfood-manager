@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Lock, ShoppingCart, Trash2, Minus, Plus, Phone, MessageSquare, Check, Printer, Moon, Sun, Search, ClipboardList, X, Hash, Pencil, AlertTriangle } from 'lucide-react'
+import { Lock, ShoppingCart, Trash2, Minus, Plus, Phone, MessageSquare, Check, Printer, Moon, Sun, Search, ClipboardList, X, Hash, Pencil, AlertTriangle, RefreshCw } from 'lucide-react'
 import { useOrderStore, type CartItem } from '../../store/orderStore'
 import { useAppStore } from '../../store/appStore'
 import { Button } from '../../components/ui/Button'
@@ -89,9 +89,29 @@ export function OrderScreen() {
   // Size group expansion
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null)
 
+  // Order alert settings
+  const [orderAlertMinutes, setOrderAlertMinutes] = useState(20)
+  const [currentTime, setCurrentTime] = useState(Date.now())
+
+  // Notes autocomplete
+  const [noteSuggestions, setNoteSuggestions] = useState<string[]>([])
+  const [showNoteSuggestions, setShowNoteSuggestions] = useState(false)
+
+  // Validation errors
+  const [validationError, setValidationError] = useState<'table' | 'phone' | null>(null)
+
   useEffect(() => {
     loadData()
     loadOngoingCount()
+    loadAlertSettings()
+    loadNoteSuggestions()
+
+    // Update current time every 30 seconds for live timer display
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now())
+    }, 30000)
+
+    return () => clearInterval(interval)
   }, [])
 
   const loadData = async () => {
@@ -110,6 +130,53 @@ export function OrderScreen() {
     const orders = await window.api.orders.getToday()
     const count = orders.filter((o: any) => o.status === 'preparing' || o.status === 'pending').length
     setOngoingCount(count)
+  }
+
+  const loadAlertSettings = async () => {
+    const settings = await window.api.settings.getAll()
+    setOrderAlertMinutes(parseInt(settings.order_alert_minutes || '20'))
+  }
+
+  const loadNoteSuggestions = async () => {
+    try {
+      const orders = await window.api.orders.getToday()
+      const uniqueNotes = new Set<string>()
+      orders.forEach((order: OrderData) => {
+        if (order.notes && order.notes.trim()) {
+          uniqueNotes.add(order.notes.trim())
+        }
+        // Also collect item notes
+        order.items?.forEach((item) => {
+          if (item.notes && item.notes.trim()) {
+            uniqueNotes.add(item.notes.trim())
+          }
+        })
+      })
+      setNoteSuggestions(Array.from(uniqueNotes).slice(0, 10)) // Limit to 10 most recent
+    } catch (err) {
+      console.error('Failed to load note suggestions:', err)
+    }
+  }
+
+  // Calculate order age in minutes
+  const getOrderAgeMinutes = (createdAt: string): number => {
+    const created = new Date(createdAt).getTime()
+    return Math.floor((currentTime - created) / 60000)
+  }
+
+  // Check if order is overdue
+  const isOrderOverdue = (createdAt: string): boolean => {
+    return getOrderAgeMinutes(createdAt) >= orderAlertMinutes
+  }
+
+  // Format order age for display
+  const formatOrderAge = (createdAt: string): string => {
+    const minutes = getOrderAgeMinutes(createdAt)
+    if (minutes < 1) return 'Just now'
+    if (minutes < 60) return `${minutes}m`
+    const hours = Math.floor(minutes / 60)
+    const mins = minutes % 60
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`
   }
 
   // Keyboard shortcuts
@@ -314,8 +381,20 @@ export function OrderScreen() {
 
   const handlePlaceOrder = async () => {
     if (store.items.length === 0) return
-    if (store.orderType === 'delivery' && !store.customerPhone.trim()) return
-    if (store.orderType === 'local' && !store.tableNumber.trim()) return
+
+    // Validate phone for delivery
+    if (store.orderType === 'delivery' && !store.customerPhone.trim()) {
+      setValidationError('phone')
+      setTimeout(() => setValidationError(null), 2000)
+      return
+    }
+
+    // Validate table number for local orders
+    if (store.orderType === 'local' && !store.tableNumber.trim()) {
+      setValidationError('table')
+      setTimeout(() => setValidationError(null), 2000)
+      return
+    }
 
     setPlacing(true)
     try {
@@ -461,15 +540,15 @@ export function OrderScreen() {
       {/* LEFT: Menu Grid */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <div className="bg-white border-b px-4 py-3 flex items-center justify-between shrink-0">
-          <h1 className="text-xl font-bold text-gray-900">{t('orders.title')}</h1>
-          <div className="flex items-center gap-2">
+        <div className="bg-white border-b px-2 sm:px-4 py-2 sm:py-3 flex items-center justify-between shrink-0">
+          <h1 className="text-lg sm:text-xl font-bold text-gray-900">{t('orders.title')}</h1>
+          <div className="flex items-center gap-1 sm:gap-2">
             <button
               onClick={openHistory}
-              className="relative flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-100 text-gray-600 text-sm font-medium hover:bg-gray-200 transition-colors"
+              className="relative flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-gray-100 text-gray-600 text-xs sm:text-sm font-medium hover:bg-gray-200 transition-colors"
             >
               <ClipboardList className="h-4 w-4" />
-              {t('orders.today')}
+              <span className="hidden sm:inline">{t('orders.today')}</span>
               {ongoingCount > 0 && (
                 <span className="absolute -top-2 -end-2 min-w-[22px] h-[22px] flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold px-1 animate-pulse">
                   {ongoingCount}
@@ -478,22 +557,22 @@ export function OrderScreen() {
             </button>
             <button
               onClick={toggleDarkMode}
-              className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+              className="p-1.5 sm:p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
             >
-              {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+              {darkMode ? <Sun className="h-4 sm:h-5 w-4 sm:w-5" /> : <Moon className="h-4 sm:h-5 w-4 sm:w-5" />}
             </button>
             <button
               onClick={() => navigate('/admin')}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 transition-colors"
+              className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg bg-gray-900 text-white text-xs sm:text-sm font-medium hover:bg-gray-800 transition-colors"
             >
               <Lock className="h-4 w-4" />
-              {t('nav.admin')}
+              <span className="hidden sm:inline">{t('nav.admin')}</span>
             </button>
           </div>
         </div>
 
         {/* Search bar */}
-        <div className="bg-white border-b px-4 py-2 shrink-0">
+        <div className="bg-white border-b px-2 sm:px-4 py-2 shrink-0">
           <div className="relative">
             <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
@@ -508,10 +587,10 @@ export function OrderScreen() {
         </div>
 
         {/* Category tabs */}
-        <div className="bg-white border-b px-4 py-2 flex gap-2 overflow-x-auto shrink-0">
+        <div className="bg-white border-b px-2 sm:px-4 py-2 flex gap-1.5 sm:gap-2 overflow-x-auto shrink-0">
           <button
             onClick={() => { setActiveCategory(null); setExpandedGroup(null) }}
-            className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+            className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
               activeCategory === null
                 ? 'bg-orange-500 text-white'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -523,7 +602,7 @@ export function OrderScreen() {
             <button
               key={cat.id}
               onClick={() => { setActiveCategory(cat.id); setExpandedGroup(null) }}
-              className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+              className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
                 activeCategory === cat.id
                   ? 'bg-orange-500 text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -535,8 +614,8 @@ export function OrderScreen() {
         </div>
 
         {/* Menu items grid */}
-        <div className="flex-1 overflow-y-auto p-4">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+        <div className="flex-1 overflow-y-auto p-2 sm:p-4">
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3">
             {groupedItems.map((entry) => {
               if (entry.type === 'single') {
                 const item = entry.item
@@ -654,20 +733,20 @@ export function OrderScreen() {
       </div>
 
       {/* RIGHT: Cart */}
-      <div className="w-96 bg-white border-s flex flex-col shrink-0">
-        <div className="px-4 py-3 border-b">
+      <div className="w-72 md:w-80 lg:w-96 bg-white border-s flex flex-col shrink-0">
+        <div className="px-2 sm:px-4 py-2 sm:py-3 border-b">
           <div className="flex items-center justify-between">
-            <h2 className="font-bold text-gray-900">{t('orders.cart')}</h2>
+            <h2 className="text-sm sm:text-base font-bold text-gray-900">{t('orders.cart')}</h2>
             {store.items.length > 0 && (
               <Button variant="ghost" size="sm" onClick={store.clearOrder}>
-                <Trash2 className="h-4 w-4" />
-                {t('orders.clearCart')}
+                <Trash2 className="h-3 sm:h-4 w-3 sm:w-4" />
+                <span className="text-xs sm:text-sm">{t('orders.clearCart')}</span>
               </Button>
             )}
           </div>
 
           {/* Order type toggle */}
-          <div className="flex gap-1 mt-3">
+          <div className="flex gap-1 mt-2 sm:mt-3">
             {(['local', 'takeout', 'delivery'] as const).map((type) => (
               <button
                 key={type}
@@ -686,21 +765,21 @@ export function OrderScreen() {
           {/* Table number for local orders */}
           {store.orderType === 'local' && (
             <div className="mt-3 relative">
-              <Hash className={`absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 ${!store.tableNumber.trim() ? 'text-red-400' : 'text-gray-400'}`} />
+              <Hash className={`absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 ${validationError === 'table' ? 'text-red-500' : 'text-gray-400'}`} />
               <input
                 type="text"
                 value={store.tableNumber}
-                onChange={(e) => store.setTableNumber(e.target.value)}
+                onChange={(e) => {
+                  store.setTableNumber(e.target.value)
+                  if (validationError === 'table') setValidationError(null)
+                }}
                 placeholder={t('orders.tableNumberPlaceholder')}
-                className={`w-full ps-10 pe-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 ${
-                  !store.tableNumber.trim()
-                    ? 'border-red-300 focus:ring-red-500 bg-red-50'
-                    : 'focus:ring-orange-500'
+                className={`w-full ps-10 pe-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 ${
+                  validationError === 'table' ? 'border-red-500 bg-red-50 animate-shake' : ''
                 }`}
-                required
               />
-              {!store.tableNumber.trim() && (
-                <p className="text-xs text-red-600 mt-1">{t('orders.tableNumberRequired')}</p>
+              {validationError === 'table' && (
+                <p className="text-xs text-red-600 mt-1 font-medium animate-pulse">{t('orders.tableNumberRequired')}</p>
               )}
             </div>
           )}
@@ -708,90 +787,90 @@ export function OrderScreen() {
           {/* Phone for delivery */}
           {store.orderType === 'delivery' && (
             <div className="mt-3 relative">
-              <Phone className={`absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 ${!store.customerPhone.trim() ? 'text-red-400' : 'text-gray-400'}`} />
+              <Phone className={`absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 ${validationError === 'phone' ? 'text-red-500' : 'text-gray-400'}`} />
               <input
                 type="tel"
                 value={store.customerPhone}
-                onChange={(e) => store.setCustomerPhone(e.target.value)}
+                onChange={(e) => {
+                  store.setCustomerPhone(e.target.value)
+                  if (validationError === 'phone') setValidationError(null)
+                }}
                 placeholder={t('orders.phonePlaceholder')}
-                className={`w-full ps-10 pe-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 ${
-                  !store.customerPhone.trim()
-                    ? 'border-red-300 focus:ring-red-500 bg-red-50'
-                    : 'focus:ring-orange-500'
+                className={`w-full ps-10 pe-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 ${
+                  validationError === 'phone' ? 'border-red-500 bg-red-50 animate-shake' : ''
                 }`}
-                required
               />
-              {!store.customerPhone.trim() && (
-                <p className="text-xs text-red-600 mt-1">{t('orders.phoneRequired')}</p>
+              {validationError === 'phone' && (
+                <p className="text-xs text-red-600 mt-1 font-medium animate-pulse">{t('orders.phoneRequired')}</p>
               )}
             </div>
           )}
         </div>
 
         {/* Cart items */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <div className="flex-1 overflow-y-auto p-2 sm:p-4 space-y-2 sm:space-y-3">
           {store.items.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-400">
-              <ShoppingCart className="h-10 w-10 mb-2" />
-              <p className="text-sm">{t('orders.empty')}</p>
+              <ShoppingCart className="h-8 sm:h-10 w-8 sm:w-10 mb-2" />
+              <p className="text-xs sm:text-sm">{t('orders.empty')}</p>
             </div>
           ) : (
             store.items.map((item, index) => (
-              <div key={index} className="bg-gray-50 rounded-lg p-3">
+              <div key={index} className="bg-gray-50 rounded-lg p-2 sm:p-3">
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
-                    <h4 className="font-medium text-gray-900 text-sm truncate">
+                    <h4 className="font-medium text-gray-900 text-xs sm:text-sm truncate">
                       {getItemName(item)}
                     </h4>
-                    <p className="text-orange-600 text-sm font-medium">
+                    <p className="text-orange-600 text-xs sm:text-sm font-medium">
                       {formatCurrency(item.price)}
                     </p>
                     {item.notes && (
-                      <p className="text-xs text-gray-500 mt-1 truncate">{item.notes}</p>
+                      <p className="text-xs text-gray-500 mt-0.5 sm:mt-1 truncate">{item.notes}</p>
                     )}
                   </div>
                   <button
                     onClick={() => store.removeItem(index)}
-                    className="p-1 hover:bg-red-100 rounded text-gray-400 hover:text-red-500"
+                    className="p-0.5 sm:p-1 hover:bg-red-100 rounded text-gray-400 hover:text-red-500"
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 className="h-3.5 sm:h-4 w-3.5 sm:w-4" />
                   </button>
                 </div>
 
-                <div className="flex items-center justify-between mt-2">
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between mt-1.5 sm:mt-2">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
                     <button
                       onClick={() => store.updateQuantity(index, item.quantity - 1)}
-                      className="w-7 h-7 rounded-lg bg-white border flex items-center justify-center hover:bg-gray-100"
+                      className="w-6 sm:w-7 h-6 sm:h-7 rounded-lg bg-white border flex items-center justify-center hover:bg-gray-100"
                     >
-                      <Minus className="h-3 w-3" />
+                      <Minus className="h-2.5 sm:h-3 w-2.5 sm:w-3" />
                     </button>
-                    <span className="text-sm font-medium w-6 text-center">{item.quantity}</span>
+                    <span className="text-xs sm:text-sm font-medium w-5 sm:w-6 text-center">{item.quantity}</span>
                     <button
                       onClick={() => store.updateQuantity(index, item.quantity + 1)}
-                      className="w-7 h-7 rounded-lg bg-white border flex items-center justify-center hover:bg-gray-100"
+                      className="w-6 sm:w-7 h-6 sm:h-7 rounded-lg bg-white border flex items-center justify-center hover:bg-gray-100"
                     >
-                      <Plus className="h-3 w-3" />
+                      <Plus className="h-2.5 sm:h-3 w-2.5 sm:w-3" />
                     </button>
                   </div>
 
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-0.5 sm:gap-1">
                     <button
                       onClick={() => setPriceModal({ index, price: String(item.price) })}
-                      className="p-1.5 rounded hover:bg-orange-100 text-gray-400 hover:text-orange-600"
+                      className="p-1 sm:p-1.5 rounded hover:bg-orange-100 text-gray-400 hover:text-orange-600"
                       title={t('orders.editPrice')}
                     >
-                      <Pencil className="h-3.5 w-3.5" />
+                      <Pencil className="h-3 sm:h-3.5 w-3 sm:w-3.5" />
                     </button>
                     <button
                       onClick={() =>
                         setNoteModal({ index, notes: item.notes })
                       }
-                      className="p-1.5 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600"
+                      className="p-1 sm:p-1.5 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600"
                     >
-                      <MessageSquare className="h-4 w-4" />
+                      <MessageSquare className="h-3.5 sm:h-4 w-3.5 sm:w-4" />
                     </button>
-                    <span className="font-bold text-sm">
+                    <span className="font-bold text-xs sm:text-sm">
                       {formatCurrency(item.price * item.quantity)}
                     </span>
                   </div>
@@ -802,14 +881,14 @@ export function OrderScreen() {
         </div>
 
         {/* Total & Place Order */}
-        <div className="border-t p-4 space-y-3 shrink-0">
+        <div className="border-t p-2 sm:p-4 space-y-2 sm:space-y-3 shrink-0">
           <div className="flex justify-between items-center">
-            <span className="text-gray-600">{t('orders.subtotal')}</span>
-            <span className="font-bold text-lg">{formatCurrency(subtotal)}</span>
+            <span className="text-xs sm:text-sm text-gray-600">{t('orders.subtotal')}</span>
+            <span className="font-bold text-sm sm:text-lg">{formatCurrency(subtotal)}</span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="font-bold text-gray-900">{t('orders.total')}</span>
-            <span className="font-bold text-xl text-orange-600">{formatCurrency(subtotal)}</span>
+            <span className="font-bold text-sm sm:text-base text-gray-900">{t('orders.total')}</span>
+            <span className="font-bold text-lg sm:text-xl text-orange-600">{formatCurrency(subtotal)}</span>
           </div>
 
           <Button
@@ -819,7 +898,7 @@ export function OrderScreen() {
               store.items.length === 0 ||
               (store.orderType === 'delivery' && !store.customerPhone.trim())
             }
-            className="w-full"
+            className="w-full text-sm sm:text-base"
             size="lg"
           >
             {t('orders.placeOrder')} (F2)
@@ -831,26 +910,57 @@ export function OrderScreen() {
       {noteModal && (
         <Modal
           isOpen
-          onClose={() => setNoteModal(null)}
+          onClose={() => { setNoteModal(null); setShowNoteSuggestions(false) }}
           title={t('orders.notes')}
           size="sm"
         >
-          <textarea
-            value={noteModal.notes}
-            onChange={(e) => setNoteModal({ ...noteModal, notes: e.target.value })}
-            placeholder={t('orders.notesPlaceholder')}
-            rows={4}
-            className="w-full border rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-            autoFocus
-          />
+          <div className="relative">
+            <textarea
+              value={noteModal.notes}
+              onChange={(e) => {
+                setNoteModal({ ...noteModal, notes: e.target.value })
+                setShowNoteSuggestions(e.target.value.length > 0 && noteSuggestions.length > 0)
+              }}
+              onFocus={() => setShowNoteSuggestions(noteModal.notes.length > 0 && noteSuggestions.length > 0)}
+              placeholder={t('orders.notesPlaceholder')}
+              rows={4}
+              className="w-full border rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+              autoFocus
+            />
+            {showNoteSuggestions && noteSuggestions.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-lg max-h-40 overflow-y-auto z-10">
+                {noteSuggestions
+                  .filter((s) => s.toLowerCase().includes(noteModal.notes.toLowerCase()))
+                  .map((suggestion, i) => (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        setNoteModal({ ...noteModal, notes: suggestion })
+                        setShowNoteSuggestions(false)
+                      }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-orange-50 hover:text-orange-600 transition-colors border-b last:border-b-0"
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+              </div>
+            )}
+          </div>
+          {noteSuggestions.length > 0 && (
+            <p className="text-xs text-gray-500 mt-2">
+              {t('orders.notesSuggestionHint', { defaultValue: 'Start typing to see suggestions from previous orders' })}
+            </p>
+          )}
           <div className="flex gap-2 mt-4">
-            <Button variant="secondary" onClick={() => setNoteModal(null)} className="flex-1">
+            <Button variant="secondary" onClick={() => { setNoteModal(null); setShowNoteSuggestions(false) }} className="flex-1">
               {t('common.cancel')}
             </Button>
             <Button
               onClick={() => {
                 store.updateItemNotes(noteModal.index, noteModal.notes)
                 setNoteModal(null)
+                setShowNoteSuggestions(false)
+                loadNoteSuggestions() // Refresh suggestions
               }}
               className="flex-1"
             >
@@ -961,7 +1071,7 @@ export function OrderScreen() {
 
       {/* Order History Modal */}
       {showHistory && (
-        <Modal isOpen onClose={() => { setShowHistory(false); setSelectedOrder(null); setEditMode(false) }} title={t('orders.today')} size="lg">
+        <Modal isOpen onClose={() => { setShowHistory(false); setSelectedOrder(null); setEditMode(false) }} title={t('orders.today')} size="xl">
           {selectedOrder ? (
             <div>
               <button
@@ -1046,7 +1156,7 @@ export function OrderScreen() {
                         <div>
                           <span className="text-sm font-medium text-gray-900">{item.menu_item_name || 'Unknown'}</span>
                           <span className="text-xs text-gray-500 ms-2">x{item.quantity}</span>
-                          {item.notes && <p className="text-xs text-gray-400">{item.notes}</p>}
+                          {item.notes && <p className="text-sm text-orange-600 font-medium mt-1">💬 {item.notes}</p>}
                         </div>
                         <span className="text-sm font-medium">{formatCurrency(item.total_price)}</span>
                       </div>
@@ -1111,7 +1221,7 @@ export function OrderScreen() {
               )}
             </div>
           ) : (
-            <div className="max-h-[70vh] overflow-y-auto space-y-6">
+            <div className="max-h-[80vh] overflow-y-auto space-y-6">
               {todayOrders.length === 0 ? (
                 <div className="text-center py-8 text-gray-400">
                   <ClipboardList className="h-10 w-10 mx-auto mb-2" />
@@ -1126,34 +1236,50 @@ export function OrderScreen() {
                         🔥 {t('orders.ongoing')} ({ongoingOrders.length})
                       </h3>
                       <div className="space-y-2">
-                        {ongoingOrders.map((order) => (
-                          <button
-                            key={order.id}
-                            onClick={() => viewOrderDetails(order)}
-                            className="w-full flex items-center justify-between p-3 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors text-start border border-blue-200"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm">
-                                #{order.daily_number}
-                              </div>
-                              <div>
-                                <p className="text-sm font-medium text-gray-900">
-                                  {t('orders.orderNumber', { number: order.daily_number })}
-                                  {order.table_number && <span className="text-gray-500 ms-2">T{order.table_number}</span>}
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  {formatTime(order.created_at)} &middot; {t(`orders.${order.order_type === 'local' ? 'local' : order.order_type}`)}
-                                </p>
-                                {order.items && order.items.length > 0 && (
-                                  <p className="text-xs text-gray-600 mt-0.5 truncate">
-                                    {order.items.map((item) => `${item.quantity}x ${item.menu_item_name}`).join(', ')}
+                        {ongoingOrders.map((order) => {
+                          const overdue = isOrderOverdue(order.created_at)
+                          return (
+                            <button
+                              key={order.id}
+                              onClick={() => viewOrderDetails(order)}
+                              className={`w-full flex items-center justify-between p-3 rounded-lg hover:shadow-md transition-all text-start border-2 ${
+                                overdue
+                                  ? 'bg-red-50 border-red-400 hover:bg-red-100 animate-pulse'
+                                  : 'bg-blue-50 border-blue-200 hover:bg-blue-100'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm ${
+                                  overdue ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-600'
+                                }`}>
+                                  #{order.daily_number}
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-sm font-medium text-gray-900">
+                                      {t('orders.orderNumber', { number: order.daily_number })}
+                                      {order.table_number && <span className="text-gray-500 ms-2">T{order.table_number}</span>}
+                                    </p>
+                                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                                      overdue ? 'bg-red-200 text-red-800' : 'bg-blue-200 text-blue-700'
+                                    }`}>
+                                      {formatOrderAge(order.created_at)}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-gray-500">
+                                    {formatTime(order.created_at)} &middot; {t(`orders.${order.order_type === 'local' ? 'local' : order.order_type}`)}
                                   </p>
-                                )}
+                                  {order.items && order.items.length > 0 && (
+                                    <p className="text-xs text-gray-600 mt-0.5 truncate">
+                                      {order.items.map((item) => `${item.quantity}x ${item.menu_item_name}`).join(', ')}
+                                    </p>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                            <span className="font-bold text-sm text-gray-900">{formatCurrency(order.total)}</span>
-                          </button>
-                        ))}
+                              <span className="font-bold text-sm text-gray-900">{formatCurrency(order.total)}</span>
+                            </button>
+                          )
+                        })}
                       </div>
                     </div>
                   )}

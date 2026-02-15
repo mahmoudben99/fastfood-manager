@@ -1,4 +1,4 @@
-import { ipcMain, dialog } from 'electron'
+import { ipcMain, dialog, app } from 'electron'
 import { copyFileSync } from 'fs'
 import { join, extname } from 'path'
 import { randomUUID } from 'crypto'
@@ -69,5 +69,17 @@ export function registerSettingsHandlers(): void {
     })
     if (result.canceled || !result.filePaths[0]) return null
     return result.filePaths[0]
+  })
+
+  ipcMain.handle('settings:getAutoLaunch', () => {
+    return app.getLoginItemSettings().openAtLogin
+  })
+
+  ipcMain.handle('settings:setAutoLaunch', (_, enabled: boolean) => {
+    app.setLoginItemSettings({
+      openAtLogin: enabled,
+      name: 'Fast Food Manager'
+    })
+    return true
   })
 }

@@ -20,7 +20,9 @@ const api = {
     hashPassword: (password: string) => ipcRenderer.invoke('settings:hashPassword', password),
     verifyPassword: (password: string) => ipcRenderer.invoke('settings:verifyPassword', password),
     uploadLogo: () => ipcRenderer.invoke('settings:uploadLogo'),
-    selectFolder: () => ipcRenderer.invoke('settings:selectFolder')
+    selectFolder: () => ipcRenderer.invoke('settings:selectFolder'),
+    getAutoLaunch: () => ipcRenderer.invoke('settings:getAutoLaunch'),
+    setAutoLaunch: (enabled: boolean) => ipcRenderer.invoke('settings:setAutoLaunch', enabled)
   },
   categories: {
     getAll: () => ipcRenderer.invoke('categories:getAll'),

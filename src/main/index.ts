@@ -129,10 +129,13 @@ app.whenReady().then(() => {
   createWindow()
   setupAutoUpdater()
 
-  // Enable auto-startup with Windows
+  // Enable auto-startup with Windows (default ON, can be changed in settings)
+  const autoLaunchSetting = settingsRepo.get('auto_launch')
+  const shouldAutoLaunch = autoLaunchSetting !== 'false' // Default to true if not set
   app.setLoginItemSettings({
-    openAtLogin: true,
-    openAsHidden: false
+    openAtLogin: shouldAutoLaunch,
+    openAsHidden: false,
+    name: 'Fast Food Manager'
   })
 
   // Auto-start Telegram bot if configured

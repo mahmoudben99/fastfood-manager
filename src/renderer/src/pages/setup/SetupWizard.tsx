@@ -16,6 +16,7 @@ export interface SetupData {
   restaurantName: string
   phone: string
   phone2: string
+  address: string
   currency: string
   currencySymbol: string
   logoPath: string
@@ -46,6 +47,7 @@ export function SetupWizard() {
     restaurantName: '',
     phone: '',
     phone2: '',
+    address: '',
     currency: 'DZD',
     currencySymbol: 'DA',
     logoPath: '',
@@ -123,6 +125,7 @@ export function SetupWizard() {
         restaurant_name: data.restaurantName,
         restaurant_phone: data.phone,
         restaurant_phone2: data.phone2,
+        restaurant_address: data.address,
         currency: data.currency,
         currency_symbol: data.currencySymbol,
         logo_path: data.logoPath,

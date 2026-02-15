@@ -36,6 +36,7 @@ export function SettingsPage() {
   const [currency, setCurrency] = useState('DZD')
   const [currencySymbol, setCurrencySymbol] = useState('DA')
   const [lang, setLang] = useState('en')
+  const [orderAlertMinutes, setOrderAlertMinutes] = useState('20')
 
   // Schedule
   const [schedule, setSchedule] = useState<any[]>([])
@@ -43,9 +44,13 @@ export function SettingsPage() {
   // Printer
   const [printers, setPrinters] = useState<{ name: string; isDefault: boolean }[]>([])
   const [printerName, setPrinterName] = useState('')
+  const [kitchenPrinterName, setKitchenPrinterName] = useState('')
   const [paperWidth, setPaperWidth] = useState('80')
   const [autoPrintReceipt, setAutoPrintReceipt] = useState(false)
   const [autoPrintKitchen, setAutoPrintKitchen] = useState(false)
+  const [receiptFontSize, setReceiptFontSize] = useState('medium')
+  const [kitchenFontSize, setKitchenFontSize] = useState('large')
+  const [splitKitchenTickets, setSplitKitchenTickets] = useState(true)
   const [testResult, setTestResult] = useState<{ success: boolean; error?: string } | null>(null)
   const [testingPrint, setTestingPrint] = useState(false)
 
@@ -58,6 +63,7 @@ export function SettingsPage() {
   const [newPass, setNewPass] = useState('')
   const [confirmPass, setConfirmPass] = useState('')
   const [passError, setPassError] = useState('')
+  const [autoLaunch, setAutoLaunch] = useState(true)
 
   // Logout
   const [logoutPassword, setLogoutPassword] = useState('')
@@ -77,16 +83,25 @@ export function SettingsPage() {
     setCurrency(settings.currency || 'DZD')
     setCurrencySymbol(settings.currency_symbol || 'DA')
     setLang(settings.language || 'en')
+    setOrderAlertMinutes(settings.order_alert_minutes || '20')
     setPrinterName(settings.printer_name || '')
+    setKitchenPrinterName(settings.kitchen_printer_name || settings.printer_name || '')
     setPaperWidth(settings.printer_width || '80')
     setAutoPrintReceipt(settings.auto_print_receipt === 'true')
     setAutoPrintKitchen(settings.auto_print_kitchen === 'true')
+    setReceiptFontSize(settings.receipt_font_size || 'medium')
+    setKitchenFontSize(settings.kitchen_font_size || 'large')
+    setSplitKitchenTickets(settings.split_kitchen_tickets !== 'false')
 
     const sched = await window.api.settings.getSchedule()
     setSchedule(sched)
 
     const printerList = await window.api.printer.getPrinters()
     setPrinters(printerList)
+
+    // Load auto-launch setting
+    const autoLaunchEnabled = await window.api.settings.getAutoLaunch()
+    setAutoLaunch(autoLaunchEnabled)
   }
 
   const saveGeneral = async () => {
@@ -97,7 +112,8 @@ export function SettingsPage() {
       restaurant_address: address,
       currency,
       currency_symbol: currencySymbol,
-      language: lang
+      language: lang,
+      order_alert_minutes: orderAlertMinutes
     })
     setLanguage(lang)
     loadSettings()
@@ -112,9 +128,13 @@ export function SettingsPage() {
   const savePrinter = async () => {
     await window.api.settings.setMultiple({
       printer_name: printerName,
+      kitchen_printer_name: kitchenPrinterName,
       printer_width: paperWidth,
       auto_print_receipt: autoPrintReceipt ? 'true' : 'false',
-      auto_print_kitchen: autoPrintKitchen ? 'true' : 'false'
+      auto_print_kitchen: autoPrintKitchen ? 'true' : 'false',
+      receipt_font_size: receiptFontSize,
+      kitchen_font_size: kitchenFontSize,
+      split_kitchen_tickets: splitKitchenTickets ? 'true' : 'false'
     })
     flashSaved()
   }
@@ -130,6 +150,13 @@ export function SettingsPage() {
     const result = await window.api.printer.testPrint()
     setTestResult(result)
     setTestingPrint(false)
+  }
+
+  const handleAutoLaunchToggle = async (enabled: boolean) => {
+    setAutoLaunch(enabled)
+    await window.api.settings.setAutoLaunch(enabled)
+    await window.api.settings.set('auto_launch', enabled ? 'true' : 'false')
+    flashSaved()
   }
 
   const changePassword = async () => {
@@ -273,6 +300,16 @@ export function SettingsPage() {
                 { value: 'fr', label: 'Français' }
               ]}
             />
+            <Input
+              label={t('settings.orderAlertMinutes', { defaultValue: 'Order Alert Time (minutes)' })}
+              type="number"
+              min="1"
+              max="120"
+              value={orderAlertMinutes}
+              onChange={(e) => setOrderAlertMinutes(e.target.value)}
+              placeholder="20"
+              helperText={t('settings.orderAlertHelp', { defaultValue: 'Orders older than this will be highlighted in red' })}
+            />
             <Button onClick={saveGeneral}>{t('common.save')}</Button>
 
             {/* Check for Updates */}
@@ -370,6 +407,30 @@ export function SettingsPage() {
               ]}
             />
 
+            {/* Font size settings */}
+            <div className="grid grid-cols-2 gap-3 pt-3 mt-3 border-t border-gray-200">
+              <Select
+                label={t('settings.receiptFontSize', { defaultValue: 'Receipt Font Size' })}
+                value={receiptFontSize}
+                onChange={(e) => setReceiptFontSize(e.target.value)}
+                options={[
+                  { value: 'small', label: t('settings.fontSmall', { defaultValue: 'Small' }) },
+                  { value: 'medium', label: t('settings.fontMedium', { defaultValue: 'Medium' }) },
+                  { value: 'large', label: t('settings.fontLarge', { defaultValue: 'Large' }) }
+                ]}
+              />
+              <Select
+                label={t('settings.kitchenFontSize', { defaultValue: 'Kitchen Font Size' })}
+                value={kitchenFontSize}
+                onChange={(e) => setKitchenFontSize(e.target.value)}
+                options={[
+                  { value: 'small', label: t('settings.fontSmall', { defaultValue: 'Small' }) },
+                  { value: 'medium', label: t('settings.fontMedium', { defaultValue: 'Medium' }) },
+                  { value: 'large', label: t('settings.fontLarge', { defaultValue: 'Large' }) }
+                ]}
+              />
+            </div>
+
             {/* Auto-print toggles */}
             <div className="pt-3 mt-3 border-t border-gray-200 space-y-3">
               <h4 className="text-sm font-medium text-gray-700">{t('settings.autoPrint', { defaultValue: 'Auto-Print on New Order' })}</h4>
@@ -432,6 +493,23 @@ export function SettingsPage() {
 
       {tab === 'security' && (
         <Card>
+          {/* Auto-launch setting */}
+          <div className="mb-6 pb-6 border-b border-gray-200">
+            <h3 className="font-semibold mb-3">{t('settings.startupSettings', { defaultValue: 'Startup Settings' })}</h3>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={autoLaunch}
+                onChange={(e) => handleAutoLaunchToggle(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+              />
+              <div>
+                <span className="text-sm font-medium text-gray-700">{t('settings.autoLaunch', { defaultValue: 'Start with Windows' })}</span>
+                <p className="text-xs text-gray-400">{t('settings.autoLaunchDesc', { defaultValue: 'Launch Fast Food Manager automatically when Windows starts' })}</p>
+              </div>
+            </label>
+          </div>
+
           <div className="space-y-4 max-w-md">
             <h3 className="font-semibold">{t('settings.changePassword')}</h3>
             <Input type="password" label={t('settings.currentPassword')} value={currentPass} onChange={(e) => setCurrentPass(e.target.value)} />

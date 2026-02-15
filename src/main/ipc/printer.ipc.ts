@@ -37,19 +37,29 @@ function getReceiptHTML(order: any, settings: Record<string, string>, type: 'rec
 
   const items = order.items || []
 
+  // Font size mappings
+  const fontSizes = {
+    small: { body: '10px', big: '14px', itemName: '12px', itemNotes: '9px', total: '14px' },
+    medium: { body: '12px', big: '18px', itemName: '14px', itemNotes: '11px', total: '18px' },
+    large: { body: '14px', big: '22px', itemName: '16px', itemNotes: '12px', total: '20px' }
+  }
+
   if (type === 'kitchen') {
+    const kitchenFontSize = settings.kitchen_font_size || 'large'
+    const sizes = fontSizes[kitchenFontSize as keyof typeof fontSizes] || fontSizes.large
+
     return `<!DOCTYPE html><html dir="${isRTL ? 'rtl' : 'ltr'}">
 <head><meta charset="utf-8">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Courier New', monospace; font-size: 12px; width: ${maxWidth}; padding: 4mm 2mm; }
+  body { font-family: 'Courier New', monospace; font-size: ${sizes.body}; width: ${maxWidth}; padding: 4mm 2mm; }
   .center { text-align: center; }
   .bold { font-weight: bold; }
-  .big { font-size: 18px; }
+  .big { font-size: ${sizes.big}; }
   .line { border-top: 1px dashed #000; margin: 4px 0; }
   .item { margin: 4px 0; }
-  .item-name { font-weight: bold; font-size: 14px; }
-  .item-notes { font-size: 11px; font-style: italic; margin-top: 2px; }
+  .item-name { font-weight: bold; font-size: ${sizes.itemName}; }
+  .item-notes { font-size: ${sizes.itemNotes}; font-style: italic; margin-top: 2px; }
   .qty { font-weight: bold; }
 </style></head>
 <body>
@@ -72,6 +82,8 @@ function getReceiptHTML(order: any, settings: Record<string, string>, type: 'rec
   }
 
   // Customer receipt
+  const receiptFontSize = settings.receipt_font_size || 'medium'
+  const sizes = fontSizes[receiptFontSize as keyof typeof fontSizes] || fontSizes.medium
   const currencySymbol = settings.currency_symbol || '$'
   const subtotal = items.reduce((sum: number, i: any) => sum + i.total_price, 0)
 
@@ -79,14 +91,14 @@ function getReceiptHTML(order: any, settings: Record<string, string>, type: 'rec
 <head><meta charset="utf-8">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Courier New', monospace; font-size: 14px; width: ${maxWidth}; padding: 4mm 2mm; }
+  body { font-family: 'Courier New', monospace; font-size: ${sizes.body}; width: ${maxWidth}; padding: 4mm 2mm; }
   .center { text-align: center; }
   .bold { font-weight: bold; }
-  .big { font-size: 20px; }
+  .big { font-size: ${sizes.big}; }
   .line { border-top: 1px dashed #000; margin: 5px 0; }
   .row { display: flex; justify-content: space-between; }
   .item { margin: 3px 0; }
-  .total-row { font-size: 18px; font-weight: bold; }
+  .total-row { font-size: ${sizes.total}; font-weight: bold; }
 </style></head>
 <body>
   ${getLogoHTML(settings)}
