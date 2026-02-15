@@ -1,6 +1,6 @@
 # Fast Food Manager - Development Log
 
-**Current Version:** 1.1.9
+**Current Version:** 1.2.0
 **Last Updated:** 2026-02-15
 **Repository:** https://github.com/mahmoudben99/fastfood-manager
 
@@ -35,6 +35,19 @@ src/
 ---
 
 ## Recent Changes
+
+### v1.2.0 (2026-02-15) - CRITICAL BUG FIXES
+**Bug Fixes:**
+- 🐛 **CRITICAL**: Fixed order timestamp using UTC instead of local time (orders showed 1 hour behind)
+- 🐛 Fixed cancel confirmation dialog appearing behind Today's Orders modal
+
+**Improvements:**
+- 📝 Added DEVELOPMENT_LOG.md with mandatory update rules for AI assistants
+- 📋 Context file now includes instructions for seamless chat transitions
+
+**Technical Changes:**
+- `orders.repo.ts`: Now explicitly sets `created_at` with local ISO time
+- `OrderScreen.tsx`: Increased cancel modal z-index from 60 to 100
 
 ### v1.1.9 (2026-02-15)
 **New Features:**
@@ -71,8 +84,11 @@ src/
 ## Known Issues
 
 ### 🐛 Active Bugs
-1. **Order timer showing incorrect time** - Needs investigation (possibly timezone/server time issue)
-2. **Cancel confirmation dialog appears behind current window** - Z-index issue
+(None currently - all known bugs fixed in v1.2.0)
+
+### ✅ Recently Fixed
+1. ✅ Order timer showing incorrect time (v1.2.0) - UTC vs local time issue
+2. ✅ Cancel confirmation dialog z-index (v1.2.0)
 
 ---
 
