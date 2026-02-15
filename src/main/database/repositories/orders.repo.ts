@@ -344,6 +344,12 @@ export const ordersRepo = {
 
   getTodayOrders(): Order[] {
     const today = new Date().toISOString().split('T')[0]
-    return this.getByDate(today)
+    const orders = this.getByDate(today)
+
+    // Load items for each order
+    return orders.map((order) => ({
+      ...order,
+      items: this.getOrderItems(order.id)
+    }))
   }
 }

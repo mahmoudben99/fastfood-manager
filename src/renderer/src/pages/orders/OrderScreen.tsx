@@ -7,6 +7,7 @@ import { useAppStore } from '../../store/appStore'
 import { Button } from '../../components/ui/Button'
 import { Modal } from '../../components/ui/Modal'
 import { formatCurrency } from '../../utils/formatCurrency'
+import { removeRepeatedPrefix } from '../../utils/removeRepeatedPrefix'
 
 interface MenuItemData {
   id: number
@@ -231,6 +232,17 @@ export function OrderScreen() {
     return true
   })
 
+  // Compute simplified names (remove repeated prefix words like "Pizza" in "Pizza Margherita")
+  const simplifiedNames = useMemo(() => {
+    const names = filteredItems.map((item) => getItemName(item))
+    return removeRepeatedPrefix(names)
+  }, [filteredItems, foodLanguage])
+
+  const getDisplayName = (item: MenuItemData): string => {
+    const originalName = getItemName(item)
+    return simplifiedNames.get(originalName) || originalName
+  }
+
   // Size suffixes to detect (order matters — check longer patterns first)
   const SIZE_PATTERNS = /\s+(XXL|XL|XS|S|M|L|Grande|Grand|Petit|Small|Medium|Large)\s*$/i
 
@@ -303,6 +315,7 @@ export function OrderScreen() {
   const handlePlaceOrder = async () => {
     if (store.items.length === 0) return
     if (store.orderType === 'delivery' && !store.customerPhone.trim()) return
+    if (store.orderType === 'local' && !store.tableNumber.trim()) return
 
     setPlacing(true)
     try {
@@ -533,7 +546,7 @@ export function OrderScreen() {
                           />
                         </div>
                         <h3 className="font-medium text-gray-900 text-sm truncate">
-                          {getItemName(item)}
+                          {getDisplayName(item)}
                         </h3>
                         <p className="text-orange-600 font-bold text-sm mt-1">
                           {formatCurrency(item.price)}
@@ -546,7 +559,7 @@ export function OrderScreen() {
                         )}
                         <div className="min-w-0 flex-1">
                           <h3 className="font-medium text-gray-900 text-sm truncate">
-                            {getItemName(item)}
+                            {getDisplayName(item)}
                           </h3>
                           <p className="text-orange-600 font-bold text-sm">
                             {formatCurrency(item.price)}
@@ -663,28 +676,44 @@ export function OrderScreen() {
           {/* Table number for local orders */}
           {store.orderType === 'local' && (
             <div className="mt-3 relative">
-              <Hash className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Hash className={`absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 ${!store.tableNumber.trim() ? 'text-red-400' : 'text-gray-400'}`} />
               <input
                 type="text"
                 value={store.tableNumber}
                 onChange={(e) => store.setTableNumber(e.target.value)}
                 placeholder={t('orders.tableNumberPlaceholder')}
-                className="w-full ps-10 pe-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className={`w-full ps-10 pe-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 ${
+                  !store.tableNumber.trim()
+                    ? 'border-red-300 focus:ring-red-500 bg-red-50'
+                    : 'focus:ring-orange-500'
+                }`}
+                required
               />
+              {!store.tableNumber.trim() && (
+                <p className="text-xs text-red-600 mt-1">{t('orders.tableNumberRequired')}</p>
+              )}
             </div>
           )}
 
           {/* Phone for delivery */}
           {store.orderType === 'delivery' && (
             <div className="mt-3 relative">
-              <Phone className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Phone className={`absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 ${!store.customerPhone.trim() ? 'text-red-400' : 'text-gray-400'}`} />
               <input
                 type="tel"
                 value={store.customerPhone}
                 onChange={(e) => store.setCustomerPhone(e.target.value)}
                 placeholder={t('orders.phonePlaceholder')}
-                className="w-full ps-10 pe-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className={`w-full ps-10 pe-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 ${
+                  !store.customerPhone.trim()
+                    ? 'border-red-300 focus:ring-red-500 bg-red-50'
+                    : 'focus:ring-orange-500'
+                }`}
+                required
               />
+              {!store.customerPhone.trim() && (
+                <p className="text-xs text-red-600 mt-1">{t('orders.phoneRequired')}</p>
+              )}
             </div>
           )}
         </div>
@@ -1094,6 +1123,11 @@ export function OrderScreen() {
                                 <p className="text-xs text-gray-500">
                                   {formatTime(order.created_at)} &middot; {t(`orders.${order.order_type === 'local' ? 'local' : order.order_type}`)}
                                 </p>
+                                {order.items && order.items.length > 0 && (
+                                  <p className="text-xs text-gray-600 mt-0.5 truncate">
+                                    {order.items.map((item) => `${item.quantity}x ${item.menu_item_name}`).join(', ')}
+                                  </p>
+                                )}
                               </div>
                             </div>
                             <span className="font-bold text-sm text-gray-900">{formatCurrency(order.total)}</span>
@@ -1130,6 +1164,11 @@ export function OrderScreen() {
                                 <p className="text-xs text-gray-500">
                                   {formatTime(order.created_at)} &middot; {t(`orders.${order.order_type === 'local' ? 'local' : order.order_type}`)}
                                 </p>
+                                {order.items && order.items.length > 0 && (
+                                  <p className="text-xs text-gray-600 mt-0.5 truncate">
+                                    {order.items.map((item) => `${item.quantity}x ${item.menu_item_name}`).join(', ')}
+                                  </p>
+                                )}
                               </div>
                             </div>
                             <div className="flex items-center gap-3">

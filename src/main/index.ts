@@ -129,6 +129,12 @@ app.whenReady().then(() => {
   createWindow()
   setupAutoUpdater()
 
+  // Enable auto-startup with Windows
+  app.setLoginItemSettings({
+    openAtLogin: true,
+    openAsHidden: false
+  })
+
   // Auto-start Telegram bot if configured
   const autoStart = settingsRepo.get('telegram_auto_start')
   const token = settingsRepo.get('telegram_bot_token')

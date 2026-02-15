@@ -79,18 +79,19 @@ function getReceiptHTML(order: any, settings: Record<string, string>, type: 'rec
 <head><meta charset="utf-8">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Courier New', monospace; font-size: 11px; width: ${maxWidth}; padding: 4mm 2mm; }
+  body { font-family: 'Courier New', monospace; font-size: 14px; width: ${maxWidth}; padding: 4mm 2mm; }
   .center { text-align: center; }
   .bold { font-weight: bold; }
-  .big { font-size: 16px; }
-  .line { border-top: 1px dashed #000; margin: 4px 0; }
+  .big { font-size: 20px; }
+  .line { border-top: 1px dashed #000; margin: 5px 0; }
   .row { display: flex; justify-content: space-between; }
-  .item { margin: 2px 0; }
-  .total-row { font-size: 14px; font-weight: bold; }
+  .item { margin: 3px 0; }
+  .total-row { font-size: 18px; font-weight: bold; }
 </style></head>
 <body>
   ${getLogoHTML(settings)}
   ${settings.restaurant_phone ? `<div class="center">${settings.restaurant_phone}</div>` : ''}
+  ${settings.restaurant_address ? `<div class="center" style="font-size:10px">${settings.restaurant_address}</div>` : ''}
   <div class="line"></div>
   <div class="row"><span>${isRTL ? 'طلب' : 'Order'} #${order.daily_number}</span><span>${getOrderTypeLabel(order.order_type, isRTL)}</span></div>
   <div>${new Date(order.created_at).toLocaleString()}</div>

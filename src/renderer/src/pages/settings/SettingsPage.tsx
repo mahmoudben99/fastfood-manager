@@ -32,6 +32,7 @@ export function SettingsPage() {
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [phone2, setPhone2] = useState('')
+  const [address, setAddress] = useState('')
   const [currency, setCurrency] = useState('DZD')
   const [currencySymbol, setCurrencySymbol] = useState('DA')
   const [lang, setLang] = useState('en')
@@ -72,6 +73,7 @@ export function SettingsPage() {
     setName(settings.restaurant_name || '')
     setPhone(settings.restaurant_phone || '')
     setPhone2(settings.restaurant_phone2 || '')
+    setAddress(settings.restaurant_address || '')
     setCurrency(settings.currency || 'DZD')
     setCurrencySymbol(settings.currency_symbol || 'DA')
     setLang(settings.language || 'en')
@@ -92,6 +94,7 @@ export function SettingsPage() {
       restaurant_name: name,
       restaurant_phone: phone,
       restaurant_phone2: phone2,
+      restaurant_address: address,
       currency,
       currency_symbol: currencySymbol,
       language: lang
@@ -245,6 +248,12 @@ export function SettingsPage() {
               <Input label={t('setup.restaurant.phone')} value={phone} onChange={(e) => setPhone(e.target.value)} />
               <Input label={t('setup.restaurant.phone2')} value={phone2} onChange={(e) => setPhone2(e.target.value)} />
             </div>
+            <Input
+              label={t('setup.restaurant.address')}
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder={t('setup.restaurant.addressPlaceholder')}
+            />
             <div className="grid grid-cols-2 gap-3">
               <Select
                 label={t('setup.restaurant.currency')}
