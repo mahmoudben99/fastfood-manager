@@ -36,22 +36,29 @@ src/
 
 ## Recent Changes
 
-### v1.2.1 (2026-02-15) - Foundation & Fixes
-**Foundation for Future Features:**
-- 🔧 Added printer_assignments table and repository (foundation for advanced printer management)
-- 📋 Prepared infrastructure for worker-specific printer assignments (UI coming in v1.3.0)
-- 🔄 Added fallback chain: worker → kitchen_all → default printer
+### v1.2.1 (2026-02-15) - Auto-Split Kitchen Tickets & Printer Management
+**New Features:**
+- 🎯 **Auto-split kitchen tickets by worker** - Automatically prints separate tickets for each worker
+- 🖨️ **Advanced printer assignments** - Database foundation for worker-specific printer routing
+- 🔄 **Smart fallback chain** - worker printer → kitchen_all → default (ensures printing always works)
+- 📋 **Printer assignment repository** - Ready for UI configuration (coming soon)
 
 **Bug Fixes:**
 - 🐛 Fixed duplicate Windows startup entry preventing app launch
 - 🐛 Removed incorrect dev path from auto-launch registry
 
+**How Auto-Split Works:**
+- When split_kitchen_tickets is enabled, orders automatically split by worker
+- Each worker gets their own ticket printed to their assigned printer
+- Falls back gracefully if no worker assigned or printer not configured
+- Receipt printing always works - uses receipt printer or defaults
+
 **Database:**
-- Migration 009: printer_assignments table with assignment types
+- Migration 009: printer_assignments table with assignment types (worker, receipt, kitchen_all, default)
 
 **Technical:**
 - `printer-assignments.repo.ts`: Repository with smart fallback logic
-- Prepared for auto-split kitchen tickets per worker (v1.3.0)
+- `printer.ipc.ts`: Auto-split implementation with failsafes
 
 ### v1.2.0 (2026-02-15) - CRITICAL BUG FIXES
 **Bug Fixes:**
