@@ -1048,7 +1048,7 @@ export function OrderScreen() {
 
       {/* Cancel Confirmation Modal */}
       {cancelConfirm && (
-        <Modal isOpen onClose={() => setCancelConfirm(null)} title={t('orders.cancelConfirm')} size="sm" zIndex={60}>
+        <Modal isOpen onClose={() => setCancelConfirm(null)} title={t('orders.cancelConfirm')} size="sm" zIndex={100}>
           <div className="text-center py-4">
             <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertTriangle className="h-7 w-7 text-red-600" />

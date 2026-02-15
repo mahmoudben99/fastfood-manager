@@ -103,10 +103,12 @@ export const ordersRepo = {
       }
 
       // Insert order (status = 'preparing' immediately)
+      // Use local time for created_at to avoid timezone issues
+      const now = new Date().toISOString()
       const orderResult = getDb()
         .prepare(
-          `INSERT INTO orders (daily_number, order_date, order_type, table_number, customer_phone, customer_name, subtotal, total, notes, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'preparing')`
+          `INSERT INTO orders (daily_number, order_date, order_type, table_number, customer_phone, customer_name, subtotal, total, notes, status, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'preparing', ?)`
         )
         .run(
           dailyNumber,
@@ -117,7 +119,8 @@ export const ordersRepo = {
           input.customer_name ?? null,
           subtotal,
           subtotal,
-          input.notes ?? null
+          input.notes ?? null,
+          now
         )
 
       const orderId = orderResult.lastInsertRowid as number
