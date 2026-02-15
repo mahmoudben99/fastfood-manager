@@ -2,6 +2,7 @@ import { ipcMain, BrowserWindow } from 'electron'
 import { readFileSync } from 'fs'
 import { settingsRepo } from '../database/repositories/settings.repo'
 import { ordersRepo } from '../database/repositories/orders.repo'
+import { printerAssignmentsRepo } from '../database/repositories/printer-assignments.repo'
 
 function getOrderTypeLabel(orderType: string, isRTL: boolean): string {
   if (orderType === 'delivery') return isRTL ? 'توصيل' : 'Delivery'

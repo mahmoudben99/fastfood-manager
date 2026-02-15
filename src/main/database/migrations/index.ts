@@ -7,6 +7,7 @@ import { migration005 } from './005_restaurant_address'
 import { migration006 } from './006_order_alert_time'
 import { migration007 } from './007_receipt_appearance'
 import { migration008 } from './008_workers_and_printers'
+import { migration009 } from './009_printer_assignments'
 
 interface Migration {
   version: number
@@ -22,7 +23,8 @@ const migrations: Migration[] = [
   migration005,
   migration006,
   migration007,
-  migration008
+  migration008,
+  migration009
 ]
 
 export function runMigrations(db: Database.Database): void {
