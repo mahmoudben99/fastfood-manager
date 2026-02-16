@@ -18,17 +18,21 @@ import { SplashScreen } from './components/SplashScreen'
 
 export default function App() {
   const [loading, setLoading] = useState(true)
-  const [showSplash, setShowSplash] = useState(true)
+  const [showSplash, setShowSplash] = useState(false)
   const { activated, setupComplete, loadSettings } = useAppStore()
 
   useEffect(() => {
-    loadSettings().finally(() => setLoading(false))
+    loadSettings()
+      .then(() => {
+        // Settings loaded, now show splash
+        setShowSplash(true)
+        setLoading(false)
+      })
+      .catch((err) => {
+        console.error('Failed to load settings:', err)
+        setLoading(false)
+      })
   }, [loadSettings])
-
-  // Show splash screen only on first load
-  if (showSplash && !loading) {
-    return <SplashScreen onComplete={() => setShowSplash(false)} />
-  }
 
   if (loading) {
     return (
@@ -39,6 +43,11 @@ export default function App() {
         </div>
       </div>
     )
+  }
+
+  // Show splash screen only on first load after settings are loaded
+  if (showSplash) {
+    return <SplashScreen onComplete={() => setShowSplash(false)} />
   }
 
   return (

@@ -9,8 +9,8 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
   const { settings } = useAppStore()
   const [stage, setStage] = useState(0) // 0: emoji scatter, 1: logo/name, 2: welcome text, 3: fade out
 
-  const restaurantName = settings.restaurant_name || 'My Restaurant'
-  const logoPath = settings.logo_path
+  const restaurantName = settings?.restaurant_name || 'Fast Food Manager'
+  const logoPath = settings?.logo_path
 
   const foodEmojis = ['🍔', '🍕', '🍟', '🌭', '🥤', '🍗', '🌮', '🥗', '🍱', '🧆', '🥙', '🍜']
 
