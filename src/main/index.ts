@@ -62,9 +62,9 @@ function createWindow(): void {
     }
   })
 
+  // Don't show immediately - wait for splash to close
   mainWindow.on('ready-to-show', () => {
-    mainWindow?.show()
-    mainWindow?.maximize()
+    // Window is ready but don't show it yet
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
