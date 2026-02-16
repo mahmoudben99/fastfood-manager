@@ -306,4 +306,4 @@ unset ELECTRON_RUN_AS_NODE
 4. Create GitHub release for updates
 5. Copy new build to `C:\Users\MahmoudBen\Desktop\FFM Final\`
 
-**Last context:** v1.2.1 shipped with printer assignments foundation. Fixed startup registry bug. Full printer UI + auto-split features planned for v1.3.0.
+**Last context:** v1.2.5 deployed with critical UI fixes (counter text interpolation + worker printer save). Live backup system working perfectly. Worker printer assignment UI fully functional. All user-reported issues resolved.
