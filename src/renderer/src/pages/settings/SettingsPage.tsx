@@ -459,7 +459,7 @@ export function SettingsPage() {
             </div>
 
             <Select
-              label={t('settings.printerName')}
+              label="Receipt Printer (Customer Receipt)"
               value={printerName}
               onChange={(e) => setPrinterName(e.target.value)}
               options={[

@@ -1213,25 +1213,45 @@ export function OrderScreen() {
                   </div>
 
                   {/* Print buttons */}
-                  <div className="flex gap-2 mb-3">
+                  <div className="flex flex-col gap-3 mb-3">
+                    {/* Receipt print button */}
                     <Button
                       variant="secondary"
                       size="sm"
                       onClick={() => window.api.printer.printReceipt(selectedOrder.id)}
-                      className="flex-1"
+                      className="w-full"
                     >
                       <Printer className="h-4 w-4" />
                       {t('orders.printReceipt')}
                     </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => window.api.printer.printKitchen(selectedOrder.id)}
-                      className="flex-1"
-                    >
-                      <Printer className="h-4 w-4" />
-                      {t('orders.printKitchen')}
-                    </Button>
+
+                    {/* Kitchen tickets - separate button for each worker */}
+                    {orderWorkers.length > 0 ? (
+                      <>
+                        {orderWorkers.map(worker => (
+                          <Button
+                            key={worker.id}
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => window.api.printer.printKitchenForWorker(selectedOrder.id, worker.id)}
+                            className="w-full"
+                          >
+                            <Printer className="h-4 w-4" />
+                            Print {worker.name} Recipe ({worker.itemCount} {worker.itemCount === 1 ? 'item' : 'items'})
+                          </Button>
+                        ))}
+                      </>
+                    ) : (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => window.api.printer.printKitchen(selectedOrder.id)}
+                        className="w-full"
+                      >
+                        <Printer className="h-4 w-4" />
+                        {t('orders.printKitchen')}
+                      </Button>
+                    )}
                   </div>
 
                   {/* Action buttons for ongoing orders */}

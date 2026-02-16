@@ -261,24 +261,11 @@
       try {
         // Get settings via IPC
         const settings = await window.electronAPI?.invoke('settings:getAll');
-
         const restaurantName = settings?.restaurant_name || 'My Restaurant';
-        const logoPath = settings?.logo_path;
 
-        // Update logo
+        // Always use restaurant name for consistent look
         const logoDiv = document.getElementById('logo');
-        if (logoPath && logoPath.trim()) {
-          const img = document.createElement('img');
-          img.src = `app-image://${logoPath}`;
-          img.alt = 'Logo';
-          img.onerror = function() {
-            // If image fails to load, show text
-            logoDiv.innerHTML = `<div class="logo-text">${restaurantName}</div>`;
-          };
-          logoDiv.appendChild(img);
-        } else {
-          logoDiv.innerHTML = `<div class="logo-text">${restaurantName}</div>`;
-        }
+        logoDiv.innerHTML = `<div class="logo-text">${restaurantName}</div>`;
       } catch (err) {
         console.error('Failed to load splash:', err);
         document.getElementById('logo').innerHTML = '<div class="logo-text">FFM</div>';
