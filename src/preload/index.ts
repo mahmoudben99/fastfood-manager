@@ -122,6 +122,8 @@ const api = {
     getPrinters: () => ipcRenderer.invoke('printer:getPrinters'),
     printReceipt: (orderId: number) => ipcRenderer.invoke('printer:printReceipt', orderId),
     printKitchen: (orderId: number) => ipcRenderer.invoke('printer:printKitchen', orderId),
+    printKitchenForWorker: (orderId: number, workerId: number) => ipcRenderer.invoke('printer:printKitchenForWorker', orderId, workerId),
+    getOrderWorkers: (orderId: number) => ipcRenderer.invoke('printer:getOrderWorkers', orderId),
     previewReceipt: (orderId: number) => ipcRenderer.invoke('printer:previewReceipt', orderId),
     testPrint: () => ipcRenderer.invoke('printer:testPrint')
   },

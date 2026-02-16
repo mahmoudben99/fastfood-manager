@@ -160,6 +160,35 @@ export function registerPrinterHandlers(): void {
     return getReceiptHTML(order, settings, 'receipt')
   })
 
+  ipcMain.handle('printer:printKitchenForWorker', async (_, orderId: number, workerId: number) => {
+    return printOrderForWorker(orderId, workerId)
+  })
+
+  ipcMain.handle('printer:getOrderWorkers', async (_, orderId: number) => {
+    const order = ordersRepo.getById(orderId)
+    if (!order || !order.items) return []
+
+    // Get unique workers from order items
+    const workerIds = new Set<number>()
+    for (const item of order.items) {
+      if (item.worker_id) {
+        workerIds.add(item.worker_id)
+      }
+    }
+
+    // Get worker details
+    const workers: { id: number; name: string; itemCount: number }[] = []
+    for (const workerId of workerIds) {
+      const worker = workersRepo.getById(workerId)
+      if (worker) {
+        const itemCount = order.items.filter(i => i.worker_id === workerId).length
+        workers.push({ id: worker.id, name: worker.name, itemCount })
+      }
+    }
+
+    return workers.sort((a, b) => a.name.localeCompare(b.name))
+  })
+
   ipcMain.handle('printer:testPrint', async () => {
     const settings = settingsRepo.getAll()
     const printerName = settings.printer_name
@@ -251,6 +280,32 @@ export async function printOrder(orderId: number, type: 'receipt' | 'kitchen'): 
   }
 
   return { success: allSuccess }
+}
+
+export async function printOrderForWorker(orderId: number, workerId: number): Promise<{ success: boolean; error?: string }> {
+  const settings = settingsRepo.getAll()
+  const order = ordersRepo.getById(orderId)
+  if (!order) return { success: false, error: 'Order not found' }
+
+  // Filter items for this worker
+  const workerItems = order.items?.filter(item => item.worker_id === workerId) || []
+  if (workerItems.length === 0) {
+    return { success: false, error: 'No items for this worker' }
+  }
+
+  // Get worker name
+  const worker = workersRepo.getById(workerId)
+  const workerName = worker?.name || null
+
+  // Create order with only this worker's items
+  const workerOrder = { ...order, items: workerItems, workerName, workerId }
+
+  // Get printer for this worker
+  const printerName = printerAssignmentsRepo.getPrinterForWorker(workerId) || settings.kitchen_printer_name || settings.printer_name
+  if (!printerName) return { success: false, error: 'No printer configured' }
+
+  const html = getReceiptHTML(workerOrder, settings, 'kitchen')
+  return doPrint(html, printerName)
 }
 
 async function doPrint(html: string, printerName: string): Promise<{ success: boolean; error?: string }> {

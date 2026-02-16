@@ -21,7 +21,7 @@ interface OrderState {
   customerName: string
   notes: string
 
-  addItem: (item: Omit<CartItem, 'quantity' | 'notes' | 'worker_id'>) => void
+  addItem: (item: Omit<CartItem, 'quantity' | 'notes' | 'worker_id'>) => Promise<void>
   removeItem: (index: number) => void
   updateQuantity: (index: number, quantity: number) => void
   updateItemNotes: (index: number, notes: string) => void
@@ -45,7 +45,7 @@ export const useOrderStore = create<OrderState>((set, get) => ({
   customerName: '',
   notes: '',
 
-  addItem: (item) => {
+  addItem: async (item) => {
     const { items } = get()
     const existingIndex = items.findIndex(
       (i) => i.menu_item_id === item.menu_item_id
@@ -56,8 +56,19 @@ export const useOrderStore = create<OrderState>((set, get) => ({
       updated[existingIndex].quantity += 1
       set({ items: updated })
     } else {
+      // Automatically assign worker based on category
+      let worker_id: number | null = null
+      try {
+        const workers = await window.api.workers.getByCategoryId(item.category_id)
+        if (workers.length > 0) {
+          worker_id = workers[0].id // Use first assigned worker
+        }
+      } catch (err) {
+        console.warn('Failed to get worker for category:', err)
+      }
+
       set({
-        items: [...items, { ...item, quantity: 1, notes: '', worker_id: null }]
+        items: [...items, { ...item, quantity: 1, notes: '', worker_id }]
       })
     }
   },

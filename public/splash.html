@@ -17,7 +17,7 @@
       background: linear-gradient(135deg, #FF4500 0%, #FF6347 50%, #FF7F50 100%);
       display: flex;
       align-items: center;
-      justify-content: center;
+      justify-center: center;
       position: relative;
     }
 
@@ -94,26 +94,19 @@
 
     /* Main content container */
     .container {
-      background: rgba(255, 255, 255, 0.25);
-      backdrop-filter: blur(10px);
-      border-radius: 32px;
-      border: 2px solid rgba(255, 255, 255, 0.4);
-      box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
-      width: 700px;
-      height: 420px;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 40px;
       position: relative;
       z-index: 10;
+      text-align: center;
     }
 
     /* Logo */
     .logo {
       opacity: 0;
-      animation: popIn 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55) 0.6s forwards;
+      animation: popIn 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55) 0.4s forwards;
     }
 
     .logo img {
@@ -145,49 +138,26 @@
       }
     }
 
+    /* Thank you text */
+    .thank-you {
+      margin-top: 50px;
+      font-size: 18px;
+      font-weight: 500;
+      color: rgba(255, 255, 255, 0.9);
+      text-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+      opacity: 0;
+      animation: fadeIn 0.8s ease-out 1.2s forwards;
+    }
+
     /* App name */
     .app-name {
-      margin-top: 30px;
-      font-size: 28px;
-      font-weight: 700;
-      color: white;
-      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-      opacity: 0;
-      animation: slideUp 0.8s ease-out 1.2s forwards;
-    }
-
-    @keyframes slideUp {
-      0% {
-        opacity: 0;
-        transform: translateY(20px);
-      }
-      100% {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    /* Welcome text */
-    .welcome {
-      margin-top: 40px;
-      text-align: center;
-      opacity: 0;
-      animation: fadeIn 1s ease-out 1.8s forwards;
-    }
-
-    .welcome-to {
-      font-size: 22px;
-      font-weight: 600;
-      color: rgba(255, 255, 255, 0.95);
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-      margin-bottom: 8px;
-    }
-
-    .restaurant-name {
+      margin-top: 8px;
       font-size: 32px;
-      font-weight: 900;
+      font-weight: 800;
       color: white;
-      text-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+      text-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+      opacity: 0;
+      animation: fadeIn 0.8s ease-out 1.5s forwards;
     }
 
     @keyframes fadeIn {
@@ -204,7 +174,9 @@
     /* Loading dots */
     .loading {
       position: absolute;
-      bottom: 30px;
+      bottom: 60px;
+      left: 50%;
+      transform: translateX(-50%);
       display: flex;
       gap: 8px;
     }
@@ -256,12 +228,8 @@
       <!-- Will be populated by script -->
     </div>
 
+    <div class="thank-you">Thank you for using</div>
     <div class="app-name">Fast Food Manager</div>
-
-    <div class="welcome">
-      <div class="welcome-to">Welcome to</div>
-      <div class="restaurant-name" id="restaurantName">Loading...</div>
-    </div>
 
     <div class="loading">
       <div class="dot"></div>
@@ -295,9 +263,6 @@
         const restaurantName = settings?.restaurant_name || 'My Restaurant';
         const logoPath = settings?.logo_path;
 
-        // Update restaurant name
-        document.getElementById('restaurantName').textContent = restaurantName;
-
         // Update logo
         const logoDiv = document.getElementById('logo');
         if (logoPath) {
@@ -307,7 +272,6 @@
         }
       } catch (err) {
         console.error('Failed to load splash:', err);
-        document.getElementById('restaurantName').textContent = 'Fast Food Manager';
         document.getElementById('logo').innerHTML = '<div class="logo-text">FFM</div>';
       }
     }

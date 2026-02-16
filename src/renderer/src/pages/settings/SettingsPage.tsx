@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check, Printer, AlertCircle, RefreshCw, LogOut } from 'lucide-react'
+import { Check, Printer, AlertCircle, RefreshCw, LogOut, Upload, Image } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '../../store/appStore'
 import { Button } from '../../components/ui/Button'
@@ -37,6 +37,7 @@ export function SettingsPage() {
   const [currencySymbol, setCurrencySymbol] = useState('DA')
   const [lang, setLang] = useState('en')
   const [orderAlertMinutes, setOrderAlertMinutes] = useState('20')
+  const [logoPath, setLogoPath] = useState('')
 
   // Schedule
   const [schedule, setSchedule] = useState<any[]>([])
@@ -86,6 +87,7 @@ export function SettingsPage() {
     setCurrencySymbol(settings.currency_symbol || 'DA')
     setLang(settings.language || 'en')
     setOrderAlertMinutes(settings.order_alert_minutes || '20')
+    setLogoPath(settings.logo_path || '')
     setPrinterName(settings.printer_name || '')
     setKitchenPrinterName(settings.kitchen_printer_name || settings.printer_name || '')
     setPaperWidth(settings.printer_width || '80')
@@ -133,11 +135,19 @@ export function SettingsPage() {
       currency,
       currency_symbol: currencySymbol,
       language: lang,
-      order_alert_minutes: orderAlertMinutes
+      order_alert_minutes: orderAlertMinutes,
+      logo_path: logoPath
     })
     setLanguage(lang)
     loadSettings()
     flashSaved()
+  }
+
+  const handleUploadLogo = async () => {
+    const path = await window.api.settings.uploadLogo()
+    if (path) {
+      setLogoPath(path)
+    }
   }
 
   const saveSchedule = async () => {
@@ -304,6 +314,29 @@ export function SettingsPage() {
       {tab === 'general' && (
         <Card>
           <div className="space-y-4 max-w-xl">
+            {/* Logo Upload */}
+            <div className="flex flex-col items-center pb-4 mb-4 border-b border-gray-200">
+              <div
+                className="w-24 h-24 rounded-xl bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center mb-3 overflow-hidden cursor-pointer hover:border-orange-400 transition-colors"
+                onClick={handleUploadLogo}
+              >
+                {logoPath ? (
+                  <img
+                    src={`app-image://${logoPath}`}
+                    alt="Logo"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <Image className="h-8 w-8 text-gray-400" />
+                )}
+              </div>
+              <Button variant="ghost" size="sm" onClick={handleUploadLogo}>
+                <Upload className="h-4 w-4" />
+                {logoPath ? t('setup.restaurant.changeLogo') : t('setup.restaurant.uploadLogo')}
+              </Button>
+              <p className="text-xs text-gray-400 mt-1">{t('setup.restaurant.logoOptional', { defaultValue: 'Optional — displayed on receipts and splash screen' })}</p>
+            </div>
+
             <Input label={t('setup.restaurant.name')} value={name} onChange={(e) => setName(e.target.value)} />
             <div className="grid grid-cols-2 gap-3">
               <Input label={t('setup.restaurant.phone')} value={phone} onChange={(e) => setPhone(e.target.value)} />

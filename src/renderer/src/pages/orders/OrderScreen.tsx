@@ -86,6 +86,9 @@ export function OrderScreen() {
   // Ongoing order count for badge
   const [ongoingCount, setOngoingCount] = useState(0)
 
+  // Workers for selected order
+  const [orderWorkers, setOrderWorkers] = useState<{ id: number; name: string; itemCount: number }[]>([])
+
   // Size group expansion
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null)
 
@@ -261,6 +264,9 @@ export function OrderScreen() {
     const full = await window.api.orders.getById(order.id)
     setSelectedOrder(full)
     setEditMode(false)
+    // Load workers for this order
+    const workers = await window.api.printer.getOrderWorkers(order.id)
+    setOrderWorkers(workers)
   }
 
   const getCategoryName = (cat: CategoryData) => {
