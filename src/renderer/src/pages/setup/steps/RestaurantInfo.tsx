@@ -40,10 +40,6 @@ export function RestaurantInfo({ data, updateData }: Props) {
     })
   }
 
-  const logoSrc = data.logoPath
-    ? `app-image://${data.logoPath}`
-    : ''
-
   return (
     <div className="space-y-6">
       <div className="text-center">
@@ -59,9 +55,13 @@ export function RestaurantInfo({ data, updateData }: Props) {
           >
             {data.logoPath ? (
               <img
-                src={logoSrc}
+                src={`file:///${data.logoPath.replace(/\\/g, '/')}`}
                 alt="Logo"
                 className="w-full h-full object-cover"
+                onError={(e) => {
+                  const img = e.target as HTMLImageElement
+                  img.src = `app-image://${data.logoPath}`
+                }}
               />
             ) : (
               <Image className="h-8 w-8 text-gray-400" />

@@ -338,10 +338,7 @@ export function SettingsPage() {
                 <Upload className="h-4 w-4" />
                 {logoPath ? t('setup.restaurant.changeLogo') : t('setup.restaurant.uploadLogo')}
               </Button>
-              {logoPath && (
-                <p className="text-xs text-gray-500 mt-2 max-w-md break-all text-center">{logoPath.split('\\').pop()}</p>
-              )}
-              <p className="text-xs text-gray-400 mt-1">{t('setup.restaurant.logoOptional', { defaultValue: 'Optional — displayed on receipts and splash screen' })}</p>
+              <p className="text-xs text-gray-400 mt-1">{t('setup.restaurant.logoOptional', { defaultValue: 'Optional — displayed on receipts' })}</p>
             </div>
 
             <Input label={t('setup.restaurant.name')} value={name} onChange={(e) => setName(e.target.value)} />
