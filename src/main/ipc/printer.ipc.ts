@@ -24,8 +24,7 @@ function getLogoHTML(settings: Record<string, string>): string {
     const data = readFileSync(logoPath)
     const ext = logoPath.toLowerCase().endsWith('.png') ? 'png' : 'jpeg'
     const base64 = data.toString('base64')
-    return `<div class="center"><img src="data:image/${ext};base64,${base64}" style="max-width:60%; max-height:60px; margin:0 auto;" /></div>
-    <div class="center bold big">${settings.restaurant_name || 'Restaurant'}</div>`
+    return `<div class="center"><img src="data:image/${ext};base64,${base64}" style="max-width:80%; max-height:120px; margin:0 auto 8px auto;" /></div>`
   } catch {
     return `<div class="center bold big">${settings.restaurant_name || 'Restaurant'}</div>`
   }

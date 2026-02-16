@@ -17,7 +17,7 @@
       background: linear-gradient(135deg, #FF4500 0%, #FF6347 50%, #FF7F50 100%);
       display: flex;
       align-items: center;
-      justify-center: center;
+      justify-content: center;
       position: relative;
     }
 
@@ -94,6 +94,8 @@
 
     /* Main content container */
     .container {
+      width: 100%;
+      height: 100%;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -107,17 +109,18 @@
     .logo {
       opacity: 0;
       animation: popIn 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55) 0.4s forwards;
+      margin-bottom: 40px;
     }
 
     .logo img {
-      width: 140px;
-      height: 140px;
+      width: 160px;
+      height: 160px;
       object-fit: contain;
       filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.3));
     }
 
     .logo-text {
-      font-size: 72px;
+      font-size: 82px;
       font-weight: 900;
       color: white;
       text-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
@@ -140,19 +143,18 @@
 
     /* Thank you text */
     .thank-you {
-      margin-top: 50px;
-      font-size: 18px;
+      font-size: 20px;
       font-weight: 500;
-      color: rgba(255, 255, 255, 0.9);
+      color: rgba(255, 255, 255, 0.95);
       text-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
       opacity: 0;
       animation: fadeIn 0.8s ease-out 1.2s forwards;
+      margin-bottom: 8px;
     }
 
     /* App name */
     .app-name {
-      margin-top: 8px;
-      font-size: 32px;
+      font-size: 36px;
       font-weight: 800;
       color: white;
       text-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
@@ -265,8 +267,15 @@
 
         // Update logo
         const logoDiv = document.getElementById('logo');
-        if (logoPath) {
-          logoDiv.innerHTML = `<img src="app-image://${logoPath}" alt="Logo">`;
+        if (logoPath && logoPath.trim()) {
+          const img = document.createElement('img');
+          img.src = `app-image://${logoPath}`;
+          img.alt = 'Logo';
+          img.onerror = function() {
+            // If image fails to load, show text
+            logoDiv.innerHTML = `<div class="logo-text">${restaurantName}</div>`;
+          };
+          logoDiv.appendChild(img);
         } else {
           logoDiv.innerHTML = `<div class="logo-text">${restaurantName}</div>`;
         }

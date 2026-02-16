@@ -317,14 +317,18 @@ export function SettingsPage() {
             {/* Logo Upload */}
             <div className="flex flex-col items-center pb-4 mb-4 border-b border-gray-200">
               <div
-                className="w-24 h-24 rounded-xl bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center mb-3 overflow-hidden cursor-pointer hover:border-orange-400 transition-colors"
+                className="w-32 h-32 rounded-xl bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center mb-3 overflow-hidden cursor-pointer hover:border-orange-400 transition-colors"
                 onClick={handleUploadLogo}
               >
                 {logoPath ? (
                   <img
-                    src={`app-image://${logoPath}`}
+                    src={`file:///${logoPath.replace(/\\/g, '/')}`}
                     alt="Logo"
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain p-2"
+                    onError={(e) => {
+                      const img = e.target as HTMLImageElement;
+                      img.src = `app-image://${logoPath}`;
+                    }}
                   />
                 ) : (
                   <Image className="h-8 w-8 text-gray-400" />
@@ -334,6 +338,9 @@ export function SettingsPage() {
                 <Upload className="h-4 w-4" />
                 {logoPath ? t('setup.restaurant.changeLogo') : t('setup.restaurant.uploadLogo')}
               </Button>
+              {logoPath && (
+                <p className="text-xs text-gray-500 mt-2 max-w-md break-all text-center">{logoPath.split('\\').pop()}</p>
+              )}
               <p className="text-xs text-gray-400 mt-1">{t('setup.restaurant.logoOptional', { defaultValue: 'Optional — displayed on receipts and splash screen' })}</p>
             </div>
 
