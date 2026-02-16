@@ -460,9 +460,6 @@ export function OrderScreen() {
       setOrderSuccess({ orderId: order.id, orderNumber: order.daily_number })
       store.clearOrder()
       loadOngoingCount()
-
-      // Auto-print kitchen ticket
-      window.api.printer.printKitchen(order.id).catch(() => {})
     } catch (err) {
       console.error('Failed to place order:', err)
     } finally {
