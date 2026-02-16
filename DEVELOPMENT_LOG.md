@@ -1,6 +1,6 @@
 # Fast Food Manager - Development Log
 
-**Current Version:** 1.2.6
+**Current Version:** 1.2.7
 **Last Updated:** 2026-02-16
 **Repository:** https://github.com/mahmoudben99/fastfood-manager
 
@@ -38,6 +38,24 @@ src/
 ---
 
 ## Recent Changes
+
+### v1.2.7 (2026-02-16) - Animated Professional Splash Screen
+**Improvements:**
+- 🎨 **REDESIGNED Splash Screen** - Professional animated splash with no image files needed!
+  - Scattering food emojis animation (🍔🍕🍟🌭 etc.)
+  - Logo pop-up or bold restaurant name display
+  - "Fast Food Manager" app name animation
+  - "Welcome to [Restaurant Name]" text with smooth transitions
+  - Beautiful gradient background (orange-600 → orange-500 → amber-500)
+  - Animated blob elements in background
+  - 3:2 rounded corner window (600x400px)
+  - Total duration: ~4 seconds with smooth stage transitions
+
+**Technical:**
+- `SplashScreen.tsx`: Complete rewrite with pure CSS animations
+- No external images required - all animations are programmatic
+- Stages: emoji scatter (0.8s) → logo/name (1.2s) → welcome text (1.5s) → fade out
+- Uses logo from settings if available, otherwise shows restaurant name in bold
 
 ### v1.2.6 (2026-02-16) - Kitchen Splitting, UX Improvements & Splash Screen
 **New Features:**
@@ -338,4 +356,4 @@ unset ELECTRON_RUN_AS_NODE
 4. Create GitHub release for updates
 5. Copy new build to `C:\Users\MahmoudBen\Desktop\FFM Final\`
 
-**Last context:** v1.2.6 deployed with worker-specific kitchen ticket splitting, visual click feedback on menu items, fixed Start with Windows persistence, and beautiful splash screen system. All core features fully functional. Next: User will add splash screen images using AI-generated prompts.
+**Last context:** v1.2.7 deployed with professional animated splash screen (no images needed). Features: emoji scatter animation, logo/name pop-up, smooth gradient background, 3:2 rounded window. All features working perfectly including worker-specific kitchen tickets, visual click feedback, and auto-launch persistence.
