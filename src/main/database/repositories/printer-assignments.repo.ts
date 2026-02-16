@@ -50,6 +50,14 @@ export const printerAssignmentsRepo = {
 
   // Get printer for specific worker - fallback chain: worker → kitchen_all → default
   getPrinterForWorker(workerId: number): string | null {
+    // Check workers table first for direct assignment
+    const worker = getDb()
+      .prepare('SELECT printer_name FROM workers WHERE id = ? AND is_active = 1')
+      .get(workerId) as { printer_name: string | null } | undefined
+
+    if (worker?.printer_name) return worker.printer_name
+
+    // Fallback to printer_assignments table (legacy)
     const assignment = getDb()
       .prepare(
         `SELECT printer_name FROM printer_assignments

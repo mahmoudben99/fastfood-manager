@@ -1,7 +1,7 @@
 # Fast Food Manager - Development Log
 
-**Current Version:** 1.2.5
-**Last Updated:** 2026-02-15
+**Current Version:** 1.2.6
+**Last Updated:** 2026-02-16
 **Repository:** https://github.com/mahmoudben99/fastfood-manager
 
 ---
@@ -38,6 +38,38 @@ src/
 ---
 
 ## Recent Changes
+
+### v1.2.6 (2026-02-16) - Kitchen Splitting, UX Improvements & Splash Screen
+**New Features:**
+- 🎨 **Splash Screen** - Beautiful welcome screen with 3 customizable images (3:2 ratio)
+- 👨‍🍳 **Worker-Specific Kitchen Tickets** - Each worker now gets their own ticket with ONLY their items
+- 👆 **Visual Click Feedback** - Menu items now have satisfying scale+highlight effect when clicked
+
+**Bug Fixes:**
+- 🐛 **CRITICAL**: Fixed kitchen tickets printing same items twice instead of splitting by worker
+- 🐛 Fixed Start with Windows defaulting to OFF (now defaults to ON and persists correctly)
+
+**Improvements:**
+- ✨ Kitchen tickets now display worker name badge: "FOR: WORKER NAME"
+- ✨ Menu item buttons have active:scale-95 + orange highlight effect
+- ✨ Splash screen shows restaurant name and transitions smoothly
+- ✨ Auto-launch setting now reads from database with proper default
+
+**Technical:**
+- `printer-assignments.repo.ts`: Updated getPrinterForWorker to check workers.printer_name first
+- `printer.ipc.ts`: Split tickets now fetch worker info and pass to ticket template
+- `OrderScreen.tsx`: Added active:scale-95 and active:bg-orange-50/200 classes to all menu buttons
+- `settings.ipc.ts`: getAutoLaunch now reads from database (default true)
+- `SplashScreen.tsx`: New component with 2.5s per image, smooth transitions
+- `App.tsx`: Integrated splash screen before main app loads
+
+**Splash Screen Setup:**
+- Place 3 images (3:2 ratio) in `public/splash/` folder:
+  - `splash-1.png`
+  - `splash-2.png`
+  - `splash-3.png`
+- Images show for 2.5 seconds each with smooth animations
+- Shows restaurant name from settings
 
 ### v1.2.5 (2026-02-15) - Critical UI/UX Fixes
 **Bug Fixes:**
@@ -306,4 +338,4 @@ unset ELECTRON_RUN_AS_NODE
 4. Create GitHub release for updates
 5. Copy new build to `C:\Users\MahmoudBen\Desktop\FFM Final\`
 
-**Last context:** v1.2.5 deployed with critical UI fixes (counter text interpolation + worker printer save). Live backup system working perfectly. Worker printer assignment UI fully functional. All user-reported issues resolved.
+**Last context:** v1.2.6 deployed with worker-specific kitchen ticket splitting, visual click feedback on menu items, fixed Start with Windows persistence, and beautiful splash screen system. All core features fully functional. Next: User will add splash screen images using AI-generated prompts.

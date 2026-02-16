@@ -3,6 +3,7 @@ import { readFileSync } from 'fs'
 import { settingsRepo } from '../database/repositories/settings.repo'
 import { ordersRepo } from '../database/repositories/orders.repo'
 import { printerAssignmentsRepo } from '../database/repositories/printer-assignments.repo'
+import { workersRepo } from '../database/repositories/workers.repo'
 
 function getOrderTypeLabel(orderType: string, isRTL: boolean): string {
   if (orderType === 'delivery') return isRTL ? 'توصيل' : 'Delivery'
@@ -62,11 +63,13 @@ function getReceiptHTML(order: any, settings: Record<string, string>, type: 'rec
   .item-name { font-weight: bold; font-size: ${sizes.itemName}; }
   .item-notes { font-size: ${sizes.itemNotes}; font-style: italic; margin-top: 2px; }
   .qty { font-weight: bold; }
+  .worker-badge { background: #000; color: #fff; padding: 4px 8px; display: inline-block; margin: 4px 0; font-weight: bold; }
 </style></head>
 <body>
   <div class="center bold big">KITCHEN</div>
   <div class="center bold big">#${order.daily_number}</div>
   <div class="center">${getOrderTypeKitchen(order.order_type)}</div>
+  ${order.workerName ? `<div class="center"><div class="worker-badge">FOR: ${order.workerName.toUpperCase()}</div></div>` : ''}
   <div class="line"></div>
   ${items.map((item: any) => `
     <div class="item">
@@ -226,7 +229,14 @@ export async function printOrder(orderId: number, type: 'receipt' | 'kitchen'): 
   // Print separate ticket for each worker
   let allSuccess = true
   for (const [workerId, items] of itemsByWorker) {
-    const workerOrder = { ...order, items }
+    // Get worker name if workerId exists
+    let workerName = null
+    if (workerId) {
+      const worker = workersRepo.getById(workerId)
+      workerName = worker?.name || null
+    }
+
+    const workerOrder = { ...order, items, workerName, workerId }
     const printerName = workerId
       ? printerAssignmentsRepo.getPrinterForWorker(workerId)
       : printerAssignmentsRepo.getKitchenAllPrinter()

@@ -72,12 +72,19 @@ export function registerSettingsHandlers(): void {
   })
 
   ipcMain.handle('settings:getAutoLaunch', () => {
-    return app.getLoginItemSettings().openAtLogin
+    // Get from database with default of true
+    const setting = settingsRepo.get('auto_launch')
+    return setting !== 'false' // Default to true if not set or set to anything other than 'false'
   })
 
   ipcMain.handle('settings:setAutoLaunch', (_, enabled: boolean) => {
+    // Save to database
+    settingsRepo.set('auto_launch', enabled ? 'true' : 'false')
+
+    // Update system setting
     app.setLoginItemSettings({
       openAtLogin: enabled,
+      openAsHidden: false,
       name: 'Fast Food Manager'
     })
     return true

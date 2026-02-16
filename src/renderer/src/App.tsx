@@ -14,14 +14,21 @@ import { ExcelImportExport } from './pages/excel/ExcelImportExport'
 import { BackupRestore } from './pages/backup/BackupRestore'
 import { SettingsPage } from './pages/settings/SettingsPage'
 import { UpdateToast } from './components/ui/UpdateToast'
+import { SplashScreen } from './components/SplashScreen'
 
 export default function App() {
   const [loading, setLoading] = useState(true)
+  const [showSplash, setShowSplash] = useState(true)
   const { activated, setupComplete, loadSettings } = useAppStore()
 
   useEffect(() => {
     loadSettings().finally(() => setLoading(false))
   }, [loadSettings])
+
+  // Show splash screen only on first load
+  if (showSplash && !loading) {
+    return <SplashScreen onComplete={() => setShowSplash(false)} />
+  }
 
   if (loading) {
     return (

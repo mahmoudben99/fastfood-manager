@@ -661,7 +661,7 @@ export function OrderScreen() {
                   <button
                     key={item.id}
                     onClick={() => handleAddItem(item)}
-                    className="bg-white rounded-xl border border-gray-200 p-3 text-start hover:shadow-md hover:border-orange-300 transition-all"
+                    className="bg-white rounded-xl border border-gray-200 p-3 text-start hover:shadow-md hover:border-orange-300 transition-all active:scale-95 active:bg-orange-50"
                   >
                     {item.image_path ? (
                       <>
@@ -705,7 +705,7 @@ export function OrderScreen() {
                   {!isExpanded ? (
                     <button
                       onClick={() => setExpandedGroup(entry.key)}
-                      className="w-full bg-white rounded-xl border-2 border-orange-200 p-3 text-start hover:shadow-md hover:border-orange-400 transition-all"
+                      className="w-full bg-white rounded-xl border-2 border-orange-200 p-3 text-start hover:shadow-md hover:border-orange-400 transition-all active:scale-95 active:bg-orange-50"
                     >
                       <div className="flex items-center gap-2">
                         {(entry.emoji || entry.categoryIcon) && (
@@ -747,7 +747,7 @@ export function OrderScreen() {
                           <button
                             key={sizeItem.id}
                             onClick={() => { handleAddItem(sizeItem); setExpandedGroup(null) }}
-                            className="flex-1 py-2 px-1 rounded-lg bg-orange-50 hover:bg-orange-100 border border-orange-200 hover:border-orange-400 transition-all text-center"
+                            className="flex-1 py-2 px-1 rounded-lg bg-orange-50 hover:bg-orange-100 border border-orange-200 hover:border-orange-400 transition-all text-center active:scale-95 active:bg-orange-200"
                           >
                             <div className="font-bold text-gray-900 text-xs">{getSizeLabel(sizeItem)}</div>
                             <div className="text-orange-600 font-bold text-xs mt-0.5">{formatCurrency(sizeItem.price)}</div>
