@@ -23,6 +23,7 @@ export default defineConfig({
   },
   renderer: {
     root: 'src/renderer',
+    publicDir: resolve('public'),
     resolve: {
       alias: {
         '@': resolve('src/renderer/src')

@@ -14,24 +14,13 @@ import { ExcelImportExport } from './pages/excel/ExcelImportExport'
 import { BackupRestore } from './pages/backup/BackupRestore'
 import { SettingsPage } from './pages/settings/SettingsPage'
 import { UpdateToast } from './components/ui/UpdateToast'
-import { SplashScreen } from './components/SplashScreen'
 
 export default function App() {
   const [loading, setLoading] = useState(true)
-  const [showSplash, setShowSplash] = useState(false)
   const { activated, setupComplete, loadSettings } = useAppStore()
 
   useEffect(() => {
-    loadSettings()
-      .then(() => {
-        // Settings loaded, now show splash
-        setShowSplash(true)
-        setLoading(false)
-      })
-      .catch((err) => {
-        console.error('Failed to load settings:', err)
-        setLoading(false)
-      })
+    loadSettings().finally(() => setLoading(false))
   }, [loadSettings])
 
   if (loading) {
@@ -43,11 +32,6 @@ export default function App() {
         </div>
       </div>
     )
-  }
-
-  // Show splash screen only on first load after settings are loaded
-  if (showSplash) {
-    return <SplashScreen onComplete={() => setShowSplash(false)} />
   }
 
   return (

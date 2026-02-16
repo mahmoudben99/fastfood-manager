@@ -178,4 +178,11 @@ const api = {
 
 contextBridge.exposeInMainWorld('api', api)
 
+// For splash window
+const electronAPI = {
+  invoke: (channel: string, ...args: any[]) => ipcRenderer.invoke(channel, ...args)
+}
+
+contextBridge.exposeInMainWorld('electronAPI', electronAPI)
+
 export type ElectronAPI = typeof api

@@ -7,6 +7,7 @@ import { registerAllHandlers } from './ipc'
 import { startBot, stopBot } from './telegram/bot'
 import { settingsRepo } from './database/repositories/settings.repo'
 import { startBackupSystem, stopBackupSystem } from './database/backup'
+import { createSplashWindow, closeSplashWindow } from './splash'
 
 // Enhanced logging function
 function log(message: string, isError = false): void {
@@ -165,11 +166,34 @@ app.whenReady().then(() => {
     log('Registering IPC handlers')
     registerAllHandlers()
 
+    // Show splash screen first
+    log('Creating splash window')
+    const splashWin = createSplashWindow()
+
+    // IPC handler for splash close
+    ipcMain.handle('splash:close', () => {
+      closeSplashWindow()
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.show()
+        mainWindow.maximize()
+      }
+    })
+
+    // Create main window (but don't show it yet)
     log('Creating main window')
     createWindow()
 
     log('Setting up auto-updater')
     setupAutoUpdater()
+
+    // Close splash and show main window after 5 seconds (fallback)
+    setTimeout(() => {
+      closeSplashWindow()
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.show()
+        mainWindow.maximize()
+      }
+    }, 5500)
 
     // Enable auto-startup with Windows (default ON, can be changed in settings)
     log('Configuring auto-launch')
