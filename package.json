@@ -1,6 +1,6 @@
 {
   "name": "fastfood-manager",
-  "version": "1.3.5",
+  "version": "1.3.6",
   "description": "Fast Food Restaurant Management System",
   "main": "./out/main/index.js",
   "scripts": {

@@ -89,6 +89,10 @@ export function OrderScreen() {
   // Workers for selected order
   const [orderWorkers, setOrderWorkers] = useState<{ id: number; name: string; itemCount: number }[]>([])
 
+  // History search
+  const [historySearch, setHistorySearch] = useState('')
+  const historySearchRef = useRef<HTMLInputElement>(null)
+
   // Size group expansion
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null)
 
@@ -192,7 +196,7 @@ export function OrderScreen() {
       if (priceModal) { setPriceModal(null); return }
       if (orderSuccess) { setOrderSuccess(null); return }
       if (cancelConfirm) { setCancelConfirm(null); return }
-      if (showHistory) { setShowHistory(false); setSelectedOrder(null); setEditMode(false); return }
+      if (showHistory) { setShowHistory(false); setSelectedOrder(null); setEditMode(false); setHistorySearch(''); return }
       if (store.items.length > 0) { store.clearOrder(); return }
       return
     }
@@ -241,6 +245,16 @@ export function OrderScreen() {
       }
       return
     }
+
+    // Auto-focus menu search on any printable character (when not in modal or input)
+    if (!isInput && !showHistory && !noteModal && !priceModal && !orderSuccess && !cancelConfirm
+        && e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      e.preventDefault()
+      setSearchQuery(e.key)
+      setExpandedGroup(null)
+      searchRef.current?.focus()
+      return
+    }
   }, [store, noteModal, priceModal, orderSuccess, cancelConfirm, showHistory, placing, categories])
 
   useEffect(() => {
@@ -258,6 +272,8 @@ export function OrderScreen() {
     setShowHistory(true)
     setSelectedOrder(null)
     setEditMode(false)
+    setHistorySearch('')
+    setTimeout(() => historySearchRef.current?.focus(), 100)
   }
 
   const viewOrderDetails = async (order: OrderData) => {
@@ -484,8 +500,20 @@ export function OrderScreen() {
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
 
-  const ongoingOrders = todayOrders.filter((o) => o.status === 'preparing' || o.status === 'pending')
-  const doneOrders = todayOrders.filter((o) => o.status === 'completed' || o.status === 'cancelled')
+  const filterByHistorySearch = (orders: OrderData[]) => {
+    if (!historySearch.trim()) return orders
+    const q = historySearch.toLowerCase()
+    return orders.filter(order => {
+      if (order.table_number?.toLowerCase().includes(q)) return true
+      if (order.customer_phone?.toLowerCase().includes(q)) return true
+      if (String(order.daily_number).includes(q)) return true
+      if (order.items?.some(item => item.menu_item_name?.toLowerCase().includes(q))) return true
+      return false
+    })
+  }
+
+  const ongoingOrders = filterByHistorySearch(todayOrders.filter((o) => o.status === 'preparing' || o.status === 'pending'))
+  const doneOrders = filterByHistorySearch(todayOrders.filter((o) => o.status === 'completed' || o.status === 'cancelled'))
 
   const markDone = async (id: number) => {
     await window.api.orders.updateStatus(id, 'completed')
@@ -1112,7 +1140,7 @@ export function OrderScreen() {
 
       {/* Order History Modal */}
       {showHistory && (
-        <Modal isOpen onClose={() => { setShowHistory(false); setSelectedOrder(null); setEditMode(false) }} title={t('orders.today')} size="xl">
+        <Modal isOpen onClose={() => { setShowHistory(false); setSelectedOrder(null); setEditMode(false); setHistorySearch('') }} title={t('orders.today')} size="xl">
           {selectedOrder ? (
             <div>
               <button
@@ -1283,10 +1311,38 @@ export function OrderScreen() {
             </div>
           ) : (
             <div className="max-h-[80vh] overflow-y-auto space-y-6">
+              {/* History search bar */}
+              {todayOrders.length > 0 && (
+                <div className="relative">
+                  <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input
+                    ref={historySearchRef}
+                    type="text"
+                    value={historySearch}
+                    onChange={(e) => setHistorySearch(e.target.value)}
+                    placeholder="Search by table, phone or item name..."
+                    className="w-full ps-10 pe-8 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  />
+                  {historySearch && (
+                    <button
+                      onClick={() => setHistorySearch('')}
+                      className="absolute end-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              )}
+
               {todayOrders.length === 0 ? (
                 <div className="text-center py-8 text-gray-400">
                   <ClipboardList className="h-10 w-10 mx-auto mb-2" />
                   <p className="text-sm">{t('orders.noOrders')}</p>
+                </div>
+              ) : ongoingOrders.length === 0 && doneOrders.length === 0 ? (
+                <div className="text-center py-8 text-gray-400">
+                  <Search className="h-10 w-10 mx-auto mb-2" />
+                  <p className="text-sm">No orders match your search</p>
                 </div>
               ) : (
                 <>
