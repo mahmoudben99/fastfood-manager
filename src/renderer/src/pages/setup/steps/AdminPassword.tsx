@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Shield } from 'lucide-react'
 import { Input } from '../../../components/ui/Input'
+import { VirtualKeyboard } from '../../../components/VirtualKeyboard'
 import type { SetupData } from '../SetupWizard'
 
 interface Props {
@@ -12,6 +13,10 @@ interface Props {
 export function AdminPassword({ data, updateData }: Props) {
   const { t } = useTranslation()
   const [confirm, setConfirm] = useState('')
+  const isTouch = data.inputMode === 'touchscreen'
+
+  // Virtual keyboard state
+  const [keyboardTarget, setKeyboardTarget] = useState<{ field: string; type: 'numeric' } | null>(null)
 
   const passwordError =
     data.password.length > 0 && data.password.length < 4 ? t('setup.password.tooShort') : ''
@@ -20,7 +25,22 @@ export function AdminPassword({ data, updateData }: Props) {
     confirm.length > 0 && confirm !== data.password ? t('setup.password.mismatch') : ''
 
   const handlePasswordChange = (value: string) => {
-    updateData({ password: value })
+    updateData({ password: value.replace(/\D/g, '') })
+  }
+
+  const getKeyboardValue = (): string => {
+    if (!keyboardTarget) return ''
+    return keyboardTarget.field === 'password' ? data.password : confirm
+  }
+
+  const handleKeyboardChange = (val: string) => {
+    if (!keyboardTarget) return
+    const digits = val.replace(/\D/g, '')
+    if (keyboardTarget.field === 'password') {
+      updateData({ password: digits })
+    } else {
+      setConfirm(digits)
+    }
   }
 
   return (
@@ -36,19 +56,36 @@ export function AdminPassword({ data, updateData }: Props) {
       <div className="bg-white rounded-xl p-6 space-y-5 shadow-sm max-w-md mx-auto">
         <Input
           type="password"
+          inputMode="numeric"
           label={t('setup.password.password')}
           value={data.password}
+          readOnly={isTouch}
+          onClick={isTouch ? () => setKeyboardTarget({ field: 'password', type: 'numeric' }) : undefined}
           onChange={(e) => handlePasswordChange(e.target.value)}
           error={passwordError}
         />
         <Input
           type="password"
+          inputMode="numeric"
           label={t('setup.password.confirm')}
           value={confirm}
-          onChange={(e) => setConfirm(e.target.value)}
+          readOnly={isTouch}
+          onClick={isTouch ? () => setKeyboardTarget({ field: 'confirm', type: 'numeric' }) : undefined}
+          onChange={(e) => setConfirm(e.target.value.replace(/\D/g, ''))}
           error={confirmError}
         />
       </div>
+
+      {/* Virtual Keyboard for touchscreen mode */}
+      {isTouch && keyboardTarget && (
+        <VirtualKeyboard
+          visible
+          type={keyboardTarget.type}
+          value={getKeyboardValue()}
+          onChange={handleKeyboardChange}
+          onClose={() => setKeyboardTarget(null)}
+        />
+      )}
     </div>
   )
 }

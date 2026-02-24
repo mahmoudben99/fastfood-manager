@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { Lock, KeyRound, Copy, Check, ArrowLeft } from 'lucide-react'
 import { Button } from './Button'
 import { Input } from './Input'
+import { VirtualKeyboard } from '../VirtualKeyboard'
+import { useAppStore } from '../../store/appStore'
 
 interface PasswordGateProps {
   onUnlock: () => void
@@ -13,6 +15,8 @@ type Step = 'password' | 'forgot' | 'newPassword'
 
 export function PasswordGate({ onUnlock, onCancel }: PasswordGateProps) {
   const { t } = useTranslation()
+  const { inputMode } = useAppStore()
+  const isTouch = inputMode === 'touchscreen'
   const [step, setStep] = useState<Step>('password')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -26,6 +30,30 @@ export function PasswordGate({ onUnlock, onCancel }: PasswordGateProps) {
   // New password state
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+
+  // Virtual keyboard state
+  const [keyboardTarget, setKeyboardTarget] = useState<{ field: string; type: 'numeric' | 'text' } | null>(null)
+
+  const getKeyboardValue = (): string => {
+    if (!keyboardTarget) return ''
+    switch (keyboardTarget.field) {
+      case 'password': return password
+      case 'newPassword': return newPassword
+      case 'confirmPassword': return confirmPassword
+      case 'unlockCode': return unlockCode
+      default: return ''
+    }
+  }
+
+  const handleKeyboardChange = (val: string) => {
+    if (!keyboardTarget) return
+    switch (keyboardTarget.field) {
+      case 'password': setPassword(val.replace(/\D/g, '')); break
+      case 'newPassword': setNewPassword(val.replace(/\D/g, '')); break
+      case 'confirmPassword': setConfirmPassword(val.replace(/\D/g, '')); break
+      case 'unlockCode': setUnlockCode(val.toUpperCase()); break
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -134,11 +162,14 @@ export function PasswordGate({ onUnlock, onCancel }: PasswordGateProps) {
             <form onSubmit={handleSubmit} className="space-y-4">
               <Input
                 type="password"
+                inputMode="numeric"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                readOnly={isTouch}
+                onClick={isTouch ? () => setKeyboardTarget({ field: 'password', type: 'numeric' }) : undefined}
+                onChange={(e) => setPassword(e.target.value.replace(/\D/g, ''))}
                 placeholder={t('setup.password.password')}
                 error={error}
-                autoFocus
+                autoFocus={!isTouch}
               />
 
               <div className="flex gap-3">
@@ -200,11 +231,13 @@ export function PasswordGate({ onUnlock, onCancel }: PasswordGateProps) {
               <Input
                 type="text"
                 value={unlockCode}
+                readOnly={isTouch}
+                onClick={isTouch ? () => setKeyboardTarget({ field: 'unlockCode', type: 'text' }) : undefined}
                 onChange={(e) => setUnlockCode(e.target.value.toUpperCase())}
                 placeholder={t('forgotPassword.codePlaceholder')}
                 label={t('forgotPassword.codeLabel')}
                 error={error}
-                autoFocus
+                autoFocus={!isTouch}
                 className="font-mono tracking-wider"
               />
 
@@ -236,16 +269,22 @@ export function PasswordGate({ onUnlock, onCancel }: PasswordGateProps) {
             <form onSubmit={handleResetPassword} className="space-y-4">
               <Input
                 type="password"
+                inputMode="numeric"
                 value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
+                readOnly={isTouch}
+                onClick={isTouch ? () => setKeyboardTarget({ field: 'newPassword', type: 'numeric' }) : undefined}
+                onChange={(e) => setNewPassword(e.target.value.replace(/\D/g, ''))}
                 placeholder={t('setup.password.password')}
                 label={t('setup.password.password')}
-                autoFocus
+                autoFocus={!isTouch}
               />
               <Input
                 type="password"
+                inputMode="numeric"
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                readOnly={isTouch}
+                onClick={isTouch ? () => setKeyboardTarget({ field: 'confirmPassword', type: 'numeric' }) : undefined}
+                onChange={(e) => setConfirmPassword(e.target.value.replace(/\D/g, ''))}
                 placeholder={t('setup.password.confirm')}
                 label={t('setup.password.confirm')}
                 error={error}
@@ -258,6 +297,17 @@ export function PasswordGate({ onUnlock, onCancel }: PasswordGateProps) {
           </>
         )}
       </div>
+
+      {/* Virtual Keyboard for touchscreen mode */}
+      {isTouch && keyboardTarget && (
+        <VirtualKeyboard
+          visible
+          type={keyboardTarget.type}
+          value={getKeyboardValue()}
+          onChange={handleKeyboardChange}
+          onClose={() => setKeyboardTarget(null)}
+        />
+      )}
     </div>
   )
 }

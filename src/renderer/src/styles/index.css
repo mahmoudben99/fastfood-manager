@@ -86,6 +86,11 @@ html[dir="rtl"] ::-webkit-scrollbar { direction: rtl; }
 .dark ::-webkit-scrollbar-thumb { background: #4b5563; }
 .dark ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
 
+/* ===== Touch Scrolling ===== */
+.overflow-y-auto, .overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
 /* ===== Animations ===== */
 @keyframes slide-up {
   from { transform: translateY(100px); opacity: 0; }

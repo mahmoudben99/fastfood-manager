@@ -665,15 +665,15 @@ export function OrderScreen() {
       {/* LEFT: Menu Grid */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <div className="bg-white border-b px-2 sm:px-4 py-2 sm:py-3 flex items-center justify-between shrink-0">
-          <h1 className="text-lg sm:text-xl font-bold text-gray-900">{t('orders.title')}</h1>
-          <div className="flex items-center gap-1 sm:gap-2">
+        <div className={`bg-white border-b ${isTouch ? 'px-4 py-3' : 'px-2 sm:px-4 py-2 sm:py-3'} flex items-center justify-between shrink-0`}>
+          <h1 className={`${isTouch ? 'text-xl' : 'text-lg sm:text-xl'} font-bold text-gray-900`}>{t('orders.title')}</h1>
+          <div className={`flex items-center ${isTouch ? 'gap-3' : 'gap-1 sm:gap-2'}`}>
             <button
               onClick={openHistory}
-              className="relative flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-gray-100 text-gray-600 text-xs sm:text-sm font-medium hover:bg-gray-200 transition-colors"
+              className={`relative flex items-center ${isTouch ? 'gap-2 px-5 py-3 rounded-xl text-base' : 'gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm'} bg-gray-100 text-gray-600 font-medium hover:bg-gray-200 transition-colors active:scale-95`}
             >
-              <ClipboardList className="h-4 w-4" />
-              <span className="hidden sm:inline">{t('orders.today')}</span>
+              <ClipboardList className={isTouch ? 'h-5 w-5' : 'h-4 w-4'} />
+              {isTouch ? t('orders.today') : <span className="hidden sm:inline">{t('orders.today')}</span>}
               {ongoingCount > 0 && (
                 <span className="absolute -top-2 -end-2 min-w-[22px] h-[22px] flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold px-1 animate-pulse">
                   {ongoingCount}
@@ -682,16 +682,16 @@ export function OrderScreen() {
             </button>
             <button
               onClick={toggleDarkMode}
-              className="p-1.5 sm:p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+              className={`${isTouch ? 'p-3 rounded-xl' : 'p-1.5 sm:p-2 rounded-lg'} hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors active:scale-95`}
             >
-              {darkMode ? <Sun className="h-4 sm:h-5 w-4 sm:w-5" /> : <Moon className="h-4 sm:h-5 w-4 sm:w-5" />}
+              {darkMode ? <Sun className={isTouch ? 'h-6 w-6' : 'h-4 sm:h-5 w-4 sm:w-5'} /> : <Moon className={isTouch ? 'h-6 w-6' : 'h-4 sm:h-5 w-4 sm:w-5'} />}
             </button>
             <button
               onClick={() => navigate('/admin')}
-              className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg bg-gray-900 text-white text-xs sm:text-sm font-medium hover:bg-gray-800 transition-colors"
+              className={`flex items-center ${isTouch ? 'gap-2 px-5 py-3 rounded-xl text-base' : 'gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm'} bg-gray-900 text-white font-medium hover:bg-gray-800 transition-colors active:scale-95`}
             >
-              <Lock className="h-4 w-4" />
-              <span className="hidden sm:inline">{t('nav.admin')}</span>
+              <Lock className={isTouch ? 'h-5 w-5' : 'h-4 w-4'} />
+              {isTouch ? t('nav.admin') : <span className="hidden sm:inline">{t('nav.admin')}</span>}
             </button>
           </div>
         </div>
@@ -1189,22 +1189,24 @@ export function OrderScreen() {
       {noteModal && (
         <Modal
           isOpen
-          onClose={() => { setNoteModal(null); setShowNoteSuggestions(false) }}
+          onClose={() => { setNoteModal(null); setShowNoteSuggestions(false); setKeyboardTarget(null) }}
           title={t('orders.notes')}
           size="sm"
         >
           <div className="relative">
             <textarea
               value={noteModal.notes}
-              onChange={(e) => {
+              readOnly={isTouch}
+              onClick={isTouch ? () => setKeyboardTarget({ field: 'notes', type: 'text' }) : undefined}
+              onChange={isTouch ? undefined : (e) => {
                 setNoteModal({ ...noteModal, notes: e.target.value })
                 setShowNoteSuggestions(e.target.value.length > 0 && noteSuggestions.length > 0)
               }}
-              onFocus={() => setShowNoteSuggestions(noteModal.notes.length > 0 && noteSuggestions.length > 0)}
+              onFocus={isTouch ? undefined : () => setShowNoteSuggestions(noteModal.notes.length > 0 && noteSuggestions.length > 0)}
               placeholder={t('orders.notesPlaceholder')}
               rows={4}
-              className="w-full border rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-              autoFocus
+              className={`w-full border rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 ${isTouch ? 'cursor-pointer' : ''}`}
+              autoFocus={!isTouch}
             />
             {showNoteSuggestions && noteSuggestions.length > 0 && (
               <div className="absolute top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-lg max-h-40 overflow-y-auto z-10">
@@ -1231,7 +1233,7 @@ export function OrderScreen() {
             </p>
           )}
           <div className="flex gap-2 mt-4">
-            <Button variant="secondary" onClick={() => { setNoteModal(null); setShowNoteSuggestions(false) }} className="flex-1">
+            <Button variant="secondary" onClick={() => { setNoteModal(null); setShowNoteSuggestions(false); setKeyboardTarget(null) }} className="flex-1">
               {t('common.cancel')}
             </Button>
             <Button
@@ -1239,6 +1241,7 @@ export function OrderScreen() {
                 store.updateItemNotes(noteModal.index, noteModal.notes)
                 setNoteModal(null)
                 setShowNoteSuggestions(false)
+                setKeyboardTarget(null)
                 loadNoteSuggestions() // Refresh suggestions
               }}
               className="flex-1"
@@ -1253,23 +1256,25 @@ export function OrderScreen() {
       {priceModal && (
         <Modal
           isOpen
-          onClose={() => setPriceModal(null)}
+          onClose={() => { setPriceModal(null); setKeyboardTarget(null) }}
           title={t('orders.editPrice')}
           size="sm"
         >
           <div className="space-y-3">
             <input
-              type="number"
+              type={isTouch ? 'text' : 'number'}
               value={priceModal.price}
-              onChange={(e) => setPriceModal({ ...priceModal, price: e.target.value })}
+              readOnly={isTouch}
+              onClick={isTouch ? () => setKeyboardTarget({ field: 'price', type: 'numeric' }) : undefined}
+              onChange={isTouch ? undefined : (e) => setPriceModal({ ...priceModal, price: e.target.value })}
               step="0.01"
               min="0"
-              className="w-full border rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 text-lg font-bold text-center"
-              autoFocus
+              className={`w-full border rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 text-lg font-bold text-center ${isTouch ? 'cursor-pointer' : ''}`}
+              autoFocus={!isTouch}
             />
             <p className="text-xs text-gray-500 text-center">{t('orders.notesPlaceholder')}</p>
             <div className="flex gap-2">
-              <Button variant="secondary" onClick={() => setPriceModal(null)} className="flex-1">
+              <Button variant="secondary" onClick={() => { setPriceModal(null); setKeyboardTarget(null) }} className="flex-1">
                 {t('common.cancel')}
               </Button>
               <Button
@@ -1279,6 +1284,7 @@ export function OrderScreen() {
                     store.updateItemPrice(priceModal.index, newPrice)
                   }
                   setPriceModal(null)
+                  setKeyboardTarget(null)
                 }}
                 className="flex-1"
               >
@@ -1350,7 +1356,7 @@ export function OrderScreen() {
 
       {/* Order History Modal */}
       {showHistory && (
-        <Modal isOpen onClose={() => { setShowHistory(false); setSelectedOrder(null); setEditMode(false); setHistorySearch('') }} title={t('orders.today')} size="xl">
+        <Modal isOpen onClose={() => { setShowHistory(false); setSelectedOrder(null); setEditMode(false); setHistorySearch(''); setKeyboardTarget(null) }} title={t('orders.today')} size="xl">
           {selectedOrder ? (
             <div>
               <button
@@ -1529,9 +1535,11 @@ export function OrderScreen() {
                     ref={historySearchRef}
                     type="text"
                     value={historySearch}
-                    onChange={(e) => setHistorySearch(e.target.value)}
+                    readOnly={isTouch}
+                    onClick={isTouch ? () => setKeyboardTarget({ field: 'historySearch', type: 'text' }) : undefined}
+                    onChange={isTouch ? undefined : (e) => setHistorySearch(e.target.value)}
                     placeholder="Search by table, phone or item name..."
-                    className="w-full ps-10 pe-8 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    className={`w-full ps-10 pe-8 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 ${isTouch ? 'cursor-pointer' : ''}`}
                   />
                   {historySearch && (
                     <button

@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Upload, Image } from 'lucide-react'
 import { Input } from '../../../components/ui/Input'
 import { Select } from '../../../components/ui/Select'
 import { Button } from '../../../components/ui/Button'
+import { VirtualKeyboard } from '../../../components/VirtualKeyboard'
 import type { SetupData } from '../SetupWizard'
 
 interface Props {
@@ -24,6 +26,31 @@ const currencies = [
 
 export function RestaurantInfo({ data, updateData }: Props) {
   const { t } = useTranslation()
+  const isTouch = data.inputMode === 'touchscreen'
+  const [keyboardTarget, setKeyboardTarget] = useState<{ field: string; type: 'numeric' | 'text' } | null>(null)
+
+  const getKeyboardValue = (): string => {
+    if (!keyboardTarget) return ''
+    switch (keyboardTarget.field) {
+      case 'restaurantName': return data.restaurantName
+      case 'phone': return data.phone
+      case 'phone2': return data.phone2
+      case 'address': return data.address || ''
+      case 'currencySymbol': return data.currencySymbol
+      default: return ''
+    }
+  }
+
+  const handleKeyboardChange = (val: string) => {
+    if (!keyboardTarget) return
+    switch (keyboardTarget.field) {
+      case 'restaurantName': updateData({ restaurantName: val }); break
+      case 'phone': updateData({ phone: val }); break
+      case 'phone2': updateData({ phone2: val }); break
+      case 'address': updateData({ address: val }); break
+      case 'currencySymbol': updateData({ currencySymbol: val }); break
+    }
+  }
 
   const handleUploadLogo = async () => {
     const path = await window.api.settings.uploadLogo()
@@ -77,7 +104,9 @@ export function RestaurantInfo({ data, updateData }: Props) {
         <Input
           label={t('setup.restaurant.name')}
           value={data.restaurantName}
-          onChange={(e) => updateData({ restaurantName: e.target.value })}
+          readOnly={isTouch}
+          onClick={isTouch ? () => setKeyboardTarget({ field: 'restaurantName', type: 'text' }) : undefined}
+          onChange={isTouch ? undefined : (e) => updateData({ restaurantName: e.target.value })}
           placeholder={t('setup.restaurant.namePlaceholder')}
         />
 
@@ -85,13 +114,17 @@ export function RestaurantInfo({ data, updateData }: Props) {
           <Input
             label={t('setup.restaurant.phone')}
             value={data.phone}
-            onChange={(e) => updateData({ phone: e.target.value })}
+            readOnly={isTouch}
+            onClick={isTouch ? () => setKeyboardTarget({ field: 'phone', type: 'numeric' }) : undefined}
+            onChange={isTouch ? undefined : (e) => updateData({ phone: e.target.value })}
             placeholder={t('setup.restaurant.phonePlaceholder')}
           />
           <Input
             label={t('setup.restaurant.phone2')}
             value={data.phone2}
-            onChange={(e) => updateData({ phone2: e.target.value })}
+            readOnly={isTouch}
+            onClick={isTouch ? () => setKeyboardTarget({ field: 'phone2', type: 'numeric' }) : undefined}
+            onChange={isTouch ? undefined : (e) => updateData({ phone2: e.target.value })}
             placeholder={t('setup.restaurant.phone2Placeholder')}
           />
         </div>
@@ -99,7 +132,9 @@ export function RestaurantInfo({ data, updateData }: Props) {
         <Input
           label={t('setup.restaurant.address')}
           value={data.address || ''}
-          onChange={(e) => updateData({ address: e.target.value })}
+          readOnly={isTouch}
+          onClick={isTouch ? () => setKeyboardTarget({ field: 'address', type: 'text' }) : undefined}
+          onChange={isTouch ? undefined : (e) => updateData({ address: e.target.value })}
           placeholder={t('setup.restaurant.addressPlaceholder')}
         />
 
@@ -113,10 +148,23 @@ export function RestaurantInfo({ data, updateData }: Props) {
           <Input
             label={t('setup.restaurant.currencySymbol')}
             value={data.currencySymbol}
-            onChange={(e) => updateData({ currencySymbol: e.target.value })}
+            readOnly={isTouch}
+            onClick={isTouch ? () => setKeyboardTarget({ field: 'currencySymbol', type: 'text' }) : undefined}
+            onChange={isTouch ? undefined : (e) => updateData({ currencySymbol: e.target.value })}
           />
         </div>
       </div>
+
+      {/* Virtual Keyboard for touchscreen mode */}
+      {isTouch && keyboardTarget && (
+        <VirtualKeyboard
+          visible
+          type={keyboardTarget.type}
+          value={getKeyboardValue()}
+          onChange={handleKeyboardChange}
+          onClose={() => setKeyboardTarget(null)}
+        />
+      )}
     </div>
   )
 }
