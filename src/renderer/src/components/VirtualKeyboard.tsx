@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Delete, Check, Space, ChevronUp } from 'lucide-react'
 
 interface VirtualKeyboardProps {
@@ -26,6 +26,18 @@ const LETTER_ROWS = [
 
 export function VirtualKeyboard({ value, onChange, onClose, type, visible }: VirtualKeyboardProps) {
   const [shifted, setShifted] = useState(false)
+
+  // Scroll the active input into view above the keyboard
+  useEffect(() => {
+    if (visible) {
+      setTimeout(() => {
+        const active = document.activeElement as HTMLElement
+        if (active && active.tagName !== 'BODY' && active.tagName !== 'BUTTON') {
+          active.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+      }, 150)
+    }
+  }, [visible])
 
   if (!visible) return null
 

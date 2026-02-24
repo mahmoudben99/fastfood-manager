@@ -1,7 +1,7 @@
 # Fast Food Manager - Development Log
 
-**Current Version:** 1.2.7
-**Last Updated:** 2026-02-16
+**Current Version:** 1.4.3
+**Last Updated:** 2026-02-24
 **Repository:** https://github.com/mahmoudben99/fastfood-manager
 
 ---
@@ -38,6 +38,63 @@ src/
 ---
 
 ## Recent Changes
+
+### v1.4.3 (2026-02-24) - Touchscreen Polish & Telegram Keyboard
+**Fixes:**
+- Enlarged cart item pen (edit price) and comment buttons for touchscreen
+- Enlarged order detail buttons (Edit, Done, Cancel Order, Print Receipt/Kitchen) for touch
+- Fixed virtual keyboard covering input fields — now auto-scrolls active input into view
+- Wired virtual keyboard into Telegram Bot Settings (token + chat ID inputs)
+- Enlarged checkboxes in Telegram settings for touch mode
+
+### v1.4.2 (2026-02-24) - Deep Touchscreen Fixes
+**Critical:**
+- **Hard Reset Logout** — Settings logout now clears `activation_status` (requires re-entering activation code)
+- Removed redundant preview bar from VirtualKeyboard (was exposing passwords in plain text)
+- Added DONE button to numpad layout
+
+**Virtual Keyboard Wired Into:**
+- Settings page: all General tab inputs (name, phones, address, currency symbol, alert minutes)
+- Settings page: all Security tab inputs (change password, logout password) — all PIN-only numeric
+- Worker Management: form modal (name, pay full/half, phone)
+- Menu Management: search bar + form modal (name, name_ar, name_fr, price)
+
+**Touch Fixes:**
+- Fixed hover-dependent edit/delete buttons in WorkerManagement, MenuManagement, CategorySetup (always visible in touch mode)
+- Enlarged attendance shift buttons, settings tab buttons, checkboxes for touchscreen
+
+### v1.4.1 (2026-02-24) - Virtual Keyboard Everywhere
+**Fixes:**
+- Wired virtual keyboard into PasswordGate (admin login)
+- Wired virtual keyboard into Setup Wizard steps (AdminPassword, RestaurantInfo)
+- Wired virtual keyboard into OrderScreen modals (notes, price edit, history search)
+- Made admin password PIN-only (numeric digits only, `inputMode="numeric"`)
+- Enlarged header buttons (Today's Orders, dark mode, Admin) in touchscreen mode
+- Added decimal point key to numpad
+- Added touch scrolling CSS (`-webkit-overflow-scrolling: touch`)
+
+### v1.4.0 (2026-02-23) - Touchscreen Mode
+**Major Feature:**
+- **Touchscreen Mode** — Full touchscreen support for restaurant kiosks
+- Setup wizard: new "Input Mode" step (Keyboard & Mouse vs Touchscreen)
+- `inputMode` setting stored in DB, accessible via `useAppStore()`
+- **VirtualKeyboard component** — On-screen keyboard with numpad + QWERTY modes
+- **OrderScreen category grid** — Touch-first category navigation (big cards → items grid)
+- **Enlarged cart sidebar** — Bigger buttons, quantity controls, order type buttons
+- Settings page: toggle between Keyboard/Touchscreen mode
+
+### v1.3.1 (2026-02-22) - Bug Fixes
+**Fixes:**
+- Fixed doubled kitchen printing issue
+- Fixed auto-update detection (electron-updater requires latest.yml in release)
+- Fixed logo display in renderer (file:/// protocol with app-image:// fallback)
+- Added order search in Today's Orders
+
+### v1.3.0 (2026-02-20) - Order History & Analytics Improvements
+**Features:**
+- Enhanced order history with search and filtering
+- Improved analytics dashboard
+- Better receipt formatting
 
 ### v1.2.7 (2026-02-16) - Animated Professional Splash Screen
 **Improvements:**
@@ -356,4 +413,4 @@ unset ELECTRON_RUN_AS_NODE
 4. Create GitHub release for updates
 5. Copy new build to `C:\Users\MahmoudBen\Desktop\FFM Final\`
 
-**Last context:** v1.2.7 deployed with professional animated splash screen (no images needed). Features: emoji scatter animation, logo/name pop-up, smooth gradient background, 3:2 rounded window. All features working perfectly including worker-specific kitchen tickets, visual click feedback, and auto-launch persistence.
+**Last context:** v1.4.3 deployed with comprehensive touchscreen mode. Key features: VirtualKeyboard (numpad + QWERTY), category grid navigation, hard reset logout requiring re-activation, virtual keyboard wired into all pages (OrderScreen, Settings, Workers, Menu, Telegram, PasswordGate, Setup Wizard). All passwords are PIN-only numeric. Hover-dependent buttons made always visible in touch mode. Auto-scroll-into-view when keyboard opens.

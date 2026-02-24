@@ -1133,23 +1133,23 @@ export function OrderScreen() {
                     </button>
                   </div>
 
-                  <div className="flex items-center gap-0.5 sm:gap-1">
+                  <div className={`flex items-center ${isTouch ? 'gap-2' : 'gap-0.5 sm:gap-1'}`}>
                     <button
                       onClick={() => setPriceModal({ index, price: String(item.price) })}
-                      className="p-1 sm:p-1.5 rounded hover:bg-orange-100 text-gray-400 hover:text-orange-600"
+                      className={`${isTouch ? 'p-2.5' : 'p-1 sm:p-1.5'} rounded hover:bg-orange-100 text-gray-400 hover:text-orange-600`}
                       title={t('orders.editPrice')}
                     >
-                      <Pencil className="h-3 sm:h-3.5 w-3 sm:w-3.5" />
+                      <Pencil className={isTouch ? 'h-5 w-5' : 'h-3 sm:h-3.5 w-3 sm:w-3.5'} />
                     </button>
                     <button
                       onClick={() =>
                         setNoteModal({ index, notes: item.notes })
                       }
-                      className="p-1 sm:p-1.5 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600"
+                      className={`${isTouch ? 'p-2.5' : 'p-1 sm:p-1.5'} rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600`}
                     >
-                      <MessageSquare className="h-3.5 sm:h-4 w-3.5 sm:w-4" />
+                      <MessageSquare className={isTouch ? 'h-5 w-5' : 'h-3.5 sm:h-4 w-3.5 sm:w-4'} />
                     </button>
-                    <span className="font-bold text-xs sm:text-sm">
+                    <span className={`font-bold ${isTouch ? 'text-sm' : 'text-xs sm:text-sm'}`}>
                       {formatCurrency(item.price * item.quantity)}
                     </span>
                   </div>
@@ -1458,7 +1458,7 @@ export function OrderScreen() {
                     {/* Receipt print button */}
                     <Button
                       variant="secondary"
-                      size="sm"
+                      size={isTouch ? 'md' : 'sm'}
                       onClick={() => window.api.printer.printReceipt(selectedOrder.id)}
                       className="w-full"
                     >
@@ -1473,7 +1473,7 @@ export function OrderScreen() {
                           <Button
                             key={worker.id}
                             variant="secondary"
-                            size="sm"
+                            size={isTouch ? 'md' : 'sm'}
                             onClick={() => window.api.printer.printKitchenForWorker(selectedOrder.id, worker.id)}
                             className="w-full"
                           >
@@ -1485,7 +1485,7 @@ export function OrderScreen() {
                     ) : (
                       <Button
                         variant="secondary"
-                        size="sm"
+                        size={isTouch ? 'md' : 'sm'}
                         onClick={() => window.api.printer.printKitchen(selectedOrder.id)}
                         className="w-full"
                       >
@@ -1498,15 +1498,15 @@ export function OrderScreen() {
                   {/* Action buttons for ongoing orders */}
                   {(selectedOrder.status === 'preparing' || selectedOrder.status === 'pending') && (
                     <div className="flex gap-2 pt-3 border-t">
-                      <Button variant="secondary" size="sm" onClick={startEdit} className="flex-1">
+                      <Button variant="secondary" size={isTouch ? 'md' : 'sm'} onClick={startEdit} className="flex-1">
                         <Pencil className="h-4 w-4 me-1" />
                         {t('orders.editOrder')}
                       </Button>
-                      <Button size="sm" onClick={() => markDone(selectedOrder.id)} className="flex-1 bg-green-600 hover:bg-green-700">
+                      <Button size={isTouch ? 'md' : 'sm'} onClick={() => markDone(selectedOrder.id)} className="flex-1 bg-green-600 hover:bg-green-700">
                         <Check className="h-4 w-4 me-1" />
                         {t('orders.markDone')}
                       </Button>
-                      <Button variant="danger" size="sm" onClick={() => setCancelConfirm(selectedOrder)}>
+                      <Button variant="danger" size={isTouch ? 'md' : 'sm'} onClick={() => setCancelConfirm(selectedOrder)}>
                         <X className="h-4 w-4 me-1" />
                         {t('orders.cancelOrder')}
                       </Button>
@@ -1516,7 +1516,7 @@ export function OrderScreen() {
                   {/* Action buttons for completed/canceled orders (allow restore) */}
                   {(selectedOrder.status === 'completed' || selectedOrder.status === 'cancelled') && (
                     <div className="flex gap-2 pt-3 border-t">
-                      <Button variant="secondary" size="sm" onClick={() => restoreOrder(selectedOrder.id)} className="flex-1">
+                      <Button variant="secondary" size={isTouch ? 'md' : 'sm'} onClick={() => restoreOrder(selectedOrder.id)} className="flex-1">
                         <RefreshCw className="h-4 w-4 me-1" />
                         {t('orders.restoreOrder')}
                       </Button>

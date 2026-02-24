@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Send, Eye, EyeOff, Check, AlertCircle } from 'lucide-react'
+import { useAppStore } from '../../store/appStore'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { Card } from '../../components/ui/Card'
+import { VirtualKeyboard } from '../../components/VirtualKeyboard'
 
 export function TelegramSettings() {
   const { t } = useTranslation()
+  const { inputMode } = useAppStore()
+  const isTouch = inputMode === 'touchscreen'
   const [token, setToken] = useState('')
   const [chatId, setChatId] = useState('')
   const [autoStart, setAutoStart] = useState(false)
@@ -16,6 +20,26 @@ export function TelegramSettings() {
   const [saved, setSaved] = useState(false)
   const [startError, setStartError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // Virtual keyboard
+  const [keyboardTarget, setKeyboardTarget] = useState<{ field: string; type: 'numeric' | 'text' } | null>(null)
+
+  const getKeyboardValue = (): string => {
+    if (!keyboardTarget) return ''
+    switch (keyboardTarget.field) {
+      case 'token': return token
+      case 'chatId': return chatId
+      default: return ''
+    }
+  }
+
+  const handleKeyboardChange = (val: string) => {
+    if (!keyboardTarget) return
+    switch (keyboardTarget.field) {
+      case 'token': setToken(val); break
+      case 'chatId': setChatId(val); break
+    }
+  }
 
   useEffect(() => {
     loadConfig()
@@ -84,7 +108,9 @@ export function TelegramSettings() {
             <input
               type={showToken ? 'text' : 'password'}
               value={token}
-              onChange={(e) => setToken(e.target.value)}
+              readOnly={isTouch}
+              onClick={isTouch ? () => setKeyboardTarget({ field: 'token', type: 'text' }) : undefined}
+              onChange={isTouch ? undefined : (e) => setToken(e.target.value)}
               placeholder={t('settings.telegramTokenPlaceholder', {
                 defaultValue: 'Paste your bot token from @BotFather'
               })}
@@ -92,12 +118,12 @@ export function TelegramSettings() {
             />
             <button
               onClick={() => setShowToken(!showToken)}
-              className="p-2 hover:bg-gray-100 rounded-lg"
+              className={`${isTouch ? 'p-3' : 'p-2'} hover:bg-gray-100 rounded-lg`}
             >
               {showToken ? (
-                <EyeOff className="h-4 w-4 text-gray-500" />
+                <EyeOff className={`${isTouch ? 'h-5 w-5' : 'h-4 w-4'} text-gray-500`} />
               ) : (
-                <Eye className="h-4 w-4 text-gray-500" />
+                <Eye className={`${isTouch ? 'h-5 w-5' : 'h-4 w-4'} text-gray-500`} />
               )}
             </button>
           </div>
@@ -107,7 +133,9 @@ export function TelegramSettings() {
         <Input
           label={t('settings.telegramChatId', { defaultValue: 'Chat ID' })}
           value={chatId}
-          onChange={(e) => setChatId(e.target.value)}
+          readOnly={isTouch}
+          onClick={isTouch ? () => setKeyboardTarget({ field: 'chatId', type: 'text' }) : undefined}
+          onChange={isTouch ? undefined : (e) => setChatId(e.target.value)}
           placeholder={t('settings.telegramChatIdPlaceholder', {
             defaultValue: 'Your Telegram chat ID'
           })}
@@ -119,9 +147,9 @@ export function TelegramSettings() {
             type="checkbox"
             checked={autoStart}
             onChange={(e) => setAutoStart(e.target.checked)}
-            className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+            className={`${isTouch ? 'w-6 h-6' : 'w-4 h-4'} rounded border-gray-300 text-orange-500 focus:ring-orange-500`}
           />
-          <span className="text-sm text-gray-700">
+          <span className={`${isTouch ? 'text-base' : 'text-sm'} text-gray-700`}>
             {t('settings.telegramAutoStart', {
               defaultValue: 'Auto-start bot when app launches'
             })}
@@ -134,7 +162,7 @@ export function TelegramSettings() {
             type="checkbox"
             checked={orderNotifications}
             onChange={(e) => setOrderNotifications(e.target.checked)}
-            className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+            className={`${isTouch ? 'w-6 h-6' : 'w-4 h-4'} rounded border-gray-300 text-orange-500 focus:ring-orange-500`}
           />
           <div>
             <span className="text-sm text-gray-700">
@@ -197,6 +225,17 @@ export function TelegramSettings() {
           <p>4. Send /start to @userinfobot to get your Chat ID</p>
         </div>
       </div>
+
+      {/* Virtual Keyboard for touchscreen mode */}
+      {isTouch && keyboardTarget && (
+        <VirtualKeyboard
+          visible
+          type={keyboardTarget.type}
+          value={getKeyboardValue()}
+          onChange={handleKeyboardChange}
+          onClose={() => setKeyboardTarget(null)}
+        />
+      )}
     </Card>
   )
 }
