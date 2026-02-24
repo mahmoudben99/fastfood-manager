@@ -59,21 +59,6 @@ export function VirtualKeyboard({ value, onChange, onClose, type, visible }: Vir
         className="relative bg-gray-800 border-t border-gray-600 p-2 animate-slide-up-keyboard"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Input preview */}
-        <div className="flex items-center gap-2 mb-2 px-2">
-          <div className="flex-1 bg-white rounded-lg px-4 py-3 text-lg font-medium text-gray-900 min-h-[48px] flex items-center">
-            {value || <span className="text-gray-400">...</span>}
-            <span className="animate-pulse text-orange-500 ml-0.5">|</span>
-          </div>
-          <button
-            onClick={onClose}
-            className="bg-orange-500 hover:bg-orange-600 text-white rounded-lg px-6 py-3 font-bold text-lg flex items-center gap-2 active:scale-95 transition-transform"
-          >
-            <Check className="h-5 w-5" />
-            Done
-          </button>
-        </div>
-
         {type === 'numeric' ? (
           /* Numpad layout */
           <div className="max-w-xs mx-auto">
@@ -96,6 +81,14 @@ export function VirtualKeyboard({ value, onChange, onClose, type, visible }: Vir
                 ))}
               </div>
             ))}
+            {/* Done button */}
+            <button
+              onClick={onClose}
+              className="w-full h-14 rounded-lg font-bold text-xl bg-orange-500 hover:bg-orange-600 text-white flex items-center justify-center gap-2 active:scale-95 transition-all mt-1"
+            >
+              <Check className="h-6 w-6" />
+              Done
+            </button>
           </div>
         ) : (
           /* Full QWERTY layout */

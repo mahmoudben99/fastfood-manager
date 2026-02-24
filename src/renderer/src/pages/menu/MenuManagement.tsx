@@ -8,10 +8,12 @@ import { Select } from '../../components/ui/Select'
 import { Modal } from '../../components/ui/Modal'
 import { Badge } from '../../components/ui/Badge'
 import { formatCurrency } from '../../utils/formatCurrency'
+import { VirtualKeyboard } from '../../components/VirtualKeyboard'
 
 export function MenuManagement() {
   const { t } = useTranslation()
-  const { foodLanguage } = useAppStore()
+  const { foodLanguage, inputMode } = useAppStore()
+  const isTouch = inputMode === 'touchscreen'
   const [items, setItems] = useState<any[]>([])
   const [categories, setCategories] = useState<any[]>([])
   const [stockItems, setStockItems] = useState<any[]>([])
@@ -32,6 +34,32 @@ export function MenuManagement() {
     { stock_item_id: number; quantity: number; unit: string }[]
   >([])
   const [saving, setSaving] = useState(false)
+
+  // Virtual keyboard
+  const [keyboardTarget, setKeyboardTarget] = useState<{ field: string; type: 'numeric' | 'text' } | null>(null)
+
+  const getKeyboardValue = (): string => {
+    if (!keyboardTarget) return ''
+    switch (keyboardTarget.field) {
+      case 'search': return search
+      case 'formName': return formName
+      case 'formNameAr': return formNameAr
+      case 'formNameFr': return formNameFr
+      case 'formPrice': return formPrice
+      default: return ''
+    }
+  }
+
+  const handleKeyboardChange = (val: string) => {
+    if (!keyboardTarget) return
+    switch (keyboardTarget.field) {
+      case 'search': setSearch(val); break
+      case 'formName': setFormName(val); break
+      case 'formNameAr': setFormNameAr(val); break
+      case 'formNameFr': setFormNameFr(val); break
+      case 'formPrice': setFormPrice(val); break
+    }
+  }
 
   useEffect(() => {
     loadData()
@@ -156,9 +184,11 @@ export function MenuManagement() {
           <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            readOnly={isTouch}
+            onClick={isTouch ? () => setKeyboardTarget({ field: 'search', type: 'text' }) : undefined}
+            onChange={isTouch ? undefined : (e) => setSearch(e.target.value)}
             placeholder={t('menu.search')}
-            className="w-full ps-10 pe-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+            className={`w-full ps-10 pe-3 ${isTouch ? 'py-3 text-base' : 'py-2 text-sm'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500`}
           />
         </div>
         <Select
@@ -194,12 +224,12 @@ export function MenuManagement() {
               <span className="text-orange-600 font-bold">{formatCurrency(item.price)}</span>
               <Badge>{categories.find((c: any) => c.id === item.category_id)?.icon || ''} {item.category_name}</Badge>
             </div>
-            <div className="flex gap-2 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
-              <Button variant="ghost" size="sm" onClick={() => openForm(item)}>
-                <Pencil className="h-4 w-4" />
+            <div className={`flex gap-2 mt-3 transition-opacity ${isTouch ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+              <Button variant="ghost" size={isTouch ? 'md' : 'sm'} onClick={() => openForm(item)}>
+                <Pencil className={isTouch ? 'h-5 w-5' : 'h-4 w-4'} />
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => handleDelete(item.id)}>
-                <Trash2 className="h-4 w-4 text-red-500" />
+              <Button variant="ghost" size={isTouch ? 'md' : 'sm'} onClick={() => handleDelete(item.id)}>
+                <Trash2 className={`${isTouch ? 'h-5 w-5' : 'h-4 w-4'} text-red-500`} />
               </Button>
             </div>
           </div>
@@ -213,7 +243,7 @@ export function MenuManagement() {
       {/* Add/Edit Modal */}
       <Modal
         isOpen={showForm}
-        onClose={() => setShowForm(false)}
+        onClose={() => { setShowForm(false); setKeyboardTarget(null) }}
         title={editItem ? t('menu.editItem') : t('menu.addItem')}
         size="lg"
       >
@@ -222,27 +252,36 @@ export function MenuManagement() {
             <Input
               label={t('menu.name')}
               value={formName}
-              onChange={(e) => setFormName(e.target.value)}
+              readOnly={isTouch}
+              onClick={isTouch ? () => setKeyboardTarget({ field: 'formName', type: 'text' }) : undefined}
+              onChange={isTouch ? undefined : (e) => setFormName(e.target.value)}
             />
             <Input
               label={t('menu.nameAr')}
               value={formNameAr}
-              onChange={(e) => setFormNameAr(e.target.value)}
+              readOnly={isTouch}
+              onClick={isTouch ? () => setKeyboardTarget({ field: 'formNameAr', type: 'text' }) : undefined}
+              onChange={isTouch ? undefined : (e) => setFormNameAr(e.target.value)}
               dir="rtl"
             />
             <Input
               label={t('menu.nameFr')}
               value={formNameFr}
-              onChange={(e) => setFormNameFr(e.target.value)}
+              readOnly={isTouch}
+              onClick={isTouch ? () => setKeyboardTarget({ field: 'formNameFr', type: 'text' }) : undefined}
+              onChange={isTouch ? undefined : (e) => setFormNameFr(e.target.value)}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <Input
               label={t('menu.price')}
-              type="number"
+              type={isTouch ? 'text' : 'number'}
+              inputMode="numeric"
               value={formPrice}
-              onChange={(e) => setFormPrice(e.target.value)}
+              readOnly={isTouch}
+              onClick={isTouch ? () => setKeyboardTarget({ field: 'formPrice', type: 'numeric' }) : undefined}
+              onChange={isTouch ? undefined : (e) => setFormPrice(e.target.value)}
               step="0.01"
             />
             <Select
@@ -348,6 +387,17 @@ export function MenuManagement() {
           </div>
         </div>
       </Modal>
+
+      {/* Virtual Keyboard for touchscreen mode */}
+      {isTouch && keyboardTarget && (
+        <VirtualKeyboard
+          visible
+          type={keyboardTarget.type}
+          value={getKeyboardValue()}
+          onChange={handleKeyboardChange}
+          onClose={() => setKeyboardTarget(null)}
+        />
+      )}
     </div>
   )
 }

@@ -9,10 +9,12 @@ import { Modal } from '../../components/ui/Modal'
 import { Badge } from '../../components/ui/Badge'
 import { Card } from '../../components/ui/Card'
 import { formatCurrency } from '../../utils/formatCurrency'
+import { VirtualKeyboard } from '../../components/VirtualKeyboard'
 
 export function WorkerManagement() {
   const { t } = useTranslation()
-  const { foodLanguage } = useAppStore()
+  const { foodLanguage, inputMode } = useAppStore()
+  const isTouch = inputMode === 'touchscreen'
   const [workers, setWorkers] = useState<any[]>([])
   const [categories, setCategories] = useState<any[]>([])
   const [tab, setTab] = useState<'workers' | 'attendance'>('workers')
@@ -27,6 +29,30 @@ export function WorkerManagement() {
   const [formPhone, setFormPhone] = useState('')
   const [formCategories, setFormCategories] = useState<number[]>([])
   const [saving, setSaving] = useState(false)
+
+  // Virtual keyboard
+  const [keyboardTarget, setKeyboardTarget] = useState<{ field: string; type: 'numeric' | 'text' } | null>(null)
+
+  const getKeyboardValue = (): string => {
+    if (!keyboardTarget) return ''
+    switch (keyboardTarget.field) {
+      case 'formName': return formName
+      case 'formPayFull': return formPayFull
+      case 'formPayHalf': return formPayHalf
+      case 'formPhone': return formPhone
+      default: return ''
+    }
+  }
+
+  const handleKeyboardChange = (val: string) => {
+    if (!keyboardTarget) return
+    switch (keyboardTarget.field) {
+      case 'formName': setFormName(val); break
+      case 'formPayFull': setFormPayFull(val); break
+      case 'formPayHalf': setFormPayHalf(val); break
+      case 'formPhone': setFormPhone(val); break
+    }
+  }
 
   // Attendance
   const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0])
@@ -195,12 +221,12 @@ export function WorkerManagement() {
                   <h3 className="font-semibold text-gray-900">{worker.name}</h3>
                   <Badge variant="info" className="mt-1">{t(`workers.roles.${worker.role}`)}</Badge>
                 </div>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => openForm(worker)} className="p-1.5 hover:bg-gray-100 rounded">
-                    <Pencil className="h-4 w-4 text-gray-500" />
+                <div className={`flex gap-1 transition-opacity ${isTouch ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                  <button onClick={() => openForm(worker)} className={`${isTouch ? 'p-2.5' : 'p-1.5'} hover:bg-gray-100 rounded`}>
+                    <Pencil className={`${isTouch ? 'h-5 w-5' : 'h-4 w-4'} text-gray-500`} />
                   </button>
-                  <button onClick={() => handleDelete(worker.id)} className="p-1.5 hover:bg-red-50 rounded">
-                    <Trash2 className="h-4 w-4 text-red-500" />
+                  <button onClick={() => handleDelete(worker.id)} className={`${isTouch ? 'p-2.5' : 'p-1.5'} hover:bg-red-50 rounded`}>
+                    <Trash2 className={`${isTouch ? 'h-5 w-5' : 'h-4 w-4'} text-red-500`} />
                   </button>
                 </div>
               </div>
@@ -271,7 +297,7 @@ export function WorkerManagement() {
                             <button
                               key={type}
                               onClick={() => handleSetAttendance(worker.id, type)}
-                              className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                              className={`${isTouch ? 'px-4 py-2 text-sm' : 'px-3 py-1 text-xs'} rounded-lg font-medium transition-colors ${
                                 att?.shift_type === type
                                   ? type === 'absent'
                                     ? 'bg-red-500 text-white'
@@ -294,9 +320,9 @@ export function WorkerManagement() {
       )}
 
       {/* Add/Edit Worker Modal */}
-      <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editWorker ? t('workers.editWorker') : t('workers.addWorker')}>
+      <Modal isOpen={showForm} onClose={() => { setShowForm(false); setKeyboardTarget(null) }} title={editWorker ? t('workers.editWorker') : t('workers.addWorker')}>
         <div className="space-y-4">
-          <Input label={t('workers.name')} value={formName} onChange={(e) => setFormName(e.target.value)} />
+          <Input label={t('workers.name')} value={formName} readOnly={isTouch} onClick={isTouch ? () => setKeyboardTarget({ field: 'formName', type: 'text' }) : undefined} onChange={isTouch ? undefined : (e) => setFormName(e.target.value)} />
           <Select
             label={t('workers.role')}
             value={formRole}
@@ -304,10 +330,10 @@ export function WorkerManagement() {
             options={roles.map((r) => ({ value: r, label: t(`workers.roles.${r}`) }))}
           />
           <div className="grid grid-cols-2 gap-3">
-            <Input label={t('workers.payFullDay')} type="number" value={formPayFull} onChange={(e) => setFormPayFull(e.target.value)} />
-            <Input label={t('workers.payHalfDay')} type="number" value={formPayHalf} onChange={(e) => setFormPayHalf(e.target.value)} />
+            <Input label={t('workers.payFullDay')} type={isTouch ? 'text' : 'number'} inputMode="numeric" value={formPayFull} readOnly={isTouch} onClick={isTouch ? () => setKeyboardTarget({ field: 'formPayFull', type: 'numeric' }) : undefined} onChange={isTouch ? undefined : (e) => setFormPayFull(e.target.value)} />
+            <Input label={t('workers.payHalfDay')} type={isTouch ? 'text' : 'number'} inputMode="numeric" value={formPayHalf} readOnly={isTouch} onClick={isTouch ? () => setKeyboardTarget({ field: 'formPayHalf', type: 'numeric' }) : undefined} onChange={isTouch ? undefined : (e) => setFormPayHalf(e.target.value)} />
           </div>
-          <Input label={t('workers.phone')} value={formPhone} onChange={(e) => setFormPhone(e.target.value)} />
+          <Input label={t('workers.phone')} value={formPhone} readOnly={isTouch} onClick={isTouch ? () => setKeyboardTarget({ field: 'formPhone', type: 'numeric' }) : undefined} onChange={isTouch ? undefined : (e) => setFormPhone(e.target.value)} />
 
           {formRole === 'cook' && (
             <div>
@@ -336,6 +362,17 @@ export function WorkerManagement() {
           </div>
         </div>
       </Modal>
+
+      {/* Virtual Keyboard for touchscreen mode */}
+      {isTouch && keyboardTarget && (
+        <VirtualKeyboard
+          visible
+          type={keyboardTarget.type}
+          value={getKeyboardValue()}
+          onChange={handleKeyboardChange}
+          onClose={() => setKeyboardTarget(null)}
+        />
+      )}
     </div>
   )
 }

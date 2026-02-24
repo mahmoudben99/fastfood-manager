@@ -8,6 +8,7 @@ import { Input } from '../../components/ui/Input'
 import { Select } from '../../components/ui/Select'
 import { Card } from '../../components/ui/Card'
 import { TelegramSettings } from './TelegramSettings'
+import { VirtualKeyboard } from '../../components/VirtualKeyboard'
 
 const currencies = [
   { value: 'DZD', label: 'DZD - Algerian Dinar', symbol: 'DA' },
@@ -24,7 +25,8 @@ const currencies = [
 export function SettingsPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { setLanguage, setSetupComplete, loadSettings } = useAppStore()
+  const { setLanguage, setSetupComplete, setActivated, loadSettings, inputMode } = useAppStore()
+  const isTouch = inputMode === 'touchscreen'
   const [tab, setTab] = useState<'general' | 'schedule' | 'printer' | 'telegram' | 'security'>('general')
   const [saved, setSaved] = useState(false)
 
@@ -73,6 +75,42 @@ export function SettingsPage() {
   const [logoutPassword, setLogoutPassword] = useState('')
   const [logoutError, setLogoutError] = useState('')
   const [loggingOut, setLoggingOut] = useState(false)
+
+  // Virtual keyboard
+  const [keyboardTarget, setKeyboardTarget] = useState<{ field: string; type: 'numeric' | 'text' } | null>(null)
+
+  const getKeyboardValue = (): string => {
+    if (!keyboardTarget) return ''
+    switch (keyboardTarget.field) {
+      case 'name': return name
+      case 'phone': return phone
+      case 'phone2': return phone2
+      case 'address': return address
+      case 'currencySymbol': return currencySymbol
+      case 'orderAlertMinutes': return orderAlertMinutes
+      case 'currentPass': return currentPass
+      case 'newPass': return newPass
+      case 'confirmPass': return confirmPass
+      case 'logoutPassword': return logoutPassword
+      default: return ''
+    }
+  }
+
+  const handleKeyboardChange = (val: string) => {
+    if (!keyboardTarget) return
+    switch (keyboardTarget.field) {
+      case 'name': setName(val); break
+      case 'phone': setPhone(val); break
+      case 'phone2': setPhone2(val); break
+      case 'address': setAddress(val); break
+      case 'currencySymbol': setCurrencySymbol(val); break
+      case 'orderAlertMinutes': setOrderAlertMinutes(val.replace(/\D/g, '')); break
+      case 'currentPass': setCurrentPass(val.replace(/\D/g, '')); break
+      case 'newPass': setNewPass(val.replace(/\D/g, '')); break
+      case 'confirmPass': setConfirmPass(val.replace(/\D/g, '')); break
+      case 'logoutPassword': setLogoutPassword(val.replace(/\D/g, '')); setLogoutError(''); break
+    }
+  }
 
   useEffect(() => {
     loadCurrentSettings()
@@ -240,9 +278,12 @@ export function SettingsPage() {
         setLoggingOut(false)
         return
       }
+      // Hard reset: clear both setup and activation
       await window.api.settings.set('setup_complete', 'false')
+      await window.api.settings.set('activation_status', '')
       setSetupComplete(false)
-      navigate('/setup')
+      setActivated(false)
+      navigate('/activation')
     } catch {
       setLogoutError(t('nav.wrongPassword'))
     } finally {
@@ -304,8 +345,8 @@ export function SettingsPage() {
         {tabs.map((tb) => (
           <button
             key={tb.key}
-            onClick={() => setTab(tb.key)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium ${
+            onClick={() => { setTab(tb.key); setKeyboardTarget(null) }}
+            className={`${isTouch ? 'px-5 py-3 text-base' : 'px-4 py-2 text-sm'} rounded-lg font-medium ${
               tab === tb.key ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600'
             }`}
           >
@@ -344,15 +385,17 @@ export function SettingsPage() {
               <p className="text-xs text-gray-400 mt-1">{t('setup.restaurant.logoOptional', { defaultValue: 'Optional — displayed on receipts' })}</p>
             </div>
 
-            <Input label={t('setup.restaurant.name')} value={name} onChange={(e) => setName(e.target.value)} />
+            <Input label={t('setup.restaurant.name')} value={name} readOnly={isTouch} onClick={isTouch ? () => setKeyboardTarget({ field: 'name', type: 'text' }) : undefined} onChange={isTouch ? undefined : (e) => setName(e.target.value)} />
             <div className="grid grid-cols-2 gap-3">
-              <Input label={t('setup.restaurant.phone')} value={phone} onChange={(e) => setPhone(e.target.value)} />
-              <Input label={t('setup.restaurant.phone2')} value={phone2} onChange={(e) => setPhone2(e.target.value)} />
+              <Input label={t('setup.restaurant.phone')} value={phone} readOnly={isTouch} onClick={isTouch ? () => setKeyboardTarget({ field: 'phone', type: 'numeric' }) : undefined} onChange={isTouch ? undefined : (e) => setPhone(e.target.value)} />
+              <Input label={t('setup.restaurant.phone2')} value={phone2} readOnly={isTouch} onClick={isTouch ? () => setKeyboardTarget({ field: 'phone2', type: 'numeric' }) : undefined} onChange={isTouch ? undefined : (e) => setPhone2(e.target.value)} />
             </div>
             <Input
               label={t('setup.restaurant.address')}
               value={address}
-              onChange={(e) => setAddress(e.target.value)}
+              readOnly={isTouch}
+              onClick={isTouch ? () => setKeyboardTarget({ field: 'address', type: 'text' }) : undefined}
+              onChange={isTouch ? undefined : (e) => setAddress(e.target.value)}
               placeholder={t('setup.restaurant.addressPlaceholder')}
             />
             <div className="grid grid-cols-2 gap-3">
@@ -362,7 +405,7 @@ export function SettingsPage() {
                 onChange={(e) => handleCurrencyChange(e.target.value)}
                 options={currencies.map((c) => ({ value: c.value, label: c.label }))}
               />
-              <Input label={t('setup.restaurant.currencySymbol')} value={currencySymbol} onChange={(e) => setCurrencySymbol(e.target.value)} />
+              <Input label={t('setup.restaurant.currencySymbol')} value={currencySymbol} readOnly={isTouch} onClick={isTouch ? () => setKeyboardTarget({ field: 'currencySymbol', type: 'text' }) : undefined} onChange={isTouch ? undefined : (e) => setCurrencySymbol(e.target.value)} />
             </div>
             <Select
               label={t('setup.language.title')}
@@ -376,11 +419,14 @@ export function SettingsPage() {
             />
             <Input
               label={t('settings.orderAlertMinutes', { defaultValue: 'Order Alert Time (minutes)' })}
-              type="number"
+              type={isTouch ? 'text' : 'number'}
+              inputMode="numeric"
               min="1"
               max="120"
               value={orderAlertMinutes}
-              onChange={(e) => setOrderAlertMinutes(e.target.value)}
+              readOnly={isTouch}
+              onClick={isTouch ? () => setKeyboardTarget({ field: 'orderAlertMinutes', type: 'numeric' }) : undefined}
+              onChange={isTouch ? undefined : (e) => setOrderAlertMinutes(e.target.value)}
               placeholder="20"
               helperText={t('settings.orderAlertHelp', { defaultValue: 'Orders older than this will be highlighted in red' })}
             />
@@ -622,6 +668,17 @@ export function SettingsPage() {
 
       {tab === 'telegram' && <TelegramSettings />}
 
+      {/* Virtual Keyboard for touchscreen mode */}
+      {isTouch && keyboardTarget && (
+        <VirtualKeyboard
+          visible
+          type={keyboardTarget.type}
+          value={getKeyboardValue()}
+          onChange={handleKeyboardChange}
+          onClose={() => setKeyboardTarget(null)}
+        />
+      )}
+
       {tab === 'security' && (
         <Card>
           {/* Auto-launch setting */}
@@ -632,10 +689,10 @@ export function SettingsPage() {
                 type="checkbox"
                 checked={autoLaunch}
                 onChange={(e) => handleAutoLaunchToggle(e.target.checked)}
-                className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+                className={`${isTouch ? 'w-6 h-6' : 'w-4 h-4'} rounded border-gray-300 text-orange-500 focus:ring-orange-500`}
               />
               <div>
-                <span className="text-sm font-medium text-gray-700">{t('settings.autoLaunch', { defaultValue: 'Start with Windows' })}</span>
+                <span className={`${isTouch ? 'text-base' : 'text-sm'} font-medium text-gray-700`}>{t('settings.autoLaunch', { defaultValue: 'Start with Windows' })}</span>
                 <p className="text-xs text-gray-400">{t('settings.autoLaunchDesc', { defaultValue: 'Launch Fast Food Manager automatically when Windows starts' })}</p>
               </div>
             </label>
@@ -643,9 +700,9 @@ export function SettingsPage() {
 
           <div className="space-y-4 max-w-md">
             <h3 className="font-semibold">{t('settings.changePassword')}</h3>
-            <Input type="password" label={t('settings.currentPassword')} value={currentPass} onChange={(e) => setCurrentPass(e.target.value)} />
-            <Input type="password" label={t('settings.newPassword')} value={newPass} onChange={(e) => setNewPass(e.target.value)} />
-            <Input type="password" label={t('settings.confirmPassword')} value={confirmPass} onChange={(e) => setConfirmPass(e.target.value)} error={passError} />
+            <Input type="password" inputMode="numeric" label={t('settings.currentPassword')} value={currentPass} readOnly={isTouch} onClick={isTouch ? () => setKeyboardTarget({ field: 'currentPass', type: 'numeric' }) : undefined} onChange={isTouch ? undefined : (e) => setCurrentPass(e.target.value.replace(/\D/g, ''))} />
+            <Input type="password" inputMode="numeric" label={t('settings.newPassword')} value={newPass} readOnly={isTouch} onClick={isTouch ? () => setKeyboardTarget({ field: 'newPass', type: 'numeric' }) : undefined} onChange={isTouch ? undefined : (e) => setNewPass(e.target.value.replace(/\D/g, ''))} />
+            <Input type="password" inputMode="numeric" label={t('settings.confirmPassword')} value={confirmPass} readOnly={isTouch} onClick={isTouch ? () => setKeyboardTarget({ field: 'confirmPass', type: 'numeric' }) : undefined} onChange={isTouch ? undefined : (e) => setConfirmPass(e.target.value.replace(/\D/g, ''))} error={passError} />
             <Button onClick={changePassword} disabled={!currentPass || !newPass || !confirmPass}>{t('common.save')}</Button>
           </div>
 
@@ -660,9 +717,12 @@ export function SettingsPage() {
             <div className="max-w-md space-y-3">
               <input
                 type="password"
+                inputMode="numeric"
                 value={logoutPassword}
-                onChange={(e) => { setLogoutPassword(e.target.value); setLogoutError('') }}
-                onKeyDown={(e) => e.key === 'Enter' && handleLogout()}
+                readOnly={isTouch}
+                onClick={isTouch ? () => setKeyboardTarget({ field: 'logoutPassword', type: 'numeric' }) : undefined}
+                onChange={isTouch ? undefined : (e) => { setLogoutPassword(e.target.value.replace(/\D/g, '')); setLogoutError('') }}
+                onKeyDown={isTouch ? undefined : (e) => e.key === 'Enter' && handleLogout()}
                 placeholder="••••••••"
                 className="w-full border rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
               />

@@ -125,7 +125,7 @@ export function CategorySetup({ data, updateData }: Props) {
               />
               <button
                 onClick={() => removeCategory(i)}
-                className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                className="p-2 rounded hover:bg-red-100 text-gray-400 hover:text-red-500 transition-opacity"
               >
                 <X className="h-4 w-4" />
               </button>
