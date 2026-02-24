@@ -10,6 +10,7 @@ interface AppState {
   activated: boolean
   setupComplete: boolean
   darkMode: boolean
+  inputMode: string
 
   setLanguage: (lang: string) => void
   setFoodLanguage: (lang: string) => void
@@ -18,6 +19,7 @@ interface AppState {
   setActivated: (activated: boolean) => void
   setSetupComplete: (complete: boolean) => void
   toggleDarkMode: () => void
+  setInputMode: (mode: string) => void
   loadSettings: () => Promise<void>
 }
 
@@ -30,6 +32,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   activated: false,
   setupComplete: false,
   darkMode: false,
+  inputMode: 'keyboard',
 
   setLanguage: (lang) => {
     i18n.changeLanguage(lang)
@@ -48,6 +51,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   setActivated: (activated) => set({ activated }),
 
   setSetupComplete: (complete) => set({ setupComplete: complete }),
+
+  setInputMode: (mode) => {
+    set({ inputMode: mode })
+    window.api.settings.set('input_mode', mode).catch(() => {})
+  },
 
   toggleDarkMode: () => {
     const newMode = !get().darkMode
@@ -73,7 +81,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         restaurantName: settings.restaurant_name || '',
         activated: settings.activation_status === 'activated',
         setupComplete: settings.setup_complete === 'true',
-        darkMode
+        darkMode,
+        inputMode: settings.input_mode || 'keyboard'
       })
     } catch (err) {
       console.error('Failed to load settings:', err)

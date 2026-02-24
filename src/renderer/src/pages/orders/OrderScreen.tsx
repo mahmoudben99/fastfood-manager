@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Lock, ShoppingCart, Trash2, Minus, Plus, Phone, MessageSquare, Check, Printer, Moon, Sun, Search, ClipboardList, X, Hash, Pencil, AlertTriangle, RefreshCw } from 'lucide-react'
+import { Lock, ShoppingCart, Trash2, Minus, Plus, Phone, MessageSquare, Check, Printer, Moon, Sun, Search, ClipboardList, X, Hash, Pencil, AlertTriangle, RefreshCw, ArrowLeft } from 'lucide-react'
 import { useOrderStore, type CartItem } from '../../store/orderStore'
 import { useAppStore } from '../../store/appStore'
 import { Button } from '../../components/ui/Button'
 import { Modal } from '../../components/ui/Modal'
+import { VirtualKeyboard } from '../../components/VirtualKeyboard'
 import { formatCurrency } from '../../utils/formatCurrency'
 import { removeRepeatedPrefix } from '../../utils/removeRepeatedPrefix'
 
@@ -56,8 +57,9 @@ interface OrderData {
 export function OrderScreen() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { language, foodLanguage, darkMode, toggleDarkMode } = useAppStore()
+  const { language, foodLanguage, darkMode, toggleDarkMode, inputMode } = useAppStore()
   const store = useOrderStore()
+  const isTouch = inputMode === 'touchscreen'
 
   const [categories, setCategories] = useState<CategoryData[]>([])
   const [menuItems, setMenuItems] = useState<MenuItemData[]>([])
@@ -106,6 +108,10 @@ export function OrderScreen() {
 
   // Validation errors
   const [validationError, setValidationError] = useState<'table' | 'phone' | null>(null)
+
+  // Touchscreen state
+  const [touchView, setTouchView] = useState<'categories' | 'items'>('categories')
+  const [keyboardTarget, setKeyboardTarget] = useState<{ field: string; type: 'numeric' | 'text' } | null>(null)
 
   useEffect(() => {
     loadData()
@@ -439,6 +445,56 @@ export function OrderScreen() {
     })
   }
 
+  // Virtual keyboard helpers
+  const getKeyboardValue = (): string => {
+    if (!keyboardTarget) return ''
+    switch (keyboardTarget.field) {
+      case 'table': return store.tableNumber
+      case 'phone': return store.customerPhone
+      case 'search': return searchQuery
+      case 'notes': return noteModal?.notes || ''
+      case 'price': return priceModal?.price || ''
+      case 'historySearch': return historySearch
+      default: return ''
+    }
+  }
+
+  const handleKeyboardChange = (val: string) => {
+    if (!keyboardTarget) return
+    switch (keyboardTarget.field) {
+      case 'table':
+        store.setTableNumber(val)
+        if (validationError === 'table') setValidationError(null)
+        break
+      case 'phone':
+        store.setCustomerPhone(val)
+        if (validationError === 'phone') setValidationError(null)
+        break
+      case 'search':
+        setSearchQuery(val)
+        setExpandedGroup(null)
+        break
+      case 'notes':
+        if (noteModal) setNoteModal({ ...noteModal, notes: val })
+        break
+      case 'price':
+        if (priceModal) setPriceModal({ ...priceModal, price: val })
+        break
+      case 'historySearch':
+        setHistorySearch(val)
+        break
+    }
+  }
+
+  // Count items per category for touch view
+  const itemCountByCategory = useMemo(() => {
+    const counts = new Map<number, number>()
+    menuItems.forEach(item => {
+      counts.set(item.category_id, (counts.get(item.category_id) || 0) + 1)
+    })
+    return counts
+  }, [menuItems])
+
   const handlePlaceOrder = async () => {
     if (store.items.length === 0) return
 
@@ -640,172 +696,322 @@ export function OrderScreen() {
           </div>
         </div>
 
-        {/* Search bar */}
-        <div className="bg-white border-b px-2 sm:px-4 py-2 shrink-0">
-          <div className="relative">
-            <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <input
-              ref={searchRef}
-              type="text"
-              value={searchQuery}
-              onChange={(e) => { setSearchQuery(e.target.value); setExpandedGroup(null) }}
-              placeholder={`${t('menu.search')} (F4)`}
-              className="w-full ps-10 pe-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-            />
-          </div>
-        </div>
-
-        {/* Category tabs */}
-        <div className="bg-white border-b px-2 sm:px-4 py-2 flex gap-1.5 sm:gap-2 overflow-x-auto shrink-0">
-          <button
-            onClick={() => { setActiveCategory(null); setExpandedGroup(null) }}
-            className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
-              activeCategory === null
-                ? 'bg-orange-500 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            {t('common.all')}
-          </button>
-          {categories.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => { setActiveCategory(cat.id); setExpandedGroup(null) }}
-              className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
-                activeCategory === cat.id
-                  ? 'bg-orange-500 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              {cat.icon && <span>{cat.icon}</span>} {getCategoryName(cat)}
-            </button>
-          ))}
-        </div>
-
-        {/* Menu items grid */}
-        <div className="flex-1 overflow-y-auto p-2 sm:p-4">
-          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3">
-            {groupedItems.map((entry) => {
-              if (entry.type === 'single') {
-                const item = entry.item
-                return (
+        {isTouch ? (
+          /* ========== TOUCHSCREEN LAYOUT ========== */
+          touchView === 'categories' ? (
+            /* Category grid - big buttons */
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="grid grid-cols-3 lg:grid-cols-4 gap-4 h-full content-start">
+                {categories.map((cat) => (
                   <button
-                    key={item.id}
-                    onClick={() => handleAddItem(item)}
-                    className="bg-white rounded-xl border border-gray-200 p-3 text-start hover:shadow-md hover:border-orange-300 transition-all active:scale-95 active:bg-orange-50"
+                    key={cat.id}
+                    onClick={() => { setActiveCategory(cat.id); setTouchView('items'); setExpandedGroup(null) }}
+                    className="bg-white rounded-2xl border-2 border-gray-200 p-6 flex flex-col items-center justify-center gap-3 hover:shadow-lg hover:border-orange-400 transition-all active:scale-95 active:bg-orange-50 min-h-[140px]"
                   >
-                    {item.image_path ? (
-                      <>
-                        <div className="aspect-square rounded-lg bg-gray-100 mb-2 overflow-hidden">
-                          <img
-                            src={`app-image://${item.image_path}`}
-                            alt={item.name}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        <h3 className="font-medium text-gray-900 text-sm truncate">
-                          {getDisplayName(item)}
-                        </h3>
-                        <p className="text-orange-600 font-bold text-sm mt-1">
-                          {formatCurrency(item.price)}
-                        </p>
-                      </>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        {(item.emoji || categories.find(c => c.id === item.category_id)?.icon) && (
-                          <span className="text-xl shrink-0">{item.emoji || categories.find(c => c.id === item.category_id)?.icon}</span>
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <h3 className="font-medium text-gray-900 text-sm truncate">
-                            {getDisplayName(item)}
-                          </h3>
-                          <p className="text-orange-600 font-bold text-sm">
-                            {formatCurrency(item.price)}
-                          </p>
-                        </div>
-                      </div>
-                    )}
+                    <span className="text-5xl">{cat.icon || '🍽️'}</span>
+                    <span className="text-lg font-bold text-gray-900">{getCategoryName(cat)}</span>
+                    <span className="text-sm text-gray-400">{itemCountByCategory.get(cat.id) || 0} items</span>
                   </button>
-                )
-              }
+                ))}
+              </div>
+            </div>
+          ) : (
+            /* Items grid for selected category */
+            <div className="flex-1 flex flex-col min-h-0">
+              {/* Back bar + search */}
+              <div className="bg-white border-b px-4 py-3 flex items-center gap-3 shrink-0">
+                <button
+                  onClick={() => { setTouchView('categories'); setSearchQuery(''); setExpandedGroup(null) }}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium text-base active:scale-95 transition-all"
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                  Back
+                </button>
+                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  {categories.find(c => c.id === activeCategory)?.icon}
+                  {categories.find(c => c.id === activeCategory) && getCategoryName(categories.find(c => c.id === activeCategory)!)}
+                </h2>
+                <div className="flex-1" />
+                <div className="relative w-64">
+                  <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <input
+                    type="text"
+                    readOnly
+                    value={searchQuery}
+                    onClick={() => setKeyboardTarget({ field: 'search', type: 'text' })}
+                    placeholder={t('menu.search')}
+                    className="w-full ps-11 pe-3 py-2.5 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer"
+                  />
+                </div>
+              </div>
 
-              // Grouped item (3+ sizes)
-              const isExpanded = expandedGroup === entry.key
-              return (
-                <div key={entry.key} className="relative">
-                  {!isExpanded ? (
-                    <button
-                      onClick={() => setExpandedGroup(entry.key)}
-                      className="w-full bg-white rounded-xl border-2 border-orange-200 p-3 text-start hover:shadow-md hover:border-orange-400 transition-all active:scale-95 active:bg-orange-50"
-                    >
-                      <div className="flex items-center gap-2">
-                        {(entry.emoji || entry.categoryIcon) && (
-                          <span className="text-xl shrink-0">{entry.emoji || entry.categoryIcon}</span>
+              {/* Items grid - bigger cards */}
+              <div className="flex-1 overflow-y-auto p-4">
+                <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {groupedItems.map((entry) => {
+                    if (entry.type === 'single') {
+                      const item = entry.item
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => handleAddItem(item)}
+                          className="bg-white rounded-2xl border-2 border-gray-200 p-4 text-start hover:shadow-lg hover:border-orange-400 transition-all active:scale-95 active:bg-orange-50"
+                        >
+                          {item.image_path ? (
+                            <>
+                              <div className="aspect-[4/3] rounded-xl bg-gray-100 mb-3 overflow-hidden">
+                                <img src={`app-image://${item.image_path}`} alt={item.name} className="w-full h-full object-cover" />
+                              </div>
+                              <h3 className="font-bold text-gray-900 text-base truncate">{getDisplayName(item)}</h3>
+                              <p className="text-orange-600 font-bold text-lg mt-1">{formatCurrency(item.price)}</p>
+                            </>
+                          ) : (
+                            <div className="flex items-center gap-3 py-4">
+                              <span className="text-3xl shrink-0">{item.emoji || categories.find(c => c.id === item.category_id)?.icon || '🍽️'}</span>
+                              <div className="min-w-0 flex-1">
+                                <h3 className="font-bold text-gray-900 text-base truncate">{getDisplayName(item)}</h3>
+                                <p className="text-orange-600 font-bold text-lg">{formatCurrency(item.price)}</p>
+                              </div>
+                            </div>
+                          )}
+                        </button>
+                      )
+                    }
+
+                    // Grouped (sizes) - touch version
+                    const isExpanded = expandedGroup === entry.key
+                    return (
+                      <div key={entry.key} className="relative">
+                        {!isExpanded ? (
+                          <button
+                            onClick={() => setExpandedGroup(entry.key)}
+                            className="w-full bg-white rounded-2xl border-2 border-orange-200 p-4 text-start hover:shadow-lg hover:border-orange-400 transition-all active:scale-95 active:bg-orange-50"
+                          >
+                            <div className="flex items-center gap-3 py-4">
+                              <span className="text-3xl shrink-0">{entry.emoji || entry.categoryIcon || '🍽️'}</span>
+                              <div className="min-w-0 flex-1">
+                                <h3 className="font-bold text-gray-900 text-base truncate">{getSimplifiedBaseName(entry.baseName, entry.items)}</h3>
+                                <div className="flex items-center gap-1 mt-1">
+                                  <span className="text-orange-600 font-bold text-sm">{formatCurrency(entry.items[0].price)}</span>
+                                  <span className="text-gray-400">-</span>
+                                  <span className="text-orange-600 font-bold text-sm">{formatCurrency(entry.items[entry.items.length - 1].price)}</span>
+                                </div>
+                              </div>
+                              <div className="flex gap-1">
+                                {entry.items.map((_, i) => <div key={i} className="w-2 h-2 rounded-full bg-orange-400" />)}
+                              </div>
+                            </div>
+                          </button>
+                        ) : (
+                          <div className="bg-white rounded-2xl border-2 border-orange-400 p-4 shadow-lg animate-slide-up">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <span className="text-2xl">{entry.emoji || entry.categoryIcon}</span>
+                                <span className="font-bold text-gray-900 text-base">{entry.baseName}</span>
+                              </div>
+                              <button onClick={() => setExpandedGroup(null)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400">
+                                <X className="h-5 w-5" />
+                              </button>
+                            </div>
+                            <div className="flex gap-3">
+                              {entry.items.map((sizeItem) => (
+                                <button
+                                  key={sizeItem.id}
+                                  onClick={() => { handleAddItem(sizeItem); setExpandedGroup(null) }}
+                                  className="flex-1 py-4 px-2 rounded-xl bg-orange-50 hover:bg-orange-100 border-2 border-orange-200 hover:border-orange-400 transition-all text-center active:scale-95"
+                                >
+                                  <div className="font-bold text-gray-900 text-base">{getSizeLabel(sizeItem)}</div>
+                                  <div className="text-orange-600 font-bold text-base mt-1">{formatCurrency(sizeItem.price)}</div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
                         )}
-                        <div className="min-w-0 flex-1">
-                          <h3 className="font-medium text-gray-900 text-sm truncate">{getSimplifiedBaseName(entry.baseName, entry.items)}</h3>
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <span className="text-orange-600 font-bold text-xs">{formatCurrency(entry.items[0].price)}</span>
-                            <span className="text-gray-400 text-xs">-</span>
-                            <span className="text-orange-600 font-bold text-xs">{formatCurrency(entry.items[entry.items.length - 1].price)}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {filteredItems.length === 0 && (
+                  <div className="flex flex-col items-center justify-center h-64 text-gray-400">
+                    <ShoppingCart className="h-16 w-16 mb-3" />
+                    <p className="text-lg">{t('menu.noItems')}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        ) : (
+          /* ========== KEYBOARD LAYOUT (original) ========== */
+          <>
+            {/* Search bar */}
+            <div className="bg-white border-b px-2 sm:px-4 py-2 shrink-0">
+              <div className="relative">
+                <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  ref={searchRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => { setSearchQuery(e.target.value); setExpandedGroup(null) }}
+                  placeholder={`${t('menu.search')} (F4)`}
+                  className="w-full ps-10 pe-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
+            </div>
+
+            {/* Category tabs */}
+            <div className="bg-white border-b px-2 sm:px-4 py-2 flex gap-1.5 sm:gap-2 overflow-x-auto shrink-0">
+              <button
+                onClick={() => { setActiveCategory(null); setExpandedGroup(null) }}
+                className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
+                  activeCategory === null
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {t('common.all')}
+              </button>
+              {categories.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => { setActiveCategory(cat.id); setExpandedGroup(null) }}
+                  className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
+                    activeCategory === cat.id
+                      ? 'bg-orange-500 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {cat.icon && <span>{cat.icon}</span>} {getCategoryName(cat)}
+                </button>
+              ))}
+            </div>
+
+            {/* Menu items grid */}
+            <div className="flex-1 overflow-y-auto p-2 sm:p-4">
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3">
+                {groupedItems.map((entry) => {
+                  if (entry.type === 'single') {
+                    const item = entry.item
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => handleAddItem(item)}
+                        className="bg-white rounded-xl border border-gray-200 p-3 text-start hover:shadow-md hover:border-orange-300 transition-all active:scale-95 active:bg-orange-50"
+                      >
+                        {item.image_path ? (
+                          <>
+                            <div className="aspect-square rounded-lg bg-gray-100 mb-2 overflow-hidden">
+                              <img
+                                src={`app-image://${item.image_path}`}
+                                alt={item.name}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <h3 className="font-medium text-gray-900 text-sm truncate">
+                              {getDisplayName(item)}
+                            </h3>
+                            <p className="text-orange-600 font-bold text-sm mt-1">
+                              {formatCurrency(item.price)}
+                            </p>
+                          </>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            {(item.emoji || categories.find(c => c.id === item.category_id)?.icon) && (
+                              <span className="text-xl shrink-0">{item.emoji || categories.find(c => c.id === item.category_id)?.icon}</span>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <h3 className="font-medium text-gray-900 text-sm truncate">
+                                {getDisplayName(item)}
+                              </h3>
+                              <p className="text-orange-600 font-bold text-sm">
+                                {formatCurrency(item.price)}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </button>
+                    )
+                  }
+
+                  // Grouped item (3+ sizes)
+                  const isExpanded = expandedGroup === entry.key
+                  return (
+                    <div key={entry.key} className="relative">
+                      {!isExpanded ? (
+                        <button
+                          onClick={() => setExpandedGroup(entry.key)}
+                          className="w-full bg-white rounded-xl border-2 border-orange-200 p-3 text-start hover:shadow-md hover:border-orange-400 transition-all active:scale-95 active:bg-orange-50"
+                        >
+                          <div className="flex items-center gap-2">
+                            {(entry.emoji || entry.categoryIcon) && (
+                              <span className="text-xl shrink-0">{entry.emoji || entry.categoryIcon}</span>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <h3 className="font-medium text-gray-900 text-sm truncate">{getSimplifiedBaseName(entry.baseName, entry.items)}</h3>
+                              <div className="flex items-center gap-1 mt-0.5">
+                                <span className="text-orange-600 font-bold text-xs">{formatCurrency(entry.items[0].price)}</span>
+                                <span className="text-gray-400 text-xs">-</span>
+                                <span className="text-orange-600 font-bold text-xs">{formatCurrency(entry.items[entry.items.length - 1].price)}</span>
+                              </div>
+                            </div>
+                            <div className="flex gap-0.5">
+                              {entry.items.map((_, i) => (
+                                <div key={i} className="w-1.5 h-1.5 rounded-full bg-orange-400" />
+                              ))}
+                            </div>
+                          </div>
+                        </button>
+                      ) : (
+                        <div className="bg-white rounded-xl border-2 border-orange-400 p-2 shadow-lg animate-slide-up">
+                          <div className="flex items-center justify-between mb-2 px-1">
+                            <div className="flex items-center gap-1.5">
+                              {(entry.emoji || entry.categoryIcon) && (
+                                <span className="text-base">{entry.emoji || entry.categoryIcon}</span>
+                              )}
+                              <span className="font-semibold text-gray-900 text-xs truncate">{entry.baseName}</span>
+                            </div>
+                            <button
+                              onClick={() => setExpandedGroup(null)}
+                              className="p-0.5 rounded hover:bg-gray-100 text-gray-400"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                          <div className="flex gap-1.5">
+                            {entry.items.map((sizeItem) => (
+                              <button
+                                key={sizeItem.id}
+                                onClick={() => { handleAddItem(sizeItem); setExpandedGroup(null) }}
+                                className="flex-1 py-2 px-1 rounded-lg bg-orange-50 hover:bg-orange-100 border border-orange-200 hover:border-orange-400 transition-all text-center active:scale-95 active:bg-orange-200"
+                              >
+                                <div className="font-bold text-gray-900 text-xs">{getSizeLabel(sizeItem)}</div>
+                                <div className="text-orange-600 font-bold text-xs mt-0.5">{formatCurrency(sizeItem.price)}</div>
+                              </button>
+                            ))}
                           </div>
                         </div>
-                        <div className="flex gap-0.5">
-                          {entry.items.map((_, i) => (
-                            <div key={i} className="w-1.5 h-1.5 rounded-full bg-orange-400" />
-                          ))}
-                        </div>
-                      </div>
-                    </button>
-                  ) : (
-                    <div className="bg-white rounded-xl border-2 border-orange-400 p-2 shadow-lg animate-slide-up">
-                      <div className="flex items-center justify-between mb-2 px-1">
-                        <div className="flex items-center gap-1.5">
-                          {(entry.emoji || entry.categoryIcon) && (
-                            <span className="text-base">{entry.emoji || entry.categoryIcon}</span>
-                          )}
-                          <span className="font-semibold text-gray-900 text-xs truncate">{entry.baseName}</span>
-                        </div>
-                        <button
-                          onClick={() => setExpandedGroup(null)}
-                          className="p-0.5 rounded hover:bg-gray-100 text-gray-400"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                      <div className="flex gap-1.5">
-                        {entry.items.map((sizeItem) => (
-                          <button
-                            key={sizeItem.id}
-                            onClick={() => { handleAddItem(sizeItem); setExpandedGroup(null) }}
-                            className="flex-1 py-2 px-1 rounded-lg bg-orange-50 hover:bg-orange-100 border border-orange-200 hover:border-orange-400 transition-all text-center active:scale-95 active:bg-orange-200"
-                          >
-                            <div className="font-bold text-gray-900 text-xs">{getSizeLabel(sizeItem)}</div>
-                            <div className="text-orange-600 font-bold text-xs mt-0.5">{formatCurrency(sizeItem.price)}</div>
-                          </button>
-                        ))}
-                      </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
+                  )
+                })}
+              </div>
 
-          {filteredItems.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-64 text-gray-400">
-              <ShoppingCart className="h-12 w-12 mb-3" />
-              <p>{t('menu.noItems')}</p>
+              {filteredItems.length === 0 && (
+                <div className="flex flex-col items-center justify-center h-64 text-gray-400">
+                  <ShoppingCart className="h-12 w-12 mb-3" />
+                  <p>{t('menu.noItems')}</p>
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </>
+        )}
       </div>
 
       {/* RIGHT: Cart */}
-      <div className="w-72 md:w-80 lg:w-96 bg-white border-s flex flex-col shrink-0">
-        <div className="px-2 sm:px-4 py-2 sm:py-3 border-b">
+      <div className={`${isTouch ? 'w-96 lg:w-[28rem]' : 'w-72 md:w-80 lg:w-96'} bg-white border-s flex flex-col shrink-0`}>
+        <div className={`${isTouch ? 'px-4 py-3' : 'px-2 sm:px-4 py-2 sm:py-3'} border-b`}>
           <div className="flex items-center justify-between">
-            <h2 className="text-sm sm:text-base font-bold text-gray-900">{t('orders.cart')}</h2>
+            <h2 className={`${isTouch ? 'text-lg' : 'text-sm sm:text-base'} font-bold text-gray-900`}>{t('orders.cart')}</h2>
             {store.items.length > 0 && (
               <Button variant="ghost" size="sm" onClick={store.clearOrder}>
                 <Trash2 className="h-3 sm:h-4 w-3 sm:w-4" />
@@ -815,12 +1021,12 @@ export function OrderScreen() {
           </div>
 
           {/* Order type toggle */}
-          <div className="flex gap-1 mt-2 sm:mt-3">
+          <div className={`flex gap-1 ${isTouch ? 'mt-3' : 'mt-2 sm:mt-3'}`}>
             {(['local', 'takeout', 'delivery'] as const).map((type) => (
               <button
                 key={type}
                 onClick={() => store.setOrderType(type)}
-                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${
+                className={`flex-1 ${isTouch ? 'py-3 rounded-xl text-sm' : 'py-2 rounded-lg text-xs'} font-medium transition-colors ${
                   store.orderType === type
                     ? 'bg-orange-500 text-white'
                     : 'bg-gray-100 text-gray-600'
@@ -834,16 +1040,18 @@ export function OrderScreen() {
           {/* Table number for local orders */}
           {store.orderType === 'local' && (
             <div className="mt-3 relative">
-              <Hash className={`absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 ${validationError === 'table' ? 'text-red-500' : 'text-gray-400'}`} />
+              <Hash className={`absolute start-3 top-1/2 -translate-y-1/2 ${isTouch ? 'h-5 w-5' : 'h-4 w-4'} ${validationError === 'table' ? 'text-red-500' : 'text-gray-400'}`} />
               <input
                 type="text"
                 value={store.tableNumber}
-                onChange={(e) => {
+                readOnly={isTouch}
+                onClick={isTouch ? () => setKeyboardTarget({ field: 'table', type: 'numeric' }) : undefined}
+                onChange={isTouch ? undefined : (e) => {
                   store.setTableNumber(e.target.value)
                   if (validationError === 'table') setValidationError(null)
                 }}
                 placeholder={t('orders.tableNumberPlaceholder')}
-                className={`w-full ps-10 pe-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 ${
+                className={`w-full ps-10 pe-3 ${isTouch ? 'py-3 rounded-xl text-base cursor-pointer' : 'py-2 rounded-lg text-sm'} border focus:outline-none focus:ring-2 focus:ring-orange-500 ${
                   validationError === 'table' ? 'border-red-500 bg-red-50 animate-shake' : ''
                 }`}
               />
@@ -856,16 +1064,18 @@ export function OrderScreen() {
           {/* Phone for delivery */}
           {store.orderType === 'delivery' && (
             <div className="mt-3 relative">
-              <Phone className={`absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 ${validationError === 'phone' ? 'text-red-500' : 'text-gray-400'}`} />
+              <Phone className={`absolute start-3 top-1/2 -translate-y-1/2 ${isTouch ? 'h-5 w-5' : 'h-4 w-4'} ${validationError === 'phone' ? 'text-red-500' : 'text-gray-400'}`} />
               <input
                 type="tel"
                 value={store.customerPhone}
-                onChange={(e) => {
+                readOnly={isTouch}
+                onClick={isTouch ? () => setKeyboardTarget({ field: 'phone', type: 'numeric' }) : undefined}
+                onChange={isTouch ? undefined : (e) => {
                   store.setCustomerPhone(e.target.value)
                   if (validationError === 'phone') setValidationError(null)
                 }}
                 placeholder={t('orders.phonePlaceholder')}
-                className={`w-full ps-10 pe-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 ${
+                className={`w-full ps-10 pe-3 ${isTouch ? 'py-3 rounded-xl text-base cursor-pointer' : 'py-2 rounded-lg text-sm'} border focus:outline-none focus:ring-2 focus:ring-orange-500 ${
                   validationError === 'phone' ? 'border-red-500 bg-red-50 animate-shake' : ''
                 }`}
               />
@@ -906,20 +1116,20 @@ export function OrderScreen() {
                   </button>
                 </div>
 
-                <div className="flex items-center justify-between mt-1.5 sm:mt-2">
-                  <div className="flex items-center gap-1.5 sm:gap-2">
+                <div className={`flex items-center justify-between ${isTouch ? 'mt-3' : 'mt-1.5 sm:mt-2'}`}>
+                  <div className={`flex items-center ${isTouch ? 'gap-3' : 'gap-1.5 sm:gap-2'}`}>
                     <button
                       onClick={() => store.updateQuantity(index, item.quantity - 1)}
-                      className="w-6 sm:w-7 h-6 sm:h-7 rounded-lg bg-white border flex items-center justify-center hover:bg-gray-100"
+                      className={`${isTouch ? 'w-10 h-10 rounded-xl' : 'w-6 sm:w-7 h-6 sm:h-7 rounded-lg'} bg-white border flex items-center justify-center hover:bg-gray-100 active:scale-95`}
                     >
-                      <Minus className="h-2.5 sm:h-3 w-2.5 sm:w-3" />
+                      <Minus className={isTouch ? 'h-5 w-5' : 'h-2.5 sm:h-3 w-2.5 sm:w-3'} />
                     </button>
-                    <span className="text-xs sm:text-sm font-medium w-5 sm:w-6 text-center">{item.quantity}</span>
+                    <span className={`${isTouch ? 'text-lg w-8' : 'text-xs sm:text-sm w-5 sm:w-6'} font-medium text-center`}>{item.quantity}</span>
                     <button
                       onClick={() => store.updateQuantity(index, item.quantity + 1)}
-                      className="w-6 sm:w-7 h-6 sm:h-7 rounded-lg bg-white border flex items-center justify-center hover:bg-gray-100"
+                      className={`${isTouch ? 'w-10 h-10 rounded-xl' : 'w-6 sm:w-7 h-6 sm:h-7 rounded-lg'} bg-white border flex items-center justify-center hover:bg-gray-100 active:scale-95`}
                     >
-                      <Plus className="h-2.5 sm:h-3 w-2.5 sm:w-3" />
+                      <Plus className={isTouch ? 'h-5 w-5' : 'h-2.5 sm:h-3 w-2.5 sm:w-3'} />
                     </button>
                   </div>
 
@@ -967,10 +1177,10 @@ export function OrderScreen() {
               store.items.length === 0 ||
               (store.orderType === 'delivery' && !store.customerPhone.trim())
             }
-            className="w-full text-sm sm:text-base"
+            className={`w-full ${isTouch ? 'text-lg py-4' : 'text-sm sm:text-base'}`}
             size="lg"
           >
-            {t('orders.placeOrder')} (F2)
+            {t('orders.placeOrder')}{!isTouch && ' (F2)'}
           </Button>
         </div>
       </div>
@@ -1451,6 +1661,17 @@ export function OrderScreen() {
             </div>
           )}
         </Modal>
+      )}
+
+      {/* Virtual Keyboard for touchscreen mode */}
+      {isTouch && keyboardTarget && (
+        <VirtualKeyboard
+          visible
+          type={keyboardTarget.type}
+          value={getKeyboardValue()}
+          onChange={handleKeyboardChange}
+          onClose={() => setKeyboardTarget(null)}
+        />
       )}
     </div>
   )

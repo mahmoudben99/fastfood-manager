@@ -9,6 +9,7 @@ import { AdminPassword } from './steps/AdminPassword'
 import { WorkSchedule } from './steps/WorkSchedule'
 import { CategorySetup } from './steps/CategorySetup'
 import { ExcelSetup } from './steps/ExcelSetup'
+import { InputModeSelect } from './steps/InputModeSelect'
 
 export interface SetupData {
   language: string
@@ -28,10 +29,11 @@ export interface SetupData {
     close_time: string | null
     half_end: string | null
   }[]
+  inputMode: 'keyboard' | 'touchscreen'
   categories: { name: string; name_ar?: string; name_fr?: string; icon?: string }[]
 }
 
-const STEPS = ['language', 'restaurant', 'password', 'schedule', 'excel', 'categories'] as const
+const STEPS = ['language', 'inputMode', 'restaurant', 'password', 'schedule', 'excel', 'categories'] as const
 
 export function SetupWizard() {
   const { t } = useTranslation()
@@ -51,6 +53,7 @@ export function SetupWizard() {
     currency: 'DZD',
     currencySymbol: 'DA',
     logoPath: '',
+    inputMode: 'keyboard',
     password: '',
     schedule: Array.from({ length: 7 }, (_, i) => ({
       day_of_week: i,
@@ -97,6 +100,8 @@ export function SetupWizard() {
     switch (STEPS[currentStep]) {
       case 'language':
         return true
+      case 'inputMode':
+        return true
       case 'restaurant':
         return data.restaurantName.trim() !== '' && data.phone.trim() !== ''
       case 'password':
@@ -129,6 +134,7 @@ export function SetupWizard() {
         currency: data.currency,
         currency_symbol: data.currencySymbol,
         logo_path: data.logoPath,
+        input_mode: data.inputMode,
         admin_password_hash: hash,
         setup_complete: 'true'
       })
@@ -155,6 +161,7 @@ export function SetupWizard() {
 
   const stepComponents = [
     <LanguageSelect key="lang" data={data} updateData={updateData} />,
+    <InputModeSelect key="input" data={data} updateData={updateData} />,
     <RestaurantInfo key="rest" data={data} updateData={updateData} />,
     <AdminPassword key="pass" data={data} updateData={updateData} />,
     <WorkSchedule key="sched" data={data} updateData={updateData} />,
