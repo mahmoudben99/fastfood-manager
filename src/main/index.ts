@@ -91,7 +91,9 @@ function registerImageProtocol(): void {
 // Auto-updater setup
 function setupAutoUpdater(): void {
   autoUpdater.autoDownload = false
-  autoUpdater.autoInstallOnAppQuit = true
+  autoUpdater.autoInstallOnAppQuit = false // Must be false — setting to true causes a race condition
+  // with the explicit quitAndInstall() call, resulting in two NSIS instances conflicting
+  // and the app not relaunching after update (the update loop bug)
 
   autoUpdater.on('update-available', (info) => {
     const notes = typeof info.releaseNotes === 'string' ? info.releaseNotes : ''
@@ -127,7 +129,16 @@ function setupAutoUpdater(): void {
   })
 
   ipcMain.handle('updater:install', () => {
-    autoUpdater.quitAndInstall(true, true)
+    // Destroy all windows first to release file locks on app.asar before the NSIS installer runs.
+    // Using destroy() instead of close() avoids triggering the window-all-closed → app.quit() chain.
+    BrowserWindow.getAllWindows().forEach((win) => {
+      if (!win.isDestroyed()) win.destroy()
+    })
+    // Give child processes (GPU, renderer) 800ms to fully terminate, then install.
+    // This prevents NSIS from encountering locked files and silently failing.
+    setTimeout(() => {
+      autoUpdater.quitAndInstall(true, true)
+    }, 800)
   })
 
   ipcMain.handle('updater:check', async () => {

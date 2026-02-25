@@ -1,6 +1,6 @@
 # Fast Food Manager - Development Log
 
-**Current Version:** 1.4.4
+**Current Version:** 1.4.5
 **Last Updated:** 2026-02-25
 **Repository:** https://github.com/mahmoudben99/fastfood-manager
 
@@ -38,6 +38,15 @@ src/
 ---
 
 ## Recent Changes
+
+### v1.4.5 (2026-02-25) - Fix Auto-Update Infinite Loop
+**Bug Fix:**
+- **Fixed auto-update infinite loop** — After downloading an update and clicking "Restart Now", the app would close but the new version would not launch. Manually reopening the app showed the old version, which would detect the same update again, creating an endless loop.
+- **Root cause**: `autoUpdater.autoInstallOnAppQuit = true` was set alongside explicit `quitAndInstall()` calls, causing TWO NSIS installer instances to conflict. One would try to install via the `before-quit` event, the other via `quitAndInstall()`. The conflict caused the installer to silently fail, leaving the old version intact.
+- **Fix in `src/main/index.ts`**:
+  1. Set `autoUpdater.autoInstallOnAppQuit = false` — eliminates the race condition
+  2. In the `updater:install` IPC handler, destroy all BrowserWindows before calling `quitAndInstall()` — releases file locks on `app.asar` so NSIS can replace the files
+  3. Added 800ms delay after window destruction before calling `quitAndInstall(true, true)` — gives GPU/renderer child processes time to fully terminate
 
 ### v1.4.4 (2026-02-25) - Stock Keyboard, Worker Categories, Alert Quick-Pick
 **Fixes:**
