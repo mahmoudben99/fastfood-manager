@@ -87,7 +87,6 @@ export function SettingsPage() {
       case 'phone2': return phone2
       case 'address': return address
       case 'currencySymbol': return currencySymbol
-      case 'orderAlertMinutes': return orderAlertMinutes
       case 'currentPass': return currentPass
       case 'newPass': return newPass
       case 'confirmPass': return confirmPass
@@ -104,7 +103,6 @@ export function SettingsPage() {
       case 'phone2': setPhone2(val); break
       case 'address': setAddress(val); break
       case 'currencySymbol': setCurrencySymbol(val); break
-      case 'orderAlertMinutes': setOrderAlertMinutes(val.replace(/\D/g, '')); break
       case 'currentPass': setCurrentPass(val.replace(/\D/g, '')); break
       case 'newPass': setNewPass(val.replace(/\D/g, '')); break
       case 'confirmPass': setConfirmPass(val.replace(/\D/g, '')); break
@@ -417,19 +415,43 @@ export function SettingsPage() {
                 { value: 'fr', label: 'Français' }
               ]}
             />
-            <Input
-              label={t('settings.orderAlertMinutes', { defaultValue: 'Order Alert Time (minutes)' })}
-              type={isTouch ? 'text' : 'number'}
-              inputMode="numeric"
-              min="1"
-              max="120"
-              value={orderAlertMinutes}
-              readOnly={isTouch}
-              onClick={isTouch ? () => setKeyboardTarget({ field: 'orderAlertMinutes', type: 'numeric' }) : undefined}
-              onChange={isTouch ? undefined : (e) => setOrderAlertMinutes(e.target.value)}
-              placeholder="20"
-              helperText={t('settings.orderAlertHelp', { defaultValue: 'Orders older than this will be highlighted in red' })}
-            />
+            {isTouch ? (
+              /* Touch mode: quick-pick preset minutes */
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  {t('settings.orderAlertMinutes', { defaultValue: 'Order Alert Time (minutes)' })}
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {[5, 10, 15, 20, 25, 30, 45, 60, 90, 120].map((min) => (
+                    <button
+                      key={min}
+                      onClick={() => setOrderAlertMinutes(String(min))}
+                      className={`px-4 py-2.5 rounded-xl text-sm font-semibold border-2 transition-colors ${
+                        orderAlertMinutes === String(min)
+                          ? 'bg-orange-500 text-white border-orange-500'
+                          : 'bg-gray-100 text-gray-700 border-gray-200 hover:border-orange-300'
+                      }`}
+                    >
+                      {min} min
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-400 mt-2">
+                  {t('settings.orderAlertHelp', { defaultValue: 'Orders older than this will be highlighted in red' })}
+                </p>
+              </div>
+            ) : (
+              <Input
+                label={t('settings.orderAlertMinutes', { defaultValue: 'Order Alert Time (minutes)' })}
+                type="number"
+                min="1"
+                max="120"
+                value={orderAlertMinutes}
+                onChange={(e) => setOrderAlertMinutes(e.target.value)}
+                placeholder="20"
+                helperText={t('settings.orderAlertHelp', { defaultValue: 'Orders older than this will be highlighted in red' })}
+              />
+            )}
             {/* Input Mode */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">

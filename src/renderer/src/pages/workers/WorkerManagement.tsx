@@ -343,10 +343,12 @@ export function WorkerManagement() {
                   <button
                     key={cat.id}
                     onClick={() => toggleCategory(cat.id)}
-                    className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                    className={`${isTouch ? 'px-5 py-3 text-base rounded-xl border-2 font-medium' : 'px-3 py-1.5 rounded-lg text-sm'} transition-colors ${
                       formCategories.includes(cat.id)
-                        ? 'bg-orange-500 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        ? 'bg-orange-500 text-white border-orange-500'
+                        : isTouch
+                          ? 'bg-gray-100 text-gray-700 border-gray-200 hover:border-orange-300'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
                     {getName(cat)}

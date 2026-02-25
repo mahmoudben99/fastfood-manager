@@ -8,6 +8,7 @@ import { Select } from '../../components/ui/Select'
 import { Modal } from '../../components/ui/Modal'
 import { Badge } from '../../components/ui/Badge'
 import { formatCurrency } from '../../utils/formatCurrency'
+import { VirtualKeyboard } from '../../components/VirtualKeyboard'
 
 const UNIT_LABELS: Record<string, string> = {
   kg: 'kg',
@@ -17,7 +18,8 @@ const UNIT_LABELS: Record<string, string> = {
 
 export function StockManagement() {
   const { t } = useTranslation()
-  const { language, foodLanguage } = useAppStore()
+  const { language, foodLanguage, inputMode } = useAppStore()
+  const isTouch = inputMode === 'touchscreen'
   const [items, setItems] = useState<any[]>([])
   const [tab, setTab] = useState<'all' | 'low'>('all')
   const [lowCount, setLowCount] = useState(0)
@@ -42,6 +44,38 @@ export function StockManagement() {
   const [adjPrice, setAdjPrice] = useState('')
   const [saving, setSaving] = useState(false)
 
+  // Virtual keyboard
+  const [keyboardTarget, setKeyboardTarget] = useState<{ field: string; type: 'numeric' | 'text' } | null>(null)
+
+  const getKeyboardValue = (): string => {
+    if (!keyboardTarget) return ''
+    switch (keyboardTarget.field) {
+      case 'formName': return formName
+      case 'formNameAr': return formNameAr
+      case 'formNameFr': return formNameFr
+      case 'formPrice': return formPrice
+      case 'formThreshold': return formThreshold
+      case 'adjQuantity': return adjQuantity
+      case 'adjReason': return adjReason
+      case 'adjPrice': return adjPrice
+      default: return ''
+    }
+  }
+
+  const handleKeyboardChange = (val: string) => {
+    if (!keyboardTarget) return
+    switch (keyboardTarget.field) {
+      case 'formName': setFormName(val); break
+      case 'formNameAr': setFormNameAr(val); break
+      case 'formNameFr': setFormNameFr(val); break
+      case 'formPrice': setFormPrice(val); break
+      case 'formThreshold': setFormThreshold(val); break
+      case 'adjQuantity': setAdjQuantity(val); break
+      case 'adjReason': setAdjReason(val); break
+      case 'adjPrice': setAdjPrice(val); break
+    }
+  }
+
   useEffect(() => {
     loadData()
   }, [])
@@ -56,12 +90,10 @@ export function StockManagement() {
   }
 
   const getName = (item: any) => {
-    // Primary name in food language
     let primary = item.name
     if (foodLanguage === 'ar' && item.name_ar) primary = item.name_ar
     else if (foodLanguage === 'fr' && item.name_fr) primary = item.name_fr
 
-    // If food language differs from app language, show dual: "primary - (translation)"
     if (foodLanguage !== language) {
       let translation = item.name
       if (language === 'ar' && item.name_ar) translation = item.name_ar
@@ -176,7 +208,7 @@ export function StockManagement() {
       <div className="flex gap-2 mb-4">
         <button
           onClick={() => setTab('all')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+          className={`${isTouch ? 'px-5 py-3 text-base' : 'px-4 py-2 text-sm'} rounded-lg font-medium transition-colors ${
             tab === 'all' ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600'
           }`}
         >
@@ -184,7 +216,7 @@ export function StockManagement() {
         </button>
         <button
           onClick={() => setTab('low')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+          className={`${isTouch ? 'px-5 py-3 text-base' : 'px-4 py-2 text-sm'} rounded-lg font-medium transition-colors flex items-center gap-2 ${
             tab === 'low' ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600'
           }`}
         >
@@ -213,23 +245,23 @@ export function StockManagement() {
           <tbody>
             {displayed.map((item) => (
               <tr key={item.id} className="border-b last:border-0">
-                <td className="px-4 py-3 font-medium">{getName(item)}</td>
-                <td className="px-4 py-3">{formatQty(item)}</td>
-                <td className="px-4 py-3">{formatCurrency(item.price_per_unit)}</td>
-                <td className="px-4 py-3">{statusBadge(getStatus(item))}</td>
-                <td className="px-4 py-3">
+                <td className={`px-4 ${isTouch ? 'py-4' : 'py-3'} font-medium`}>{getName(item)}</td>
+                <td className={`px-4 ${isTouch ? 'py-4' : 'py-3'}`}>{formatQty(item)}</td>
+                <td className={`px-4 ${isTouch ? 'py-4' : 'py-3'}`}>{formatCurrency(item.price_per_unit)}</td>
+                <td className={`px-4 ${isTouch ? 'py-4' : 'py-3'}`}>{statusBadge(getStatus(item))}</td>
+                <td className={`px-4 ${isTouch ? 'py-4' : 'py-3'}`}>
                   <div className="flex justify-end gap-1">
-                    <button onClick={() => openForm(item)} className="p-1.5 hover:bg-gray-100 rounded" title={t('common.edit')}>
-                      <Pencil className="h-4 w-4 text-gray-500" />
+                    <button onClick={() => openForm(item)} className={`${isTouch ? 'p-3' : 'p-1.5'} hover:bg-gray-100 rounded`} title={t('common.edit')}>
+                      <Pencil className={`${isTouch ? 'h-5 w-5' : 'h-4 w-4'} text-gray-500`} />
                     </button>
-                    <button onClick={() => openAdjust(item, 'fix')} className="p-1.5 hover:bg-blue-50 rounded" title={t('stock.fix')}>
-                      <Wrench className="h-4 w-4 text-blue-500" />
+                    <button onClick={() => openAdjust(item, 'fix')} className={`${isTouch ? 'p-3' : 'p-1.5'} hover:bg-blue-50 rounded`} title={t('stock.fix')}>
+                      <Wrench className={`${isTouch ? 'h-5 w-5' : 'h-4 w-4'} text-blue-500`} />
                     </button>
-                    <button onClick={() => openAdjust(item, 'adjust')} className="p-1.5 hover:bg-yellow-50 rounded" title={t('stock.adjust')}>
-                      <SlidersHorizontal className="h-4 w-4 text-yellow-600" />
+                    <button onClick={() => openAdjust(item, 'adjust')} className={`${isTouch ? 'p-3' : 'p-1.5'} hover:bg-yellow-50 rounded`} title={t('stock.adjust')}>
+                      <SlidersHorizontal className={`${isTouch ? 'h-5 w-5' : 'h-4 w-4'} text-yellow-600`} />
                     </button>
-                    <button onClick={() => openAdjust(item, 'purchase')} className="p-1.5 hover:bg-green-50 rounded" title={t('stock.purchase')}>
-                      <ShoppingBag className="h-4 w-4 text-green-600" />
+                    <button onClick={() => openAdjust(item, 'purchase')} className={`${isTouch ? 'p-3' : 'p-1.5'} hover:bg-green-50 rounded`} title={t('stock.purchase')}>
+                      <ShoppingBag className={`${isTouch ? 'h-5 w-5' : 'h-4 w-4'} text-green-600`} />
                     </button>
                   </div>
                 </td>
@@ -243,12 +275,12 @@ export function StockManagement() {
       </div>
 
       {/* Add/Edit Modal */}
-      <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editItem ? t('stock.editItem') : t('stock.addItem')}>
+      <Modal isOpen={showForm} onClose={() => { setShowForm(false); setKeyboardTarget(null) }} title={editItem ? t('stock.editItem') : t('stock.addItem')}>
         <div className="space-y-4">
           <div className="grid grid-cols-3 gap-3">
-            <Input label={t('stock.name')} value={formName} onChange={(e) => setFormName(e.target.value)} />
-            <Input label={t('menu.nameAr')} value={formNameAr} onChange={(e) => setFormNameAr(e.target.value)} dir="rtl" />
-            <Input label={t('menu.nameFr')} value={formNameFr} onChange={(e) => setFormNameFr(e.target.value)} />
+            <Input label={t('stock.name')} value={formName} readOnly={isTouch} onClick={isTouch ? () => setKeyboardTarget({ field: 'formName', type: 'text' }) : undefined} onChange={isTouch ? undefined : (e) => setFormName(e.target.value)} />
+            <Input label={t('menu.nameAr')} value={formNameAr} readOnly={isTouch} onClick={isTouch ? () => setKeyboardTarget({ field: 'formNameAr', type: 'text' }) : undefined} onChange={isTouch ? undefined : (e) => setFormNameAr(e.target.value)} dir="rtl" />
+            <Input label={t('menu.nameFr')} value={formNameFr} readOnly={isTouch} onClick={isTouch ? () => setKeyboardTarget({ field: 'formNameFr', type: 'text' }) : undefined} onChange={isTouch ? undefined : (e) => setFormNameFr(e.target.value)} />
           </div>
           <div className="grid grid-cols-3 gap-3">
             <Select
@@ -261,8 +293,8 @@ export function StockManagement() {
                 { value: 'unit', label: t('stock.units.unit') }
               ]}
             />
-            <Input label={t('stock.pricePerUnit')} type="number" value={formPrice} onChange={(e) => setFormPrice(e.target.value)} step="0.01" />
-            <Input label={t('stock.alertThreshold')} type="number" value={formThreshold} onChange={(e) => setFormThreshold(e.target.value)} />
+            <Input label={t('stock.pricePerUnit')} type={isTouch ? 'text' : 'number'} inputMode="numeric" value={formPrice} readOnly={isTouch} onClick={isTouch ? () => setKeyboardTarget({ field: 'formPrice', type: 'numeric' }) : undefined} onChange={isTouch ? undefined : (e) => setFormPrice(e.target.value)} step="0.01" />
+            <Input label={t('stock.alertThreshold')} type={isTouch ? 'text' : 'number'} inputMode="numeric" value={formThreshold} readOnly={isTouch} onClick={isTouch ? () => setKeyboardTarget({ field: 'formThreshold', type: 'numeric' }) : undefined} onChange={isTouch ? undefined : (e) => setFormThreshold(e.target.value)} />
           </div>
           <div className="flex gap-2 pt-4 border-t">
             <Button variant="secondary" onClick={() => setShowForm(false)} className="flex-1">{t('common.cancel')}</Button>
@@ -275,7 +307,7 @@ export function StockManagement() {
       {adjustModal && (
         <Modal
           isOpen
-          onClose={() => setAdjustModal(null)}
+          onClose={() => { setAdjustModal(null); setKeyboardTarget(null) }}
           title={
             adjustModal.type === 'fix' ? t('stock.fixTitle') :
             adjustModal.type === 'adjust' ? t('stock.adjustTitle') :
@@ -294,18 +326,24 @@ export function StockManagement() {
             </p>
             <Input
               label={adjustModal.type === 'purchase' ? t('stock.purchaseQty') : t('stock.newQuantity')}
-              type="number"
+              type={isTouch ? 'text' : 'number'}
+              inputMode="numeric"
               value={adjQuantity}
-              onChange={(e) => setAdjQuantity(e.target.value)}
+              readOnly={isTouch}
+              onClick={isTouch ? () => setKeyboardTarget({ field: 'adjQuantity', type: 'numeric' }) : undefined}
+              onChange={isTouch ? undefined : (e) => setAdjQuantity(e.target.value)}
               step="0.01"
             />
             {adjustModal.type === 'purchase' && (
               <>
                 <Input
                   label={t('stock.purchasePrice')}
-                  type="number"
+                  type={isTouch ? 'text' : 'number'}
+                  inputMode="numeric"
                   value={adjPrice}
-                  onChange={(e) => setAdjPrice(e.target.value)}
+                  readOnly={isTouch}
+                  onClick={isTouch ? () => setKeyboardTarget({ field: 'adjPrice', type: 'numeric' }) : undefined}
+                  onChange={isTouch ? undefined : (e) => setAdjPrice(e.target.value)}
                   step="0.01"
                 />
                 {adjQuantity && adjPrice && (
@@ -319,7 +357,9 @@ export function StockManagement() {
               <Input
                 label={t('stock.reason')}
                 value={adjReason}
-                onChange={(e) => setAdjReason(e.target.value)}
+                readOnly={isTouch}
+                onClick={isTouch ? () => setKeyboardTarget({ field: 'adjReason', type: 'text' }) : undefined}
+                onChange={isTouch ? undefined : (e) => setAdjReason(e.target.value)}
               />
             )}
             <div className="flex gap-2 pt-4 border-t">
@@ -328,6 +368,17 @@ export function StockManagement() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* Virtual Keyboard for touchscreen mode */}
+      {isTouch && keyboardTarget && (
+        <VirtualKeyboard
+          visible
+          type={keyboardTarget.type}
+          value={getKeyboardValue()}
+          onChange={handleKeyboardChange}
+          onClose={() => setKeyboardTarget(null)}
+        />
       )}
     </div>
   )

@@ -1,7 +1,7 @@
 # Fast Food Manager - Development Log
 
-**Current Version:** 1.4.3
-**Last Updated:** 2026-02-24
+**Current Version:** 1.4.4
+**Last Updated:** 2026-02-25
 **Repository:** https://github.com/mahmoudben99/fastfood-manager
 
 ---
@@ -38,6 +38,14 @@ src/
 ---
 
 ## Recent Changes
+
+### v1.4.4 (2026-02-25) - Stock Keyboard, Worker Categories, Alert Quick-Pick
+**Fixes:**
+- Wired virtual keyboard into Stock Management — form modal (name, name_ar, name_fr, price, threshold) and adjustment modal (quantity, price, reason)
+- Enlarged Stock Management table row height and action buttons for touchscreen
+- Enlarged Stock Management tab buttons for touchscreen
+- Worker form: category assignment buttons now much larger with borders in touchscreen mode (easy to tap)
+- Order Alert Time: replaced virtual keyboard with quick-pick preset buttons (5/10/15/20/25/30/45/60/90/120 min) — no more covered input issue
 
 ### v1.4.3 (2026-02-24) - Touchscreen Polish & Telegram Keyboard
 **Fixes:**
@@ -399,18 +407,27 @@ unset ELECTRON_RUN_AS_NODE
 
 ## For AI Assistants / Future Development
 
-**🚨 CRITICAL RULE:** When starting a new chat/session:
-1. **ALWAYS create/update this DEVELOPMENT_LOG.md file** - Don't wait for user to ask
-2. Read this file to understand current state
-3. Check `package.json` for current version
-4. Review pending features list above
-5. Check git status for uncommitted changes
+**🚨 MANDATORY WORKFLOW — EVERY SESSION, EVERY CHANGE:**
 
-**After making changes:**
-1. Always test builds before pushing releases
-2. **UPDATE THIS FILE** with all changes made
-3. Push code to GitHub
-4. Create GitHub release for updates
-5. Copy new build to `C:\Users\MahmoudBen\Desktop\FFM Final\`
+### On Session Start:
+1. **READ this DEVELOPMENT_LOG.md** to understand current state
+2. Check `package.json` for current version
+3. Check git status for uncommitted changes
 
-**Last context:** v1.4.3 deployed with comprehensive touchscreen mode. Key features: VirtualKeyboard (numpad + QWERTY), category grid navigation, hard reset logout requiring re-activation, virtual keyboard wired into all pages (OrderScreen, Settings, Workers, Menu, Telegram, PasswordGate, Setup Wizard). All passwords are PIN-only numeric. Hover-dependent buttons made always visible in touch mode. Auto-scroll-into-view when keyboard opens.
+### After EVERY Code Change (no exceptions):
+1. Bump version in `package.json` (patch: 1.4.x → 1.4.x+1)
+2. `npm run build` to compile
+3. `npx electron-builder --win nsis` to build installer
+4. Move old `.exe` + `latest.yml` to `FFM Final/old/`
+5. Copy new `.exe` + `latest.yml` to `C:\Users\MahmoudBen\Desktop\Fastfood Manager\FFM Final\`
+6. **UPDATE THIS FILE** — add a new version entry under "Recent Changes"
+7. `git add -A && git commit -m "v{version}: {summary}"`
+8. `git tag v{version} && git push origin main --tags`
+9. `gh release create v{version} dist/FastFoodManager-Setup-{version}.exe dist/latest.yml --title "v{version}" --notes "..."`
+
+### This File Must Always Be:
+- Current version in the header
+- New version entry at the top of "Recent Changes" with what changed and why
+- "Last context" updated at the bottom
+
+**Last context:** v1.4.4 deployed. Stock Management now has full virtual keyboard support. Worker category assignment buttons enlarged for touch. Order Alert Time uses quick-pick preset buttons (5-120 min) instead of keyboard to avoid covering the input. All touchscreen flows are now complete across OrderScreen, Settings, Workers, Menu, Stock, Telegram, PasswordGate, Setup Wizard.
