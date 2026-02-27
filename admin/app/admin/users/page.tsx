@@ -79,6 +79,10 @@ export default async function UsersPage({
     query = query.or(`restaurant_name.ilike.%${search}%,machine_id.ilike.%${search}%,phone.ilike.%${search}%`)
   }
 
+  const { count: rawCount } = await supabase
+    .from('installations')
+    .select('*', { count: 'exact', head: true })
+
   const { data, error: queryError } = await query
   const users = (data || []) as unknown as Installation[]
   const fetchedAt = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -93,8 +97,10 @@ export default async function UsersPage({
         </div>
       </div>
 
-      <div className="mb-4 bg-gray-100 rounded-lg px-3 py-2 font-mono text-xs text-gray-500">
-        Supabase URL: {process.env.SUPABASE_URL || '(not set)'}
+      <div className="mb-4 bg-gray-100 rounded-lg px-3 py-2 font-mono text-xs text-gray-500 space-y-1">
+        <div>Supabase URL: {process.env.SUPABASE_URL || '(not set)'}</div>
+        <div>Raw count (no join): {rawCount ?? 'null'}</div>
+        <div>With-join result: {users.length} rows</div>
       </div>
 
       {queryError && (
