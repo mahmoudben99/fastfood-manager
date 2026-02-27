@@ -32,7 +32,7 @@ export function registerTrialHandlers(): void {
       }
       // status === 'not_found' → fall through to insert a new trial below
     } catch {
-      return { success: false, error: 'Could not reach server. Check your internet connection.' }
+      // Cloud unreachable — fall through and let startTrial handle the error
     }
 
     const result = await startTrial(machineId)
