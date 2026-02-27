@@ -3,6 +3,8 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { TrialControls } from './TrialControls'
 
+export const dynamic = 'force-dynamic'
+
 function formatDate(iso: string | null) {
   if (!iso) return '—'
   return new Date(iso).toLocaleString('en-GB', {

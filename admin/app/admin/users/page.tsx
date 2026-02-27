@@ -1,6 +1,8 @@
 import { supabase, isConfigured } from '@/lib/supabase'
 import Link from 'next/link'
 
+export const dynamic = 'force-dynamic'
+
 interface Installation {
   machine_id: string
   restaurant_name: string | null
