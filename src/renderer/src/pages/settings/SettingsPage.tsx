@@ -27,7 +27,7 @@ export function SettingsPage() {
   const navigate = useNavigate()
   const { setLanguage, setSetupComplete, setActivated, loadSettings, inputMode, activationType, trialStatus, trialExpiresAt } = useAppStore()
   const isTouch = inputMode === 'touchscreen'
-  const [tab, setTab] = useState<'general' | 'schedule' | 'printer' | 'telegram' | 'security' | 'tablet'>('general')
+  const [tab, setTab] = useState<'general' | 'schedule' | 'printer' | 'telegram' | 'tablet' | 'security'>('general')
   const [saved, setSaved] = useState(false)
 
   // General
@@ -418,8 +418,8 @@ export function SettingsPage() {
     { key: 'schedule' as const, label: t('settings.schedule') },
     { key: 'printer' as const, label: t('settings.printer') },
     { key: 'telegram' as const, label: t('settings.telegram') },
-    { key: 'security' as const, label: t('settings.security') },
-    { key: 'tablet' as const, label: '📱 Tablette' }
+    { key: 'tablet' as const, label: 'Remote Orders' },
+    { key: 'security' as const, label: t('settings.security') }
   ]
 
   return (

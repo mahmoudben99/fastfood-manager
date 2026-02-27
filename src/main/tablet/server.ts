@@ -8,6 +8,9 @@ import { categoriesRepo } from '../database/repositories/categories.repo'
 import { ordersRepo } from '../database/repositories/orders.repo'
 import { settingsRepo } from '../database/repositories/settings.repo'
 import { getTabletHTML } from './tablet-ui'
+import { printOrder } from '../ipc/printer.ipc'
+import { sendOrderNotification } from '../telegram/bot'
+import { performAutoBackup } from '../ipc/backup.ipc'
 
 let server: http.Server | null = null
 let currentPort = 3333
@@ -114,6 +117,13 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
         const input = JSON.parse(body)
         const order = ordersRepo.create(input)
         mainWin?.webContents.send('tablet:new-order', order)
+        // Same side-effects as normal orders
+        performAutoBackup()
+        sendOrderNotification(order)
+        const autoPrintReceipt = settingsRepo.get('auto_print_receipt') === 'true'
+        const autoPrintKitchen = settingsRepo.get('auto_print_kitchen') === 'true'
+        if (autoPrintReceipt) printOrder(order.id, 'receipt').catch(() => {})
+        if (autoPrintKitchen) printOrder(order.id, 'kitchen').catch(() => {})
         sendJSON(res, 200, { ok: true, order_number: order.daily_number, id: order.id })
       } catch (e) {
         sendJSON(res, 500, { error: String(e) })

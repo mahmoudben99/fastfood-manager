@@ -124,7 +124,15 @@ export function OrderScreen() {
       setCurrentTime(Date.now())
     }, 30000)
 
-    return () => clearInterval(interval)
+    // Refresh badge and order list when a tablet order arrives
+    const unsubTablet = window.api.tablet.onNewOrder(() => {
+      loadOngoingCount()
+    })
+
+    return () => {
+      clearInterval(interval)
+      unsubTablet()
+    }
   }, [])
 
   const loadData = async () => {
