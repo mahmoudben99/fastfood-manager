@@ -20,6 +20,7 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [lockedReason, setLockedReason] = useState<string | null>(null)
   const [tabletToast, setTabletToast] = useState<string | null>(null)
+  const [onlineRestoredToast, setOnlineRestoredToast] = useState(false)
 
   const {
     activated, setupComplete, loadSettings,
@@ -47,6 +48,8 @@ export default function App() {
     const unsubCleared = window.api.trial.onOfflineCleared(() => {
       setTrialOfflineSecondsLeft(null)
       setLockedReason((prev) => (prev === 'offline' ? null : prev))
+      setOnlineRestoredToast(true)
+      setTimeout(() => setOnlineRestoredToast(false), 4000)
     })
 
     const unsubStatus = window.api.trial.onStatusUpdate((data) => {
@@ -97,6 +100,20 @@ export default function App() {
       {tabletToast && (
         <div className="fixed top-4 right-4 z-[999] bg-orange-500 text-white px-4 py-3 rounded-xl shadow-lg text-sm font-semibold animate-bounce">
           {tabletToast}
+        </div>
+      )}
+
+      {/* Trial offline countdown banner */}
+      {activated && activationType === 'trial' && trialOfflineSecondsLeft !== null && !lockedReason && (
+        <div className="fixed top-0 left-0 right-0 z-[998] bg-red-500 text-white text-center py-2 text-sm font-semibold shadow-md">
+          ⚠️ No internet — app locks in {Math.floor(trialOfflineSecondsLeft / 60)}:{String(trialOfflineSecondsLeft % 60).padStart(2, '0')}
+        </div>
+      )}
+
+      {/* Internet restored toast */}
+      {onlineRestoredToast && (
+        <div className="fixed top-4 right-4 z-[999] bg-green-500 text-white px-4 py-3 rounded-xl shadow-lg text-sm font-semibold">
+          ✅ Internet connection restored
         </div>
       )}
 

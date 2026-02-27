@@ -149,6 +149,9 @@ export function SetupWizard() {
         )
       }
 
+      // Sync restaurant name & version to cloud so admin dashboard shows correct data
+      window.api.installation.sync().catch(() => {})
+
       setSetupComplete(true)
       await loadSettings()
       navigate('/orders')

@@ -261,6 +261,30 @@ app.whenReady().then(() => {
     registerAllHandlers()
     registerTabletHandlers(() => mainWindow)
 
+    // Allow trial activation page to start the watcher mid-session (after factory reset)
+    ipcMain.handle('trial:ensureWatcher', () => {
+      const activationType = settingsRepo.get('activation_type')
+      if (activationType === 'trial' && !trialCheckInterval) {
+        log('Trial watcher started on demand (mid-session trial activation)')
+        setupTrialWatcher()
+      }
+    })
+
+    // Re-sync installation with latest restaurant name/version after setup completes
+    ipcMain.handle('installation:sync', async () => {
+      try {
+        const machineId = getMachineId()
+        const restaurantName = settingsRepo.get('restaurant_name') || undefined
+        const phone = settingsRepo.get('restaurant_phone') || undefined
+        await registerInstallation(machineId, restaurantName, phone, app.getVersion())
+        log('Installation synced with cloud')
+        return { ok: true }
+      } catch (e) {
+        log(`Installation sync failed: ${e}`, true)
+        return { ok: false }
+      }
+    })
+
     // Show splash screen first
     log('Creating splash window')
     const splashWin = createSplashWindow()

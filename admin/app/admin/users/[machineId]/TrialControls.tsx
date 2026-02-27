@@ -13,13 +13,14 @@ export function TrialControls({ machineId, trialStatus }: Props) {
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState('')
   const [customDays, setCustomDays] = useState('')
+  const [customExpiry, setCustomExpiry] = useState('')
 
-  const doAction = async (action: string, days?: number) => {
+  const doAction = async (action: string, days?: number, expiresAt?: string) => {
     setError('')
     const res = await fetch('/api/trial/action', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ machineId, action, days })
+      body: JSON.stringify({ machineId, action, days, expiresAt })
     })
     const data = await res.json()
     if (!res.ok) {
@@ -67,6 +68,41 @@ export function TrialControls({ machineId, trialStatus }: Props) {
               +Custom
             </button>
           </div>
+        </div>
+      </div>
+
+      <div className="mb-3">
+        <p className="text-xs text-gray-500 mb-2">Reduce trial by:</p>
+        <div className="flex flex-wrap gap-2">
+          {[1, 3, 7].map((days) => (
+            <button
+              key={days}
+              onClick={() => doAction('reduce', days)}
+              disabled={isPending}
+              className="px-3 py-1.5 text-sm rounded-lg bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 transition-colors disabled:opacity-50"
+            >
+              -{days}d
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <p className="text-xs text-gray-500 mb-2">Set exact expiry date/time:</p>
+        <div className="flex gap-2">
+          <input
+            type="datetime-local"
+            value={customExpiry}
+            onChange={(e) => setCustomExpiry(e.target.value)}
+            className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-orange-400"
+          />
+          <button
+            onClick={() => { if (customExpiry) doAction('setExpiry', undefined, customExpiry) }}
+            disabled={isPending || !customExpiry}
+            className="px-3 py-1.5 text-sm rounded-lg bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100 transition-colors disabled:opacity-50"
+          >
+            Set
+          </button>
         </div>
       </div>
 

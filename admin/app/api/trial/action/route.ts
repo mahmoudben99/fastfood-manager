@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 
 export async function POST(request: NextRequest) {
-  const { machineId, action, days } = await request.json()
+  const { machineId, action, days, expiresAt } = await request.json()
 
   if (!machineId || !action) {
     return NextResponse.json({ error: 'Missing params' }, { status: 400 })
@@ -67,6 +67,38 @@ export async function POST(request: NextRequest) {
       updateData = {
         status: 'active',
         expires_at: newExpiry.toISOString(),
+        paused_remaining_ms: null,
+        updated_at: new Date().toISOString()
+      }
+      break
+    }
+    case 'reduce': {
+      if (!days || days < 1) return NextResponse.json({ error: 'Invalid days' }, { status: 400 })
+      const reduceMs = days * 24 * 60 * 60 * 1000
+      if (trial.status === 'paused') {
+        const remaining = (trial.paused_remaining_ms || 0) - reduceMs
+        if (remaining <= 0) {
+          updateData = { status: 'expired', expires_at: new Date().toISOString(), paused_remaining_ms: 0, updated_at: new Date().toISOString() }
+        } else {
+          updateData = { paused_remaining_ms: remaining, updated_at: new Date().toISOString() }
+        }
+      } else {
+        const newExpiry = new Date(trial.expires_at).getTime() - reduceMs
+        if (newExpiry <= Date.now()) {
+          updateData = { status: 'expired', expires_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+        } else {
+          updateData = { expires_at: new Date(newExpiry).toISOString(), updated_at: new Date().toISOString() }
+        }
+      }
+      break
+    }
+    case 'setExpiry': {
+      if (!expiresAt) return NextResponse.json({ error: 'Missing expiresAt' }, { status: 400 })
+      const newDate = new Date(expiresAt)
+      if (isNaN(newDate.getTime())) return NextResponse.json({ error: 'Invalid date' }, { status: 400 })
+      updateData = {
+        expires_at: newDate.toISOString(),
+        status: newDate.getTime() > Date.now() ? 'active' : 'expired',
         paused_remaining_ms: null,
         updated_at: new Date().toISOString()
       }

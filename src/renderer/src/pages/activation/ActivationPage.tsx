@@ -67,6 +67,8 @@ export function ActivationPage() {
         setActivationType('trial')
         setTrialStatus('active')
         if (result.expiresAt) setTrialExpiresAt(new Date(result.expiresAt))
+        // Start the trial watcher if not already running (e.g. after factory reset in same session)
+        window.api.trial.ensureWatcher()
         navigate('/setup')
       } else if (result.error === 'trial_expired') {
         setTrialError('Your free trial has expired. Please purchase a license to continue.')

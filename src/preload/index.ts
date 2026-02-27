@@ -181,6 +181,7 @@ const api = {
     start: () => ipcRenderer.invoke('trial:start'),
     check: () => ipcRenderer.invoke('trial:check'),
     getLocalStatus: () => ipcRenderer.invoke('trial:getLocalStatus'),
+    ensureWatcher: () => ipcRenderer.invoke('trial:ensureWatcher'),
     onLocked: (cb: (reason: string) => void) => {
       const handler = (_: any, reason: string) => cb(reason)
       ipcRenderer.on('trial:locked', handler)
@@ -208,6 +209,9 @@ const api = {
     validateCloud: (code: string) => ipcRenderer.invoke('reset:validateCloud', code),
     resetPassword: (code: string, newPassword: string, method: 'telegram' | 'support') =>
       ipcRenderer.invoke('reset:resetPassword', code, newPassword, method)
+  },
+  installation: {
+    sync: () => ipcRenderer.invoke('installation:sync')
   },
   tablet: {
     start: () => ipcRenderer.invoke('tablet:start'),

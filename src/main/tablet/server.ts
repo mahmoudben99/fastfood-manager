@@ -65,11 +65,16 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
 
   // Serve main tablet UI
   if (method === 'GET' && url.pathname === '/') {
-    const lang = settingsRepo.get('language') ?? 'fr'
+    const lang = settingsRepo.get('language') ?? 'en'
     const pinEnabled = settingsRepo.get('tablet_pin_enabled') === '1'
     const pinVersion = settingsRepo.get('tablet_pin_version') ?? '1'
     const html = getTabletHTML(lang, pinEnabled, pinVersion)
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+    res.writeHead(200, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    })
     res.end(html)
     return
   }
