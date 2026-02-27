@@ -20,7 +20,7 @@ export default function LoginPage() {
         body: JSON.stringify({ password })
       })
       if (res.ok) {
-        router.push('/users')
+        router.push('/admin/users')
         router.refresh()
       } else {
         const data = await res.json()
