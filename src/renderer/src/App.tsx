@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAppStore } from './store/appStore'
 import { ActivationPage } from './pages/activation/ActivationPage'
+import { TrialLockedPage } from './pages/activation/TrialLockedPage'
 import { SetupWizard } from './pages/setup/SetupWizard'
 import { OrderScreen } from './pages/orders/OrderScreen'
 import { AdminLayout } from './components/layout/AdminLayout'
@@ -17,11 +18,54 @@ import { UpdateToast } from './components/ui/UpdateToast'
 
 export default function App() {
   const [loading, setLoading] = useState(true)
-  const { activated, setupComplete, loadSettings } = useAppStore()
+  const [lockedReason, setLockedReason] = useState<string | null>(null)
+
+  const {
+    activated, setupComplete, loadSettings,
+    activationType, trialOfflineSecondsLeft,
+    setTrialStatus, setTrialOfflineSecondsLeft
+  } = useAppStore()
 
   useEffect(() => {
     loadSettings().finally(() => setLoading(false))
   }, [loadSettings])
+
+  // Listen for trial events pushed from main process
+  useEffect(() => {
+    if (!window.api.trial) return
+
+    const unsubLocked = window.api.trial.onLocked((reason) => {
+      setLockedReason(reason)
+      setTrialStatus(reason === 'offline' ? 'offline-locked' : 'expired')
+    })
+
+    const unsubCountdown = window.api.trial.onOfflineCountdown((seconds) => {
+      setTrialOfflineSecondsLeft(seconds)
+    })
+
+    const unsubCleared = window.api.trial.onOfflineCleared(() => {
+      setTrialOfflineSecondsLeft(null)
+      setLockedReason((prev) => (prev === 'offline' ? null : prev))
+    })
+
+    const unsubStatus = window.api.trial.onStatusUpdate((data) => {
+      setTrialOfflineSecondsLeft(null)
+      if (data.status === 'active') {
+        setTrialStatus('active')
+        setLockedReason((prev) => (prev === 'offline' ? null : prev))
+      } else if (data.status === 'expired' || data.status === 'paused') {
+        setLockedReason(data.status)
+        setTrialStatus(data.status as 'expired' | 'paused')
+      }
+    })
+
+    return () => {
+      unsubLocked()
+      unsubCountdown()
+      unsubCleared()
+      unsubStatus()
+    }
+  }, [setTrialStatus, setTrialOfflineSecondsLeft])
 
   if (loading) {
     return (
@@ -37,6 +81,15 @@ export default function App() {
   return (
     <HashRouter>
       <UpdateToast />
+
+      {/* Trial lock overlay — renders over everything when trial is locked */}
+      {activated && activationType === 'trial' && lockedReason && (
+        <TrialLockedPage
+          reason={lockedReason}
+          offlineSecondsLeft={trialOfflineSecondsLeft}
+        />
+      )}
+
       <Routes>
         <Route path="/activate" element={<ActivationPage />} />
         <Route path="/setup" element={<SetupWizard />} />

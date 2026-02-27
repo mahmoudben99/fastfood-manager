@@ -175,6 +175,38 @@ const api = {
     check: () => ipcRenderer.invoke('updater:check'),
     download: () => ipcRenderer.invoke('updater:download'),
     install: () => ipcRenderer.invoke('updater:install')
+  },
+  trial: {
+    start: () => ipcRenderer.invoke('trial:start'),
+    check: () => ipcRenderer.invoke('trial:check'),
+    getLocalStatus: () => ipcRenderer.invoke('trial:getLocalStatus'),
+    onLocked: (cb: (reason: string) => void) => {
+      const handler = (_: any, reason: string) => cb(reason)
+      ipcRenderer.on('trial:locked', handler)
+      return () => { ipcRenderer.removeListener('trial:locked', handler) }
+    },
+    onOfflineCountdown: (cb: (seconds: number) => void) => {
+      const handler = (_: any, seconds: number) => cb(seconds)
+      ipcRenderer.on('trial:offline-countdown', handler)
+      return () => { ipcRenderer.removeListener('trial:offline-countdown', handler) }
+    },
+    onOfflineCleared: (cb: () => void) => {
+      const handler = () => cb()
+      ipcRenderer.on('trial:offline-cleared', handler)
+      return () => { ipcRenderer.removeListener('trial:offline-cleared', handler) }
+    },
+    onStatusUpdate: (cb: (data: { status: string; expiresAt?: string }) => void) => {
+      const handler = (_: any, data: any) => cb(data)
+      ipcRenderer.on('trial:status-update', handler)
+      return () => { ipcRenderer.removeListener('trial:status-update', handler) }
+    }
+  },
+  reset: {
+    sendViaTelegram: () => ipcRenderer.invoke('reset:telegram'),
+    validateTelegram: (code: string) => ipcRenderer.invoke('reset:validateTelegram', code),
+    validateCloud: (code: string) => ipcRenderer.invoke('reset:validateCloud', code),
+    resetPassword: (code: string, newPassword: string, method: 'telegram' | 'support') =>
+      ipcRenderer.invoke('reset:resetPassword', code, newPassword, method)
   }
 }
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check, Printer, AlertCircle, RefreshCw, LogOut, Upload, Image } from 'lucide-react'
+import { Check, Printer, AlertCircle, RefreshCw, LogOut, Upload, Image, ShieldCheck, ShieldX, Clock, Copy } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '../../store/appStore'
 import { Button } from '../../components/ui/Button'
@@ -25,7 +25,7 @@ const currencies = [
 export function SettingsPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { setLanguage, setSetupComplete, setActivated, loadSettings, inputMode } = useAppStore()
+  const { setLanguage, setSetupComplete, setActivated, loadSettings, inputMode, activationType, trialStatus, trialExpiresAt } = useAppStore()
   const isTouch = inputMode === 'touchscreen'
   const [tab, setTab] = useState<'general' | 'schedule' | 'printer' | 'telegram' | 'security'>('general')
   const [saved, setSaved] = useState(false)
@@ -75,6 +75,10 @@ export function SettingsPage() {
   const [logoutPassword, setLogoutPassword] = useState('')
   const [logoutError, setLogoutError] = useState('')
   const [loggingOut, setLoggingOut] = useState(false)
+
+  // License
+  const [licMachineId, setLicMachineId] = useState('')
+  const [licCopied, setLicCopied] = useState(false)
 
   // Virtual keyboard
   const [keyboardTarget, setKeyboardTarget] = useState<{ field: string; type: 'numeric' | 'text' } | null>(null)
@@ -162,6 +166,10 @@ export function SettingsPage() {
     // Load auto-launch setting
     const autoLaunchEnabled = await window.api.settings.getAutoLaunch()
     setAutoLaunch(autoLaunchEnabled)
+
+    // Load machine ID for license display
+    const mid = await window.api.activation.getMachineId()
+    setLicMachineId(mid)
   }
 
   const saveGeneral = async () => {
@@ -317,6 +325,23 @@ export function SettingsPage() {
     const curr = currencies.find((c) => c.value === value)
     setCurrency(value)
     setCurrencySymbol(curr?.symbol || value)
+  }
+
+  const getTrialTimeLeft = (): string => {
+    if (!trialExpiresAt) return ''
+    const msLeft = trialExpiresAt.getTime() - Date.now()
+    if (msLeft <= 0) return 'Expired'
+    const days = Math.floor(msLeft / (1000 * 60 * 60 * 24))
+    const hours = Math.floor((msLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+    if (days > 0) return `${days}d ${hours}h remaining`
+    const mins = Math.floor((msLeft % (1000 * 60 * 60)) / (1000 * 60))
+    return `${hours}h ${mins}m remaining`
+  }
+
+  const handleCopyLicMachineId = () => {
+    navigator.clipboard.writeText(licMachineId)
+    setLicCopied(true)
+    setTimeout(() => setLicCopied(false), 2000)
   }
 
   const tabs = [
@@ -508,6 +533,54 @@ export function SettingsPage() {
                   <AlertCircle className="h-3.5 w-3.5" />
                   {t('update.availableTitle')}
                 </p>
+              )}
+            </div>
+
+            {/* License Status */}
+            <div className="pt-4 mt-4 border-t border-gray-200">
+              <h4 className="text-sm font-medium text-gray-900 mb-3">License</h4>
+
+              {activationType === 'full' && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-green-50 rounded-lg border border-green-200">
+                  <ShieldCheck className="h-5 w-5 text-green-600 shrink-0" />
+                  <span className="text-sm font-medium text-green-700">Full License — Activated</span>
+                </div>
+              )}
+
+              {activationType === 'trial' && (trialStatus === 'active' || trialStatus === 'offline-locked') && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-orange-50 rounded-lg border border-orange-200">
+                  <Clock className="h-5 w-5 text-orange-500 shrink-0" />
+                  <span className="text-sm font-medium text-orange-700">
+                    Free Trial — {getTrialTimeLeft()}
+                  </span>
+                </div>
+              )}
+
+              {activationType === 'trial' && (trialStatus === 'expired' || trialStatus === 'paused') && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-red-50 rounded-lg border border-red-200">
+                  <ShieldX className="h-5 w-5 text-red-500 shrink-0" />
+                  <span className="text-sm font-medium text-red-700">
+                    {trialStatus === 'paused' ? 'Trial Paused' : 'Trial Expired'}
+                  </span>
+                </div>
+              )}
+
+              {licMachineId && (
+                <div className="mt-3">
+                  <p className="text-xs text-gray-500 mb-1">Machine ID</p>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 font-mono text-xs bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 select-all text-gray-700 truncate">
+                      {licMachineId}
+                    </div>
+                    <button
+                      onClick={handleCopyLicMachineId}
+                      className="shrink-0 p-2 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
+                      title="Copy machine ID"
+                    >
+                      {licCopied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4 text-gray-500" />}
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           </div>

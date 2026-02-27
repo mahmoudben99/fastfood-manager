@@ -8,6 +8,8 @@ import { startBot, stopBot } from './telegram/bot'
 import { settingsRepo } from './database/repositories/settings.repo'
 import { startBackupSystem, stopBackupSystem } from './database/backup'
 import { createSplashWindow, closeSplashWindow } from './splash'
+import { getMachineId } from './activation/activation'
+import { registerInstallation, checkTrialStatus } from './activation/cloud'
 
 // Enhanced logging function
 function log(message: string, isError = false): void {
@@ -88,7 +90,79 @@ function registerImageProtocol(): void {
   })
 }
 
-// Auto-updater setup
+// ─── Trial watcher ────────────────────────────────────────────────────────────
+// Checks Supabase for trial status on startup and every 15 minutes.
+// If offline, starts a 5-minute countdown then locks the app.
+
+let trialCheckInterval: ReturnType<typeof setInterval> | null = null
+let offlineCountdownInterval: ReturnType<typeof setInterval> | null = null
+let offlineSecondsLeft = 0
+
+function clearOfflineCountdown(): void {
+  if (offlineCountdownInterval) {
+    clearInterval(offlineCountdownInterval)
+    offlineCountdownInterval = null
+  }
+  offlineSecondsLeft = 0
+  mainWindow?.webContents.send('trial:offline-cleared')
+}
+
+async function checkTrialOnline(): Promise<void> {
+  const activationType = settingsRepo.get('activation_type')
+  if (activationType !== 'trial') return // full license or not set — skip
+
+  try {
+    const machineId = getMachineId()
+    const result = await checkTrialStatus(machineId)
+
+    // Clear any offline countdown since we got a response
+    clearOfflineCountdown()
+
+    if (result.status === 'active' && result.expiresAt) {
+      // Update local cache with latest expiry
+      settingsRepo.set('trial_expires_at', result.expiresAt)
+      mainWindow?.webContents.send('trial:status-update', {
+        status: 'active',
+        expiresAt: result.expiresAt
+      })
+    } else if (result.status === 'expired' || result.status === 'paused') {
+      mainWindow?.webContents.send('trial:locked', result.status)
+    }
+    // 'not_found' is treated as ok — might be a fresh install that hasn't synced yet
+  } catch {
+    // Network error — start or continue offline countdown
+    if (!offlineCountdownInterval) {
+      offlineSecondsLeft = 5 * 60 // 5 minutes
+      log('Trial: offline, starting 5-minute countdown')
+      mainWindow?.webContents.send('trial:offline-countdown', offlineSecondsLeft)
+
+      offlineCountdownInterval = setInterval(() => {
+        offlineSecondsLeft -= 1
+        mainWindow?.webContents.send('trial:offline-countdown', offlineSecondsLeft)
+
+        if (offlineSecondsLeft <= 0) {
+          clearInterval(offlineCountdownInterval!)
+          offlineCountdownInterval = null
+          log('Trial: offline for 5 minutes — locking app')
+          mainWindow?.webContents.send('trial:locked', 'offline')
+        }
+      }, 1000)
+    }
+    // If countdown already running, just let it continue
+  }
+}
+
+function setupTrialWatcher(): void {
+  // Initial check right after app loads (wait 3s for window to be ready)
+  setTimeout(() => { checkTrialOnline().catch(() => {}) }, 3000)
+
+  // Recheck every 15 minutes
+  trialCheckInterval = setInterval(() => {
+    checkTrialOnline().catch(() => {})
+  }, 15 * 60 * 1000)
+}
+
+// ─── Auto-updater setup ───────────────────────────────────────────────────────
 function setupAutoUpdater(): void {
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = false // Must be false — setting to true causes a race condition
@@ -225,6 +299,18 @@ app.whenReady().then(() => {
       startBot()
     }
 
+    // Register this installation in the cloud and start trial watcher if needed
+    const machineId = getMachineId()
+    const restaurantName = settingsRepo.get('restaurant_name') || undefined
+    const phone = settingsRepo.get('restaurant_phone') || undefined
+    registerInstallation(machineId, restaurantName, phone, app.getVersion()).catch(() => {})
+
+    const activationType = settingsRepo.get('activation_type')
+    if (activationType === 'trial') {
+      log('Trial mode detected — starting trial watcher')
+      setupTrialWatcher()
+    }
+
     log('Initialization complete')
   } catch (err) {
     const error = err as Error
@@ -239,6 +325,8 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   log('App closing - cleaning up')
+  if (trialCheckInterval) clearInterval(trialCheckInterval)
+  if (offlineCountdownInterval) clearInterval(offlineCountdownInterval)
   stopBot()
   stopBackupSystem()
   closeDatabase()

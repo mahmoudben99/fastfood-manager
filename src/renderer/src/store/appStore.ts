@@ -12,6 +12,12 @@ interface AppState {
   darkMode: boolean
   inputMode: string
 
+  // Trial / license state
+  activationType: 'full' | 'trial' | null
+  trialStatus: 'active' | 'expired' | 'paused' | 'offline-locked' | null
+  trialExpiresAt: Date | null
+  trialOfflineSecondsLeft: number | null
+
   setLanguage: (lang: string) => void
   setFoodLanguage: (lang: string) => void
   setCurrency: (currency: string, symbol: string) => void
@@ -20,6 +26,10 @@ interface AppState {
   setSetupComplete: (complete: boolean) => void
   toggleDarkMode: () => void
   setInputMode: (mode: string) => void
+  setActivationType: (type: 'full' | 'trial' | null) => void
+  setTrialStatus: (status: 'active' | 'expired' | 'paused' | 'offline-locked' | null) => void
+  setTrialExpiresAt: (date: Date | null) => void
+  setTrialOfflineSecondsLeft: (seconds: number | null) => void
   loadSettings: () => Promise<void>
 }
 
@@ -33,6 +43,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   setupComplete: false,
   darkMode: false,
   inputMode: 'keyboard',
+
+  activationType: null,
+  trialStatus: null,
+  trialExpiresAt: null,
+  trialOfflineSecondsLeft: null,
 
   setLanguage: (lang) => {
     i18n.changeLanguage(lang)
@@ -57,6 +72,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     window.api.settings.set('input_mode', mode).catch(() => {})
   },
 
+  setActivationType: (type) => set({ activationType: type }),
+
+  setTrialStatus: (status) => set({ trialStatus: status }),
+
+  setTrialExpiresAt: (date) => set({ trialExpiresAt: date }),
+
+  setTrialOfflineSecondsLeft: (seconds) => set({ trialOfflineSecondsLeft: seconds }),
+
   toggleDarkMode: () => {
     const newMode = !get().darkMode
     set({ darkMode: newMode })
@@ -73,6 +96,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       const darkMode = settings.dark_mode === 'true'
       document.documentElement.classList.toggle('dark', darkMode)
 
+      const activationType = (settings.activation_type as 'full' | 'trial' | null) || null
+      const trialExpiresAt = settings.trial_expires_at ? new Date(settings.trial_expires_at) : null
+
       set({
         language: lang,
         foodLanguage: settings.food_language || lang,
@@ -82,7 +108,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         activated: settings.activation_status === 'activated',
         setupComplete: settings.setup_complete === 'true',
         darkMode,
-        inputMode: settings.input_mode || 'keyboard'
+        inputMode: settings.input_mode || 'keyboard',
+        activationType,
+        trialExpiresAt,
+        trialStatus: activationType === 'trial' ? 'active' : null
       })
     } catch (err) {
       console.error('Failed to load settings:', err)

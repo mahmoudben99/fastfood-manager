@@ -63,6 +63,25 @@ export function isBotRunning(): boolean {
   return isRunning
 }
 
+/** Send any message to the configured Telegram chat. Works even if bot is not started. */
+export async function sendMessageToChat(message: string): Promise<boolean> {
+  const token = settingsRepo.get('telegram_bot_token')
+  const chatId = settingsRepo.get('telegram_chat_id')
+  if (!token || !chatId) return false
+  try {
+    const url = `https://api.telegram.org/bot${token}/sendMessage`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text: message, parse_mode: 'Markdown' })
+    })
+    const data = await res.json() as { ok: boolean }
+    return data.ok === true
+  } catch {
+    return false
+  }
+}
+
 export function sendOrderNotification(order: any): void {
   if (!bot || !isRunning) return
   const notifySetting = settingsRepo.get('telegram_order_notifications')

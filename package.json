@@ -1,6 +1,6 @@
 {
   "name": "fastfood-manager",
-  "version": "1.4.5",
+  "version": "1.4.6",
   "description": "Fast Food Restaurant Management System",
   "main": "./out/main/index.js",
   "scripts": {
@@ -30,6 +30,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.98.0",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.6.2",
     "date-fns": "^4.1.0",

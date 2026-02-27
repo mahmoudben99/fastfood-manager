@@ -1,0 +1,56 @@
+import { ipcMain } from 'electron'
+import { getMachineId } from '../activation/activation'
+import { settingsRepo } from '../database/repositories/settings.repo'
+import {
+  startTrial,
+  checkTrialStatus,
+  validateCloudResetCode
+} from '../activation/cloud'
+
+export function registerTrialHandlers(): void {
+  /** Start a 7-day free trial. Stores activation_type='trial' locally on success. */
+  ipcMain.handle('trial:start', async () => {
+    const machineId = getMachineId()
+    const result = await startTrial(machineId)
+
+    if (result.success && result.expiresAt) {
+      settingsRepo.set('activation_status', 'activated')
+      settingsRepo.set('activation_type', 'trial')
+      settingsRepo.set('trial_expires_at', result.expiresAt)
+      settingsRepo.set('machine_id', machineId)
+      return { success: true, expiresAt: result.expiresAt }
+    }
+
+    // Already has a trial — allow them in using existing trial dates
+    if (result.error === 'trial_exists' && result.expiresAt) {
+      settingsRepo.set('activation_status', 'activated')
+      settingsRepo.set('activation_type', 'trial')
+      settingsRepo.set('trial_expires_at', result.expiresAt)
+      settingsRepo.set('machine_id', machineId)
+      return { success: true, expiresAt: result.expiresAt, alreadyStarted: true }
+    }
+
+    return { success: false, error: result.error || 'Could not start trial. Check your internet connection.' }
+  })
+
+  /** Check trial status from the cloud. Used by the trial watcher. */
+  ipcMain.handle('trial:check', async () => {
+    const machineId = getMachineId()
+    return await checkTrialStatus(machineId)
+  })
+
+  /** Get trial status from local DB only (fast, no network). */
+  ipcMain.handle('trial:getLocalStatus', () => {
+    return {
+      activationType: settingsRepo.get('activation_type') || null,
+      trialExpiresAt: settingsRepo.get('trial_expires_at') || null,
+      activationStatus: settingsRepo.get('activation_status') || null
+    }
+  })
+
+  /** Validate a cloud-generated reset code (from admin dashboard). */
+  ipcMain.handle('reset:validateCloud', async (_, code: string) => {
+    const machineId = getMachineId()
+    return await validateCloudResetCode(machineId, code)
+  })
+}
