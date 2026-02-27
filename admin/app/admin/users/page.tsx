@@ -86,7 +86,8 @@ export default async function UsersPage({
     supabase.from('trials').select('machine_id, status, expires_at')
   ])
 
-  const trialsMap = new Map((trialsData || []).map((t) => [t.machine_id, t]))
+  type TrialRow = { machine_id: string; status: string; expires_at: string | null }
+  const trialsMap = new Map((trialsData || []).map((t: TrialRow) => [t.machine_id, t]))
 
   const users: Installation[] = (instData || []).map((inst) => ({
     ...inst,
