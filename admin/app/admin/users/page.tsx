@@ -87,9 +87,10 @@ export default async function UsersPage({
   ])
 
   type TrialRow = { machine_id: string; status: string; expires_at: string | null }
+  type InstRow = { machine_id: string; restaurant_name: string | null; phone: string | null; app_version: string | null; created_at: string; updated_at: string }
   const trialsMap = new Map((trialsData || []).map((t: TrialRow) => [t.machine_id, t]))
 
-  const users: Installation[] = (instData || []).map((inst) => ({
+  const users: Installation[] = (instData || []).map((inst: InstRow) => ({
     ...inst,
     trials: trialsMap.get(inst.machine_id) || null
   }))
