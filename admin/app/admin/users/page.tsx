@@ -79,7 +79,7 @@ export default async function UsersPage({
     query = query.or(`restaurant_name.ilike.%${search}%,machine_id.ilike.%${search}%,phone.ilike.%${search}%`)
   }
 
-  const { data } = await query
+  const { data, error: queryError } = await query
   const users = (data || []) as unknown as Installation[]
   const fetchedAt = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 
@@ -92,6 +92,12 @@ export default async function UsersPage({
           <p className="text-xs text-gray-400">fetched at {fetchedAt} (server time)</p>
         </div>
       </div>
+
+      {queryError && (
+        <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-4 font-mono text-xs text-red-700 break-all">
+          <strong>Supabase error:</strong> {queryError.message} (code: {queryError.code})
+        </div>
+      )}
 
       <form className="mb-4">
         <input
