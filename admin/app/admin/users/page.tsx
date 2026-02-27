@@ -69,22 +69,30 @@ export default async function UsersPage({
     )
   }
 
-  let query = supabase
+  // Fetch installations and trials as separate queries — avoids PostgREST
+  // schema-cache issues with embedded FK joins returning 0 rows silently.
+  let instQuery = supabase
     .from('installations')
-    .select('machine_id, restaurant_name, phone, app_version, created_at, updated_at, trials(status, expires_at)')
+    .select('machine_id, restaurant_name, phone, app_version, created_at, updated_at')
     .order('updated_at', { ascending: false })
     .limit(200)
 
   if (search) {
-    query = query.or(`restaurant_name.ilike.%${search}%,machine_id.ilike.%${search}%,phone.ilike.%${search}%`)
+    instQuery = instQuery.or(`restaurant_name.ilike.%${search}%,machine_id.ilike.%${search}%,phone.ilike.%${search}%`)
   }
 
-  const { count: rawCount } = await supabase
-    .from('installations')
-    .select('*', { count: 'exact', head: true })
+  const [{ data: instData }, { data: trialsData }] = await Promise.all([
+    instQuery,
+    supabase.from('trials').select('machine_id, status, expires_at')
+  ])
 
-  const { data, error: queryError } = await query
-  const users = (data || []) as unknown as Installation[]
+  const trialsMap = new Map((trialsData || []).map((t) => [t.machine_id, t]))
+
+  const users: Installation[] = (instData || []).map((inst) => ({
+    ...inst,
+    trials: trialsMap.get(inst.machine_id) || null
+  }))
+
   const fetchedAt = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 
   return (
@@ -96,18 +104,6 @@ export default async function UsersPage({
           <p className="text-xs text-gray-400">fetched at {fetchedAt} (server time)</p>
         </div>
       </div>
-
-      <div className="mb-4 bg-gray-100 rounded-lg px-3 py-2 font-mono text-xs text-gray-500 space-y-1">
-        <div>Supabase URL: {process.env.SUPABASE_URL || '(not set)'}</div>
-        <div>Raw count (no join): {rawCount ?? 'null'}</div>
-        <div>With-join result: {users.length} rows</div>
-      </div>
-
-      {queryError && (
-        <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-4 font-mono text-xs text-red-700 break-all">
-          <strong>Supabase error:</strong> {queryError.message} (code: {queryError.code})
-        </div>
-      )}
 
       <form className="mb-4">
         <input
