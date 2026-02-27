@@ -1,11 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 
-// ─── FILL IN YOUR SUPABASE CREDENTIALS ───────────────────────────────────────
-// These are the "Project URL" and "anon/public" key from Supabase → Settings → API.
-// The anon key is safe to be in the source — RLS policies enforce data security.
-const SUPABASE_URL = 'REPLACE_WITH_SUPABASE_URL'
-const SUPABASE_ANON_KEY = 'REPLACE_WITH_SUPABASE_ANON_KEY'
-// ─────────────────────────────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://ijdiiixkemrmkhhkbcng.supabase.co'
+const SUPABASE_ANON_KEY = 'sb_publishable_xmW71xs0XzNYbTEwnmbLCA_ZmphJkIV'
 
 const TRIAL_DAYS = 7
 

@@ -1,6 +1,6 @@
 # Fast Food Manager - Development Log
 
-**Current Version:** 1.4.6
+**Current Version:** 1.4.7
 **Last Updated:** 2026-02-27
 **Repository:** https://github.com/mahmoudben99/fastfood-manager
 
@@ -38,6 +38,10 @@ src/
 ---
 
 ## Recent Changes
+n### v1.4.7 (2026-02-27) - Connect Supabase credentials
+- Filled in Supabase URL + anon key in cloud.ts — trial system now fully operational
+- Updated admin/.env.example with project URL and service_role key
+
 
 ### v1.4.6 (2026-02-27) - Free Trial System + Admin Dashboard + Password Reset
 **New Features:**
