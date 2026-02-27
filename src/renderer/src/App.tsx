@@ -19,6 +19,7 @@ import { UpdateToast } from './components/ui/UpdateToast'
 export default function App() {
   const [loading, setLoading] = useState(true)
   const [lockedReason, setLockedReason] = useState<string | null>(null)
+  const [tabletToast, setTabletToast] = useState<string | null>(null)
 
   const {
     activated, setupComplete, loadSettings,
@@ -67,6 +68,16 @@ export default function App() {
     }
   }, [setTrialStatus, setTrialOfflineSecondsLeft])
 
+  // Listen for orders placed from the tablet
+  useEffect(() => {
+    if (!window.api.tablet) return
+    const unsub = window.api.tablet.onNewOrder((order) => {
+      setTabletToast(`🍽 Commande #${order.daily_number} reçue via tablette`)
+      setTimeout(() => setTabletToast(null), 5000)
+    })
+    return unsub
+  }, [])
+
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-gray-50">
@@ -81,6 +92,13 @@ export default function App() {
   return (
     <HashRouter>
       <UpdateToast />
+
+      {/* Tablet new-order toast */}
+      {tabletToast && (
+        <div className="fixed top-4 right-4 z-[999] bg-orange-500 text-white px-4 py-3 rounded-xl shadow-lg text-sm font-semibold animate-bounce">
+          {tabletToast}
+        </div>
+      )}
 
       {/* Trial lock overlay — renders over everything when trial is locked */}
       {activated && activationType === 'trial' && lockedReason && (

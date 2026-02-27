@@ -1,6 +1,6 @@
 {
   "name": "fastfood-manager",
-  "version": "1.4.7",
+  "version": "1.5.0",
   "description": "Fast Food Restaurant Management System",
   "main": "./out/main/index.js",
   "scripts": {
@@ -17,6 +17,7 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.18",
     "@types/bcryptjs": "^2.4.6",
+    "@types/qrcode": "^1.5.5",
     "@types/better-sqlite3": "^7.6.13",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
@@ -32,6 +33,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.98.0",
     "bcryptjs": "^3.0.3",
+    "qrcode": "^1.5.4",
     "better-sqlite3": "^12.6.2",
     "date-fns": "^4.1.0",
     "electron-updater": "^6.7.3",

@@ -207,6 +207,19 @@ const api = {
     validateCloud: (code: string) => ipcRenderer.invoke('reset:validateCloud', code),
     resetPassword: (code: string, newPassword: string, method: 'telegram' | 'support') =>
       ipcRenderer.invoke('reset:resetPassword', code, newPassword, method)
+  },
+  tablet: {
+    start: () => ipcRenderer.invoke('tablet:start'),
+    stop: () => ipcRenderer.invoke('tablet:stop'),
+    status: () => ipcRenderer.invoke('tablet:status'),
+    setPin: (pin: string) => ipcRenderer.invoke('tablet:setPin', pin),
+    setPinEnabled: (enabled: boolean) => ipcRenderer.invoke('tablet:setPinEnabled', enabled),
+    setAutoStart: (enabled: boolean) => ipcRenderer.invoke('tablet:setAutoStart', enabled),
+    onNewOrder: (cb: (order: any) => void) => {
+      const handler = (_: any, order: any) => cb(order)
+      ipcRenderer.on('tablet:new-order', handler)
+      return () => { ipcRenderer.removeListener('tablet:new-order', handler) }
+    }
   }
 }
 

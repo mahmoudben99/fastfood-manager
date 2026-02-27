@@ -1,6 +1,6 @@
 # Fast Food Manager - Development Log
 
-**Current Version:** 1.4.7
+**Current Version:** 1.5.0
 **Last Updated:** 2026-02-27
 **Repository:** https://github.com/mahmoudben99/fastfood-manager
 
@@ -38,7 +38,41 @@ src/
 ---
 
 ## Recent Changes
-n### v1.4.7 (2026-02-27) - Connect Supabase credentials
+
+### v1.5.0 (2026-02-27) - Waiter Tablet Mode + Auto-Update Fix
+**New Features:**
+- **Tablet/Phone Ordering**: Electron main process now runs a local HTTP server (port 3333). Any phone or tablet on the same WiFi can open the URL or scan a QR code to access a mobile-first order page.
+  - Self-contained HTML/CSS/JS page served from Electron main (no build step on the tablet)
+  - Menu shown by category, 2-col phone / 3-4 col tablet grid, item images/emojis
+  - Cart with +/- controls, order type selector (Local / À emporter / Livraison), table# / phone# field, notes
+  - Confirmation screen with order number after submission
+  - Language follows app language (Arabic/French/English)
+  - Orders go through same `ordersRepo.create()` path → stock deducted, Telegram notified, auto-print triggered
+  - Main app shows toast notification when tablet order arrives
+- **Optional 4-digit PIN**: Devices enter PIN once; stored in localStorage. Changing PIN increments a version counter invalidating all sessions.
+- **Settings → Tablet tab**: Start/Stop server button, QR code display, URL + copy button, auto-start toggle, PIN enable/change.
+
+**Bug Fixes:**
+- **Auto-update race condition** (v1.4.7 downloads but doesn't install): `win.destroy()` was triggering `window-all-closed` → `app.quit()` before the 800ms `setTimeout(() => quitAndInstall())` could fire. Fixed by adding `isInstallingUpdate` flag that skips `app.quit()` in `window-all-closed` when an update install is in progress.
+- Admin dashboard: fixed login redirect (`/users` → `/admin/users`)
+- Admin dashboard: mobile-responsive sidebar with hamburger drawer
+
+**Files Added:**
+- `src/main/tablet/server.ts` — HTTP server with menu API + order submission + PIN auth
+- `src/main/tablet/tablet-ui.ts` — Self-contained HTML for the tablet UI
+- `src/main/ipc/tablet.ipc.ts` — IPC handlers for tablet server control
+
+**Files Modified:**
+- `src/main/index.ts` — auto-start tablet server on launch, auto-update race fix
+- `src/main/ipc/tablet.ipc.ts` — registered via `registerTabletHandlers()`
+- `src/preload/index.ts` — exposed `window.api.tablet.*`
+- `src/renderer/src/pages/settings/SettingsPage.tsx` — new Tablet tab
+- `src/renderer/src/App.tsx` — tablet:new-order toast listener
+- `package.json` — added `qrcode` dependency
+
+---
+
+### v1.4.7 (2026-02-27) - Connect Supabase credentials
 - Filled in Supabase URL + anon key in cloud.ts — trial system now fully operational
 - Updated admin/.env.example with project URL and service_role key
 

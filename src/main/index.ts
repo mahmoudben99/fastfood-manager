@@ -10,6 +10,8 @@ import { startBackupSystem, stopBackupSystem } from './database/backup'
 import { createSplashWindow, closeSplashWindow } from './splash'
 import { getMachineId } from './activation/activation'
 import { registerInstallation, checkTrialStatus } from './activation/cloud'
+import { registerTabletHandlers } from './ipc/tablet.ipc'
+import { startTabletServer } from './tablet/server'
 
 // Enhanced logging function
 function log(message: string, isError = false): void {
@@ -96,6 +98,7 @@ function registerImageProtocol(): void {
 
 let trialCheckInterval: ReturnType<typeof setInterval> | null = null
 let offlineCountdownInterval: ReturnType<typeof setInterval> | null = null
+let isInstallingUpdate = false
 let offlineSecondsLeft = 0
 
 function clearOfflineCountdown(): void {
@@ -203,13 +206,19 @@ function setupAutoUpdater(): void {
   })
 
   ipcMain.handle('updater:install', () => {
-    // Destroy all windows first to release file locks on app.asar before the NSIS installer runs.
-    // Using destroy() instead of close() avoids triggering the window-all-closed → app.quit() chain.
+    // Set flag so window-all-closed doesn't call app.quit() and kill us before quitAndInstall runs.
+    isInstallingUpdate = true
+    // Destroy all windows to release file locks on app.asar before the NSIS installer runs.
     BrowserWindow.getAllWindows().forEach((win) => {
       if (!win.isDestroyed()) win.destroy()
     })
+    // Manual cleanup (window-all-closed is skipped when isInstallingUpdate = true).
+    if (trialCheckInterval) clearInterval(trialCheckInterval)
+    if (offlineCountdownInterval) clearInterval(offlineCountdownInterval)
+    stopBot()
+    stopBackupSystem()
+    closeDatabase()
     // Give child processes (GPU, renderer) 800ms to fully terminate, then install.
-    // This prevents NSIS from encountering locked files and silently failing.
     setTimeout(() => {
       autoUpdater.quitAndInstall(true, true)
     }, 800)
@@ -250,6 +259,7 @@ app.whenReady().then(() => {
 
     log('Registering IPC handlers')
     registerAllHandlers()
+    registerTabletHandlers(() => mainWindow)
 
     // Show splash screen first
     log('Creating splash window')
@@ -311,6 +321,14 @@ app.whenReady().then(() => {
       setupTrialWatcher()
     }
 
+    // Auto-start tablet server if enabled and app is activated
+    const tabletAutoStart = settingsRepo.get('tablet_server_auto_start')
+    const isActivated = activationType === 'full' || activationType === 'trial'
+    if (tabletAutoStart !== '0' && isActivated && mainWindow) {
+      log('Auto-starting tablet server')
+      startTabletServer(mainWindow).catch((e) => log(`Tablet server auto-start failed: ${e}`, true))
+    }
+
     log('Initialization complete')
   } catch (err) {
     const error = err as Error
@@ -324,6 +342,8 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
+  // Skip if quitAndInstall is about to run — it handles process exit itself.
+  if (isInstallingUpdate) return
   log('App closing - cleaning up')
   if (trialCheckInterval) clearInterval(trialCheckInterval)
   if (offlineCountdownInterval) clearInterval(offlineCountdownInterval)

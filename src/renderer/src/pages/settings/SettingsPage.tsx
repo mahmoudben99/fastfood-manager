@@ -27,7 +27,7 @@ export function SettingsPage() {
   const navigate = useNavigate()
   const { setLanguage, setSetupComplete, setActivated, loadSettings, inputMode, activationType, trialStatus, trialExpiresAt } = useAppStore()
   const isTouch = inputMode === 'touchscreen'
-  const [tab, setTab] = useState<'general' | 'schedule' | 'printer' | 'telegram' | 'security'>('general')
+  const [tab, setTab] = useState<'general' | 'schedule' | 'printer' | 'telegram' | 'security' | 'tablet'>('general')
   const [saved, setSaved] = useState(false)
 
   // General
@@ -82,6 +82,19 @@ export function SettingsPage() {
 
   // Virtual keyboard
   const [keyboardTarget, setKeyboardTarget] = useState<{ field: string; type: 'numeric' | 'text' } | null>(null)
+
+  // Tablet server state
+  const [tabletRunning, setTabletRunning] = useState(false)
+  const [tabletUrl, setTabletUrl] = useState('')
+  const [tabletQr, setTabletQr] = useState('')
+  const [tabletAutoStart, setTabletAutoStart] = useState(true)
+  const [tabletPinEnabled, setTabletPinEnabled] = useState(false)
+  const [tabletPinModal, setTabletPinModal] = useState(false)
+  const [newPin, setNewPin] = useState('')
+  const [confirmPin, setConfirmPin] = useState('')
+  const [pinError, setPinError] = useState('')
+  const [tabletLoading, setTabletLoading] = useState(false)
+  const [urlCopied, setUrlCopied] = useState(false)
 
   const getKeyboardValue = (): string => {
     if (!keyboardTarget) return ''
@@ -170,6 +183,14 @@ export function SettingsPage() {
     // Load machine ID for license display
     const mid = await window.api.activation.getMachineId()
     setLicMachineId(mid)
+
+    // Load tablet server status
+    const tabletStatus = await window.api.tablet.status()
+    setTabletRunning(tabletStatus.running)
+    setTabletUrl(tabletStatus.url || '')
+    setTabletQr(tabletStatus.qrDataUrl || '')
+    setTabletAutoStart(settings.tablet_server_auto_start !== '0')
+    setTabletPinEnabled(settings.tablet_pin_enabled === '1')
   }
 
   const saveGeneral = async () => {
@@ -344,12 +365,61 @@ export function SettingsPage() {
     setTimeout(() => setLicCopied(false), 2000)
   }
 
+  const handleTabletToggle = async () => {
+    setTabletLoading(true)
+    if (tabletRunning) {
+      await window.api.tablet.stop()
+      setTabletRunning(false)
+      setTabletUrl('')
+      setTabletQr('')
+    } else {
+      const result = await window.api.tablet.start()
+      if (result.ok) {
+        setTabletRunning(true)
+        setTabletUrl(result.url)
+        setTabletQr(result.qrDataUrl)
+      }
+    }
+    setTabletLoading(false)
+  }
+
+  const handleTabletAutoStart = async (enabled: boolean) => {
+    setTabletAutoStart(enabled)
+    await window.api.tablet.setAutoStart(enabled)
+  }
+
+  const handleTabletPinEnabled = async (enabled: boolean) => {
+    setTabletPinEnabled(enabled)
+    await window.api.tablet.setPinEnabled(enabled)
+  }
+
+  const handleSavePin = async () => {
+    if (newPin.length !== 4 || !/^\d{4}$/.test(newPin)) { setPinError('Le PIN doit être 4 chiffres.'); return }
+    if (newPin !== confirmPin) { setPinError('Les PINs ne correspondent pas.'); return }
+    const result = await window.api.tablet.setPin(newPin)
+    if (result.ok) {
+      setTabletPinModal(false)
+      setNewPin('')
+      setConfirmPin('')
+      setPinError('')
+    } else {
+      setPinError(result.error || 'Erreur')
+    }
+  }
+
+  const handleCopyUrl = () => {
+    navigator.clipboard.writeText(tabletUrl)
+    setUrlCopied(true)
+    setTimeout(() => setUrlCopied(false), 2000)
+  }
+
   const tabs = [
     { key: 'general' as const, label: t('settings.general') },
     { key: 'schedule' as const, label: t('settings.schedule') },
     { key: 'printer' as const, label: t('settings.printer') },
     { key: 'telegram' as const, label: t('settings.telegram') },
-    { key: 'security' as const, label: t('settings.security') }
+    { key: 'security' as const, label: t('settings.security') },
+    { key: 'tablet' as const, label: '📱 Tablette' }
   ]
 
   return (
@@ -835,6 +905,124 @@ export function SettingsPage() {
               </Button>
             </div>
           </div>
+        </Card>
+      )}
+
+      {tab === 'tablet' && (
+        <Card>
+          {/* Server toggle */}
+          <div className="mb-6 pb-6 border-b border-gray-200">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="font-semibold text-gray-900">Serveur de commandes tablette</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Les serveurs peuvent commander depuis leur téléphone sur le même WiFi</p>
+              </div>
+              <div className={`flex items-center gap-2 text-sm font-medium ${tabletRunning ? 'text-green-600' : 'text-gray-400'}`}>
+                <div className={`w-2.5 h-2.5 rounded-full ${tabletRunning ? 'bg-green-500' : 'bg-gray-300'}`} />
+                {tabletRunning ? 'Actif' : 'Arrêté'}
+              </div>
+            </div>
+            <Button onClick={handleTabletToggle} loading={tabletLoading} variant={tabletRunning ? 'danger' : 'primary'}>
+              {tabletRunning ? '⏹ Arrêter le serveur' : '▶ Démarrer le serveur'}
+            </Button>
+          </div>
+
+          {/* QR code + URL */}
+          {tabletRunning && tabletQr && (
+            <div className="mb-6 pb-6 border-b border-gray-200">
+              <h3 className="font-semibold mb-3">Accès tablette / téléphone</h3>
+              <div className="flex flex-col sm:flex-row gap-6 items-start">
+                <img src={tabletQr} alt="QR Code" className="w-48 h-48 rounded-lg border border-gray-200" />
+                <div className="flex-1">
+                  <p className="text-sm text-gray-500 mb-2">Scannez le QR code ou ouvrez cette adresse :</p>
+                  <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
+                    <span className="text-sm font-mono text-gray-800 flex-1 break-all">{tabletUrl}</span>
+                    <button
+                      onClick={handleCopyUrl}
+                      className="flex-shrink-0 text-orange-500 hover:text-orange-600"
+                      title="Copier le lien"
+                    >
+                      {urlCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-2">Le téléphone doit être sur le même réseau WiFi que ce PC.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Auto-start */}
+          <div className="mb-6 pb-6 border-b border-gray-200">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={tabletAutoStart}
+                onChange={(e) => handleTabletAutoStart(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+              />
+              <div>
+                <span className="text-sm font-medium text-gray-700">Démarrer automatiquement au lancement</span>
+                <p className="text-xs text-gray-400">Le serveur tablette démarre avec l'application</p>
+              </div>
+            </label>
+          </div>
+
+          {/* PIN */}
+          <div>
+            <h3 className="font-semibold mb-3">Sécurité PIN</h3>
+            <label className="flex items-center gap-3 cursor-pointer mb-4">
+              <input
+                type="checkbox"
+                checked={tabletPinEnabled}
+                onChange={(e) => handleTabletPinEnabled(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+              />
+              <div>
+                <span className="text-sm font-medium text-gray-700">Activer le PIN d'accès (4 chiffres)</span>
+                <p className="text-xs text-gray-400">Les serveurs doivent entrer ce PIN pour accéder à la page de commande</p>
+              </div>
+            </label>
+            {tabletPinEnabled && (
+              <Button onClick={() => setTabletPinModal(true)} variant="secondary">
+                🔒 Modifier le PIN
+              </Button>
+            )}
+          </div>
+
+          {/* PIN modal */}
+          {tabletPinModal && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-xl">
+                <h3 className="font-bold text-lg mb-1">Modifier le PIN tablette</h3>
+                <p className="text-xs text-orange-600 mb-4">Tous les appareils connectés seront déconnectés et devront entrer le nouveau PIN.</p>
+                <div className="space-y-3">
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={4}
+                    value={newPin}
+                    onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
+                    placeholder="Nouveau PIN (4 chiffres)"
+                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  />
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={4}
+                    value={confirmPin}
+                    onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
+                    placeholder="Confirmer le PIN"
+                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  />
+                  {pinError && <p className="text-red-500 text-xs">{pinError}</p>}
+                  <div className="flex gap-2">
+                    <Button onClick={handleSavePin} disabled={newPin.length !== 4}>Enregistrer</Button>
+                    <Button variant="secondary" onClick={() => { setTabletPinModal(false); setNewPin(''); setConfirmPin(''); setPinError('') }}>Annuler</Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </Card>
       )}
     </div>
