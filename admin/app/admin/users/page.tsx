@@ -93,6 +93,10 @@ export default async function UsersPage({
         </div>
       </div>
 
+      <div className="mb-4 bg-gray-100 rounded-lg px-3 py-2 font-mono text-xs text-gray-500">
+        Supabase URL: {process.env.SUPABASE_URL || '(not set)'}
+      </div>
+
       {queryError && (
         <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-4 font-mono text-xs text-red-700 break-all">
           <strong>Supabase error:</strong> {queryError.message} (code: {queryError.code})
