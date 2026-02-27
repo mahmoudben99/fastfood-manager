@@ -314,9 +314,8 @@ export function SettingsPage() {
         setLoggingOut(false)
         return
       }
-      // Hard reset: clear both setup and activation
-      await window.api.settings.set('setup_complete', 'false')
-      await window.api.settings.set('activation_status', '')
+      // Factory reset: backup + wipe entire database, then go to activation
+      await window.api.settings.resetAll()
       setSetupComplete(false)
       setActivated(false)
       navigate('/activation')

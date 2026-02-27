@@ -22,7 +22,8 @@ const api = {
     uploadLogo: () => ipcRenderer.invoke('settings:uploadLogo'),
     selectFolder: () => ipcRenderer.invoke('settings:selectFolder'),
     getAutoLaunch: () => ipcRenderer.invoke('settings:getAutoLaunch'),
-    setAutoLaunch: (enabled: boolean) => ipcRenderer.invoke('settings:setAutoLaunch', enabled)
+    setAutoLaunch: (enabled: boolean) => ipcRenderer.invoke('settings:setAutoLaunch', enabled),
+    resetAll: () => ipcRenderer.invoke('settings:resetAll')
   },
   categories: {
     getAll: () => ipcRenderer.invoke('categories:getAll'),

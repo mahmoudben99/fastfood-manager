@@ -159,10 +159,10 @@ function setupTrialWatcher(): void {
   // Initial check right after app loads (wait 3s for window to be ready)
   setTimeout(() => { checkTrialOnline().catch(() => {}) }, 3000)
 
-  // Recheck every 15 minutes
+  // Recheck every 2 minutes so admin pause/terminate takes effect quickly
   trialCheckInterval = setInterval(() => {
     checkTrialOnline().catch(() => {})
-  }, 15 * 60 * 1000)
+  }, 2 * 60 * 1000)
 }
 
 // ─── Auto-updater setup ───────────────────────────────────────────────────────

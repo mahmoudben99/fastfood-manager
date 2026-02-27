@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { join } from 'path'
-import { existsSync, mkdirSync } from 'fs'
+import { existsSync, mkdirSync, unlinkSync } from 'fs'
 import { runMigrations } from './migrations'
 
 let db: Database.Database | null = null
@@ -66,4 +66,16 @@ export function closeDatabase(): void {
     db.close()
     db = null
   }
+}
+
+/** Factory reset: close DB, delete file + WAL, reinitialize fresh. */
+export function resetAllData(): void {
+  const dbPath = getDbPath()
+  closeDatabase()
+  // Delete main file and WAL journal files
+  for (const suffix of ['', '-wal', '-shm']) {
+    const f = dbPath + suffix
+    if (existsSync(f)) unlinkSync(f)
+  }
+  initDatabase()
 }

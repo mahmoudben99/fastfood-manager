@@ -4,7 +4,8 @@ import { join, extname } from 'path'
 import { randomUUID } from 'crypto'
 import bcrypt from 'bcryptjs'
 import { settingsRepo } from '../database/repositories/settings.repo'
-import { getLogoPath } from '../database/connection'
+import { getLogoPath, resetAllData } from '../database/connection'
+import { performAutoBackup } from './backup.ipc'
 
 export function registerSettingsHandlers(): void {
   ipcMain.handle('settings:get', (_, key: string) => {
@@ -88,5 +89,16 @@ export function registerSettingsHandlers(): void {
       name: 'Fast Food Manager'
     })
     return true
+  })
+
+  /** Factory reset: backup → wipe entire DB → reinitialize fresh. */
+  ipcMain.handle('settings:resetAll', async () => {
+    try {
+      await performAutoBackup()
+    } catch {
+      // Backup failure should not prevent reset
+    }
+    resetAllData()
+    return { success: true }
   })
 }
