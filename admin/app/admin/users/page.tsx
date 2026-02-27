@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase'
+import { supabase, isConfigured } from '@/lib/supabase'
 import Link from 'next/link'
 
 interface Installation {
@@ -42,6 +42,30 @@ export default async function UsersPage({
 }) {
   const { q } = await searchParams
   const search = q?.trim() || ''
+
+  if (!isConfigured) {
+    return (
+      <div>
+        <h1 className="text-2xl font-bold mb-6">Users</h1>
+        <div className="bg-red-50 border border-red-200 rounded-xl p-6">
+          <h2 className="text-base font-bold text-red-700 mb-2">⚠️ Supabase not configured</h2>
+          <p className="text-sm text-red-600 mb-4">
+            The admin dashboard needs environment variables set in Vercel. Go to:
+            <strong> Vercel → Your Project → Settings → Environment Variables</strong> and add:
+          </p>
+          <ul className="text-sm font-mono text-red-800 space-y-1 bg-red-100 rounded-lg p-4">
+            <li>SUPABASE_URL</li>
+            <li>SUPABASE_SERVICE_ROLE_KEY</li>
+            <li>ADMIN_PASSWORD</li>
+            <li>SESSION_SECRET</li>
+            <li>FFM_SECRET_KEY</li>
+            <li>FFM_UNLOCK_KEY</li>
+          </ul>
+          <p className="text-xs text-red-500 mt-3">Values are in your local <code>.env.local</code> file. After adding, redeploy.</p>
+        </div>
+      </div>
+    )
+  }
 
   let query = supabase
     .from('installations')

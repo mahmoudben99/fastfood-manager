@@ -11,6 +11,30 @@ export function registerTrialHandlers(): void {
   /** Start a 7-day free trial. Stores activation_type='trial' locally on success. */
   ipcMain.handle('trial:start', async () => {
     const machineId = getMachineId()
+
+    // First, always check the cloud for any existing trial on this machine.
+    // This prevents a reset when local data is cleared (reinstall, etc.)
+    try {
+      const existing = await checkTrialStatus(machineId)
+      if (existing.status === 'active' && existing.expiresAt) {
+        // Machine already has an active trial — restore it locally without inserting
+        settingsRepo.set('activation_status', 'activated')
+        settingsRepo.set('activation_type', 'trial')
+        settingsRepo.set('trial_expires_at', existing.expiresAt)
+        settingsRepo.set('machine_id', machineId)
+        return { success: true, expiresAt: existing.expiresAt, alreadyStarted: true }
+      }
+      if (existing.status === 'expired') {
+        return { success: false, error: 'trial_expired' }
+      }
+      if (existing.status === 'paused') {
+        return { success: false, error: 'trial_paused' }
+      }
+      // status === 'not_found' → fall through to insert a new trial below
+    } catch {
+      return { success: false, error: 'Could not reach server. Check your internet connection.' }
+    }
+
     const result = await startTrial(machineId)
 
     if (result.success && result.expiresAt) {
@@ -21,7 +45,7 @@ export function registerTrialHandlers(): void {
       return { success: true, expiresAt: result.expiresAt }
     }
 
-    // Already has a trial — allow them in using existing trial dates
+    // Belt-and-suspenders: race condition where two processes insert at same time
     if (result.error === 'trial_exists' && result.expiresAt) {
       settingsRepo.set('activation_status', 'activated')
       settingsRepo.set('activation_type', 'trial')

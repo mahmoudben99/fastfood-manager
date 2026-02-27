@@ -79,6 +79,12 @@ export function SettingsPage() {
   // License
   const [licMachineId, setLicMachineId] = useState('')
   const [licCopied, setLicCopied] = useState(false)
+  const [, setTimerTick] = useState(0)
+  // Activate modal (for trial users who later purchase)
+  const [activateModal, setActivateModal] = useState(false)
+  const [activateCode, setActivateCode] = useState('')
+  const [activateError, setActivateError] = useState('')
+  const [activateLoading, setActivateLoading] = useState(false)
 
   // Virtual keyboard
   const [keyboardTarget, setKeyboardTarget] = useState<{ field: string; type: 'numeric' | 'text' } | null>(null)
@@ -129,6 +135,9 @@ export function SettingsPage() {
 
   useEffect(() => {
     loadCurrentSettings()
+    // Tick every second so the trial countdown stays live
+    const timerInterval = setInterval(() => setTimerTick((n) => n + 1), 1000)
+    return () => clearInterval(timerInterval)
   }, [])
 
   const loadCurrentSettings = async () => {
@@ -354,15 +363,42 @@ export function SettingsPage() {
     if (msLeft <= 0) return 'Expired'
     const days = Math.floor(msLeft / (1000 * 60 * 60 * 24))
     const hours = Math.floor((msLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
-    if (days > 0) return `${days}d ${hours}h remaining`
     const mins = Math.floor((msLeft % (1000 * 60 * 60)) / (1000 * 60))
-    return `${hours}h ${mins}m remaining`
+    const secs = Math.floor((msLeft % (1000 * 60)) / 1000)
+    if (days > 0) return `${days}d ${hours}h ${mins}m ${secs}s remaining`
+    if (hours > 0) return `${hours}h ${mins}m ${secs}s remaining`
+    return `${mins}m ${secs}s remaining`
   }
 
   const handleCopyLicMachineId = () => {
     navigator.clipboard.writeText(licMachineId)
     setLicCopied(true)
     setTimeout(() => setLicCopied(false), 2000)
+  }
+
+  const formatActivateCode = (value: string) => {
+    const clean = value.replace(/[^A-Fa-f0-9-]/g, '').toUpperCase().replace(/-/g, '')
+    const parts: string[] = []
+    for (let i = 0; i < clean.length && i < 20; i += 5) parts.push(clean.slice(i, i + 5))
+    return parts.join('-')
+  }
+
+  const handleActivateSerial = async () => {
+    setActivateError('')
+    setActivateLoading(true)
+    try {
+      const result = await window.api.activation.activate(activateCode)
+      if (result.success) {
+        setActivateModal(false)
+        window.location.reload()
+      } else {
+        setActivateError('Invalid activation code for this machine.')
+      }
+    } catch {
+      setActivateError('Activation failed. Try again.')
+    } finally {
+      setActivateLoading(false)
+    }
   }
 
   const handleTabletToggle = async () => {
@@ -620,7 +656,7 @@ export function SettingsPage() {
               {activationType === 'trial' && (trialStatus === 'active' || trialStatus === 'offline-locked') && (
                 <div className="flex items-center gap-2 px-3 py-2 bg-orange-50 rounded-lg border border-orange-200">
                   <Clock className="h-5 w-5 text-orange-500 shrink-0" />
-                  <span className="text-sm font-medium text-orange-700">
+                  <span className="text-sm font-medium text-orange-700 flex-1">
                     Free Trial — {getTrialTimeLeft()}
                   </span>
                 </div>
@@ -633,6 +669,17 @@ export function SettingsPage() {
                     {trialStatus === 'paused' ? 'Trial Paused' : 'Trial Expired'}
                   </span>
                 </div>
+              )}
+
+              {/* Activate button — visible when not on full license */}
+              {activationType !== 'full' && (
+                <button
+                  onClick={() => { setActivateModal(true); setActivateCode(''); setActivateError('') }}
+                  className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-semibold transition-colors"
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  Activate Software
+                </button>
               )}
 
               {licMachineId && (
@@ -653,6 +700,43 @@ export function SettingsPage() {
                 </div>
               )}
             </div>
+
+            {/* Activate modal */}
+            {activateModal && (
+              <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm">
+                  <h3 className="text-lg font-bold text-gray-900 mb-1">Activate Software</h3>
+                  <p className="text-xs text-gray-500 mb-4">Enter the serial code for this machine ID: <span className="font-mono">{licMachineId}</span></p>
+                  <input
+                    type="text"
+                    value={activateCode}
+                    onChange={(e) => setActivateCode(formatActivateCode(e.target.value))}
+                    placeholder="XXXXX-XXXXX-XXXXX-XXXXX"
+                    className="w-full border rounded-lg px-3 py-2.5 font-mono text-sm tracking-wider text-center uppercase focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none mb-3"
+                    maxLength={23}
+                    autoFocus
+                  />
+                  {activateError && (
+                    <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2 mb-3">{activateError}</p>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setActivateModal(false)}
+                      className="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleActivateSerial}
+                      disabled={activateCode.length < 23 || activateLoading}
+                      className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white rounded-lg text-sm font-semibold transition-colors"
+                    >
+                      {activateLoading ? '...' : 'Activate'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </Card>
       )}

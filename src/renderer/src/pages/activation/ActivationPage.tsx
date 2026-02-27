@@ -68,12 +68,10 @@ export function ActivationPage() {
         setTrialStatus('active')
         if (result.expiresAt) setTrialExpiresAt(new Date(result.expiresAt))
         navigate('/setup')
-      } else if (result.error === 'trial_exists') {
-        // Already started a trial on this machine — let them in
-        setActivated(true)
-        setActivationType('trial')
-        setTrialStatus('active')
-        navigate('/setup')
+      } else if (result.error === 'trial_expired') {
+        setTrialError('Your free trial has expired. Please purchase a license to continue.')
+      } else if (result.error === 'trial_paused') {
+        setTrialError('Your trial has been paused by the administrator.')
       } else {
         setTrialError(result.error || 'Could not start trial. Please check your internet connection.')
       }
