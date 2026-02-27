@@ -81,12 +81,16 @@ export default async function UsersPage({
 
   const { data } = await query
   const users = (data || []) as unknown as Installation[]
+  const fetchedAt = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Users</h1>
-        <span className="text-sm text-gray-500">{users.length} results</span>
+        <div className="text-right">
+          <span className="text-sm text-gray-500">{users.length} results</span>
+          <p className="text-xs text-gray-400">fetched at {fetchedAt} (server time)</p>
+        </div>
       </div>
 
       <form className="mb-4">
