@@ -7,5 +7,10 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 export const isConfigured = !!(supabaseUrl && supabaseServiceKey)
 
 export const supabase = isConfigured
-  ? createClient(supabaseUrl, supabaseServiceKey)
+  ? createClient(supabaseUrl, supabaseServiceKey, {
+      global: {
+        fetch: (url, options = {}) =>
+          fetch(url, { ...options, cache: 'no-store' })
+      }
+    })
   : null as any

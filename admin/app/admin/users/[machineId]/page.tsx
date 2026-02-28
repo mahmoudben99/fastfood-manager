@@ -30,32 +30,36 @@ export default async function UserDetailPage({
 }) {
   const { machineId } = await params
 
-  const { data: installation } = await supabase
-    .from('installations')
-    .select('*')
-    .eq('machine_id', machineId)
-    .single()
+  const [{ data: installation }, { data: trial }, { data: activation }] = await Promise.all([
+    supabase.from('installations').select('*').eq('machine_id', machineId).single(),
+    supabase.from('trials').select('*').eq('machine_id', machineId).single(),
+    supabase.from('activations').select('activated_at').eq('machine_id', machineId).single()
+  ])
 
   if (!installation) notFound()
 
-  const { data: trial } = await supabase
-    .from('trials')
-    .select('*')
-    .eq('machine_id', machineId)
-    .single()
+  const hasActivation = !!activation
 
-  const { data: activation } = await supabase
-    .from('activations')
-    .select('activated_at')
-    .eq('machine_id', machineId)
-    .single()
-
-  const statusColors: Record<string, string> = {
-    active: 'bg-green-100 text-green-700 border-green-200',
-    expired: 'bg-red-100 text-red-700 border-red-200',
-    paused: 'bg-yellow-100 text-yellow-700 border-yellow-200'
+  // Combined status badge
+  let statusLabel: string
+  let statusColor: string
+  if (hasActivation) {
+    statusLabel = 'Full License'
+    statusColor = 'bg-blue-100 text-blue-700 border-blue-200'
+  } else if (trial?.status === 'active') {
+    statusLabel = 'Trial Active'
+    statusColor = 'bg-green-100 text-green-700 border-green-200'
+  } else if (trial?.status === 'paused') {
+    statusLabel = 'Trial Paused'
+    statusColor = 'bg-yellow-100 text-yellow-700 border-yellow-200'
+  } else if (trial?.status === 'expired') {
+    statusLabel = 'Trial Expired'
+    statusColor = 'bg-red-100 text-red-700 border-red-200'
+  } else {
+    statusLabel = 'No Trial'
+    statusColor = 'bg-gray-100 text-gray-600 border-gray-200'
   }
-  const trialStatusColor = trial ? (statusColors[trial.status] || 'bg-gray-100 text-gray-600') : ''
+
   const fetchedAt = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 
   return (
@@ -64,9 +68,9 @@ export default async function UserDetailPage({
         <div className="flex items-center gap-3">
           <Link href="/admin/users" className="text-gray-400 hover:text-gray-600 text-sm">← Users</Link>
           <h1 className="text-2xl font-bold">{installation.restaurant_name || 'Unknown Restaurant'}</h1>
-          {activation && (
-            <span className="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 font-medium">Full License</span>
-          )}
+          <span className={`px-2 py-0.5 text-xs rounded-full font-medium border ${statusColor}`}>
+            {statusLabel}
+          </span>
         </div>
         <AutoRefresh fetchedAt={fetchedAt} />
       </div>
@@ -83,15 +87,10 @@ export default async function UserDetailPage({
       {trial ? (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mb-4">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-gray-900">Trial Status</h2>
-            <div className="flex items-center gap-2">
-              <span className={`px-2 py-0.5 text-xs rounded-full font-medium border ${trialStatusColor}`}>
-                {trial.status}
-              </span>
-              {trial.status === 'active' && (
-                <span className="text-xs text-gray-500">{formatDaysLeft(trial.expires_at)}</span>
-              )}
-            </div>
+            <h2 className="font-semibold text-gray-900">Trial Info</h2>
+            {trial.status === 'active' && (
+              <span className="text-xs text-gray-500">{formatDaysLeft(trial.expires_at)}</span>
+            )}
           </div>
 
           <div className="space-y-2 mb-5 text-sm text-gray-600">
@@ -102,7 +101,7 @@ export default async function UserDetailPage({
             )}
           </div>
 
-          <TrialControls machineId={machineId} trialStatus={trial.status} />
+          <TrialControls machineId={machineId} trialStatus={trial.status} hasActivation={hasActivation} />
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mb-4 text-center text-gray-400 text-sm">

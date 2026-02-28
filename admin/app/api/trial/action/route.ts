@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 
 export async function POST(request: NextRequest) {
-  const { machineId, action, days, expiresAt } = await request.json()
+  const { machineId, action, days, expiresAt, mode } = await request.json()
 
   if (!machineId || !action) {
     return NextResponse.json({ error: 'Missing params' }, { status: 400 })
@@ -101,6 +101,31 @@ export async function POST(request: NextRequest) {
         status: newDate.getTime() > Date.now() ? 'active' : 'expired',
         paused_remaining_ms: null,
         updated_at: new Date().toISOString()
+      }
+      break
+    }
+    case 'setMode': {
+      if (!mode) return NextResponse.json({ error: 'Missing mode' }, { status: 400 })
+
+      if (mode === 'full') {
+        // Grant full license: insert/upsert into activations table
+        const { error: actErr } = await supabase
+          .from('activations')
+          .upsert({ machine_id: machineId, activated_at: new Date().toISOString() }, { onConflict: 'machine_id' })
+        if (actErr) return NextResponse.json({ error: actErr.message }, { status: 500 })
+        // Also set trial to expired so it's not active alongside full license
+        updateData = { status: 'expired', expires_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+      } else if (mode === 'expired') {
+        // Remove activation if exists, set trial to expired
+        await supabase.from('activations').delete().eq('machine_id', machineId)
+        updateData = { status: 'expired', expires_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+      } else if (mode === 'trial') {
+        // Remove activation, reactivate trial for 7 days
+        await supabase.from('activations').delete().eq('machine_id', machineId)
+        const newExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+        updateData = { status: 'active', expires_at: newExpiry.toISOString(), paused_remaining_ms: null, updated_at: new Date().toISOString() }
+      } else {
+        return NextResponse.json({ error: 'Invalid mode' }, { status: 400 })
       }
       break
     }

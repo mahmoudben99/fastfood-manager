@@ -14,10 +14,14 @@ interface Installation {
     status: string
     expires_at: string | null
   } | null
+  hasActivation: boolean
 }
 
-function StatusBadge({ trial }: { trial: Installation['trials'] }) {
-  if (!trial) {
+function StatusBadge({ user }: { user: Installation }) {
+  if (user.hasActivation) {
+    return <span className="px-2 py-0.5 text-xs rounded-full font-medium bg-blue-100 text-blue-700">Full License</span>
+  }
+  if (!user.trials) {
     return <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">No Trial</span>
   }
   const colors: Record<string, string> = {
@@ -26,8 +30,8 @@ function StatusBadge({ trial }: { trial: Installation['trials'] }) {
     paused: 'bg-yellow-100 text-yellow-700'
   }
   return (
-    <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${colors[trial.status] || 'bg-gray-100 text-gray-600'}`}>
-      {trial.status}
+    <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${colors[user.trials.status] || 'bg-gray-100 text-gray-600'}`}>
+      {user.trials.status === 'active' ? 'Trial Active' : user.trials.status === 'expired' ? 'Trial Expired' : user.trials.status}
     </span>
   )
 }
@@ -35,6 +39,15 @@ function StatusBadge({ trial }: { trial: Installation['trials'] }) {
 function formatDate(iso: string | null) {
   if (!iso) return '—'
   return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+function timeAgo(iso: string | null) {
+  if (!iso) return '—'
+  const ms = Date.now() - new Date(iso).getTime()
+  if (ms < 60000) return 'just now'
+  if (ms < 3600000) return `${Math.floor(ms / 60000)}m ago`
+  if (ms < 86400000) return `${Math.floor(ms / 3600000)}h ago`
+  return `${Math.floor(ms / 86400000)}d ago`
 }
 
 export default async function UsersPage({
@@ -50,7 +63,7 @@ export default async function UsersPage({
       <div>
         <h1 className="text-2xl font-bold mb-6">Users</h1>
         <div className="bg-red-50 border border-red-200 rounded-xl p-6">
-          <h2 className="text-base font-bold text-red-700 mb-2">⚠️ Supabase not configured</h2>
+          <h2 className="text-base font-bold text-red-700 mb-2">Supabase not configured</h2>
           <p className="text-sm text-red-600 mb-4">
             The admin dashboard needs environment variables set in Vercel. Go to:
             <strong> Vercel → Your Project → Settings → Environment Variables</strong> and add:
@@ -69,8 +82,6 @@ export default async function UsersPage({
     )
   }
 
-  // Fetch installations and trials as separate queries — avoids PostgREST
-  // schema-cache issues with embedded FK joins returning 0 rows silently.
   let instQuery = supabase
     .from('installations')
     .select('machine_id, restaurant_name, phone, app_version, created_at, updated_at')
@@ -81,18 +92,22 @@ export default async function UsersPage({
     instQuery = instQuery.or(`restaurant_name.ilike.%${search}%,machine_id.ilike.%${search}%,phone.ilike.%${search}%`)
   }
 
-  const [{ data: instData }, { data: trialsData }] = await Promise.all([
+  const [{ data: instData }, { data: trialsData }, { data: activationsData }] = await Promise.all([
     instQuery,
-    supabase.from('trials').select('machine_id, status, expires_at')
+    supabase.from('trials').select('machine_id, status, expires_at'),
+    supabase.from('activations').select('machine_id')
   ])
 
   type TrialRow = { machine_id: string; status: string; expires_at: string | null }
   type InstRow = { machine_id: string; restaurant_name: string | null; phone: string | null; app_version: string | null; created_at: string; updated_at: string }
+  type ActivationRow = { machine_id: string }
   const trialsMap = new Map((trialsData || []).map((t: TrialRow) => [t.machine_id, t]))
+  const activationsSet = new Set((activationsData || []).map((a: ActivationRow) => a.machine_id))
 
   const users: Installation[] = (instData || []).map((inst: InstRow) => ({
     ...inst,
-    trials: trialsMap.get(inst.machine_id) || null
+    trials: trialsMap.get(inst.machine_id) || null,
+    hasActivation: activationsSet.has(inst.machine_id)
   }))
 
   const fetchedAt = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -111,7 +126,7 @@ export default async function UsersPage({
         <input
           name="q"
           defaultValue={search}
-          placeholder="Search by name, machine ID, or phone…"
+          placeholder="Search by name, machine ID, or phone..."
           className="w-full max-w-md border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
         />
       </form>
@@ -137,12 +152,12 @@ export default async function UsersPage({
                 <td className="px-4 py-3 font-mono text-xs text-gray-500">{u.machine_id}</td>
                 <td className="px-4 py-3 text-gray-600">{u.phone || '—'}</td>
                 <td className="px-4 py-3 text-gray-600">{u.app_version || '—'}</td>
-                <td className="px-4 py-3"><StatusBadge trial={u.trials} /></td>
+                <td className="px-4 py-3"><StatusBadge user={u} /></td>
                 <td className="px-4 py-3 text-gray-600">{formatDate(u.trials?.expires_at || null)}</td>
-                <td className="px-4 py-3 text-gray-500">{formatDate(u.updated_at)}</td>
+                <td className="px-4 py-3 text-gray-500" title={u.updated_at}>{timeAgo(u.updated_at)}</td>
                 <td className="px-4 py-3">
                   <Link href={`/admin/users/${u.machine_id}`} className="text-orange-500 hover:text-orange-600 font-medium">
-                    View →
+                    View
                   </Link>
                 </td>
               </tr>
