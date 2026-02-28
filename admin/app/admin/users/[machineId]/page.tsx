@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { TrialControls } from './TrialControls'
+import { AutoRefresh } from './AutoRefresh'
 
 export const dynamic = 'force-dynamic'
 
@@ -55,15 +56,19 @@ export default async function UserDetailPage({
     paused: 'bg-yellow-100 text-yellow-700 border-yellow-200'
   }
   const trialStatusColor = trial ? (statusColors[trial.status] || 'bg-gray-100 text-gray-600') : ''
+  const fetchedAt = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 
   return (
     <div className="max-w-2xl">
-      <div className="flex items-center gap-3 mb-6">
-        <Link href="/admin/users" className="text-gray-400 hover:text-gray-600 text-sm">← Users</Link>
-        <h1 className="text-2xl font-bold">{installation.restaurant_name || 'Unknown Restaurant'}</h1>
-        {activation && (
-          <span className="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 font-medium">Full License</span>
-        )}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <Link href="/admin/users" className="text-gray-400 hover:text-gray-600 text-sm">← Users</Link>
+          <h1 className="text-2xl font-bold">{installation.restaurant_name || 'Unknown Restaurant'}</h1>
+          {activation && (
+            <span className="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 font-medium">Full License</span>
+          )}
+        </div>
+        <AutoRefresh fetchedAt={fetchedAt} />
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mb-4 space-y-3">

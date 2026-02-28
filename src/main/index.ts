@@ -159,10 +159,10 @@ function setupTrialWatcher(): void {
   // Initial check right after app loads (wait 3s for window to be ready)
   setTimeout(() => { checkTrialOnline().catch(() => {}) }, 3000)
 
-  // Recheck every 2 minutes so admin pause/terminate takes effect quickly
+  // Recheck every 30 seconds for fast offline detection and admin action response
   trialCheckInterval = setInterval(() => {
     checkTrialOnline().catch(() => {})
-  }, 2 * 60 * 1000)
+  }, 30 * 1000)
 }
 
 // ─── Auto-updater setup ───────────────────────────────────────────────────────
@@ -264,9 +264,23 @@ app.whenReady().then(() => {
     // Allow trial activation page to start the watcher mid-session (after factory reset)
     ipcMain.handle('trial:ensureWatcher', () => {
       const activationType = settingsRepo.get('activation_type')
-      if (activationType === 'trial' && !trialCheckInterval) {
-        log('Trial watcher started on demand (mid-session trial activation)')
-        setupTrialWatcher()
+      if (activationType === 'trial') {
+        if (!trialCheckInterval) {
+          log('Trial watcher started on demand (mid-session trial activation)')
+          setupTrialWatcher()
+        } else {
+          // Watcher already running (from before reset) — trigger an immediate check
+          log('Trial watcher already running — triggering immediate check')
+          checkTrialOnline().catch(() => {})
+        }
+      }
+    })
+
+    // Renderer can trigger an immediate trial check (e.g. on browser offline/online events)
+    ipcMain.handle('trial:checkNow', () => {
+      const activationType = settingsRepo.get('activation_type')
+      if (activationType === 'trial') {
+        checkTrialOnline().catch(() => {})
       }
     })
 

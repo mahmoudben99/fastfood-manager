@@ -182,6 +182,7 @@ const api = {
     check: () => ipcRenderer.invoke('trial:check'),
     getLocalStatus: () => ipcRenderer.invoke('trial:getLocalStatus'),
     ensureWatcher: () => ipcRenderer.invoke('trial:ensureWatcher'),
+    checkNow: () => ipcRenderer.invoke('trial:checkNow'),
     onLocked: (cb: (reason: string) => void) => {
       const handler = (_: any, reason: string) => cb(reason)
       ipcRenderer.on('trial:locked', handler)

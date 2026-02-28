@@ -71,6 +71,26 @@ export default function App() {
     }
   }, [setTrialStatus, setTrialOfflineSecondsLeft])
 
+  // Instant offline/online detection via browser events — triggers immediate trial check
+  useEffect(() => {
+    if (!activated || activationType !== 'trial') return
+
+    const handleOffline = () => {
+      window.api.trial.checkNow()
+    }
+    const handleOnline = () => {
+      window.api.trial.checkNow()
+    }
+
+    window.addEventListener('offline', handleOffline)
+    window.addEventListener('online', handleOnline)
+
+    return () => {
+      window.removeEventListener('offline', handleOffline)
+      window.removeEventListener('online', handleOnline)
+    }
+  }, [activated, activationType])
+
   // Listen for orders placed from the tablet
   useEffect(() => {
     if (!window.api.tablet) return

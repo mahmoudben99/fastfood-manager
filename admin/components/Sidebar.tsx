@@ -55,7 +55,7 @@ export function Sidebar() {
           <span className="text-lg">🚪</span>
           Sign Out
         </button>
-        <p className="text-center text-gray-600 text-xs mt-2">admin v1.0.5</p>
+        <p className="text-center text-gray-600 text-xs mt-2">admin v1.0.6</p>
       </div>
     </>
   )
