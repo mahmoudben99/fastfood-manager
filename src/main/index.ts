@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, protocol, dialog, ipcMain } from 'electron'
+import { app, BrowserWindow, shell, protocol, dialog, ipcMain, net } from 'electron'
 import { join } from 'path'
 import { writeFileSync, appendFileSync } from 'fs'
 import { autoUpdater } from 'electron-updater'
@@ -93,10 +93,16 @@ function registerImageProtocol(): void {
 }
 
 // ─── Trial watcher ────────────────────────────────────────────────────────────
-// Checks Supabase for trial status on startup and every 15 minutes.
-// If offline, starts a 5-minute countdown then locks the app.
+// Uses Electron's net.isOnline() for instant OS-level offline detection (no fetch timeout).
+// Also checks Supabase every 30s for admin actions (pause/extend/terminate).
+// Offline countdown: 10 seconds for testing — increase later for production.
+
+const OFFLINE_LOCK_SECONDS = 10 // seconds before locking when offline (10s for testing)
+const FAST_OFFLINE_CHECK_MS = 3000 // check net.isOnline() every 3 seconds
+const CLOUD_CHECK_MS = 30 * 1000 // check Supabase every 30 seconds
 
 let trialCheckInterval: ReturnType<typeof setInterval> | null = null
+let fastOfflineInterval: ReturnType<typeof setInterval> | null = null
 let offlineCountdownInterval: ReturnType<typeof setInterval> | null = null
 let isInstallingUpdate = false
 let offlineSecondsLeft = 0
@@ -106,23 +112,67 @@ function clearOfflineCountdown(): void {
     clearInterval(offlineCountdownInterval)
     offlineCountdownInterval = null
   }
-  offlineSecondsLeft = 0
-  mainWindow?.webContents.send('trial:offline-cleared')
+  if (offlineSecondsLeft > 0) {
+    offlineSecondsLeft = 0
+    mainWindow?.webContents.send('trial:offline-cleared')
+  }
 }
 
-async function checkTrialOnline(): Promise<void> {
+function startOfflineCountdown(): void {
+  if (offlineCountdownInterval) return // already running
+  offlineSecondsLeft = OFFLINE_LOCK_SECONDS
+  log(`Trial: offline detected (net.isOnline=false), starting ${OFFLINE_LOCK_SECONDS}s countdown`)
+  mainWindow?.webContents.send('trial:offline-countdown', offlineSecondsLeft)
+
+  offlineCountdownInterval = setInterval(() => {
+    // If we came back online mid-countdown, abort
+    if (net.isOnline()) {
+      log('Trial: back online during countdown — aborting lock')
+      clearOfflineCountdown()
+      return
+    }
+    offlineSecondsLeft -= 1
+    mainWindow?.webContents.send('trial:offline-countdown', offlineSecondsLeft)
+
+    if (offlineSecondsLeft <= 0) {
+      clearInterval(offlineCountdownInterval!)
+      offlineCountdownInterval = null
+      log(`Trial: offline for ${OFFLINE_LOCK_SECONDS}s — locking app`)
+      mainWindow?.webContents.send('trial:locked', 'offline')
+    }
+  }, 1000)
+}
+
+// Fast offline check using OS-level net.isOnline() — runs every 3 seconds
+function checkOfflineInstant(): void {
   const activationType = settingsRepo.get('activation_type')
-  if (activationType !== 'trial') return // full license or not set — skip
+  if (activationType !== 'trial') return
+
+  if (!net.isOnline()) {
+    startOfflineCountdown()
+  } else if (offlineCountdownInterval) {
+    // Back online — clear countdown
+    log('Trial: online restored — clearing countdown')
+    clearOfflineCountdown()
+  }
+}
+
+// Cloud check — fetches Supabase for trial status (admin actions, expiry updates)
+async function checkTrialCloud(): Promise<void> {
+  const activationType = settingsRepo.get('activation_type')
+  if (activationType !== 'trial') return
+
+  // Skip cloud check if we're offline — the fast check handles that
+  if (!net.isOnline()) return
 
   try {
     const machineId = getMachineId()
     const result = await checkTrialStatus(machineId)
 
-    // Clear any offline countdown since we got a response
+    // Clear any offline countdown since we got a cloud response
     clearOfflineCountdown()
 
     if (result.status === 'active' && result.expiresAt) {
-      // Update local cache with latest expiry
       settingsRepo.set('trial_expires_at', result.expiresAt)
       mainWindow?.webContents.send('trial:status-update', {
         status: 'active',
@@ -131,38 +181,22 @@ async function checkTrialOnline(): Promise<void> {
     } else if (result.status === 'expired' || result.status === 'paused') {
       mainWindow?.webContents.send('trial:locked', result.status)
     }
-    // 'not_found' is treated as ok — might be a fresh install that hasn't synced yet
   } catch {
-    // Network error — start or continue offline countdown
-    if (!offlineCountdownInterval) {
-      offlineSecondsLeft = 5 * 60 // 5 minutes
-      log('Trial: offline, starting 5-minute countdown')
-      mainWindow?.webContents.send('trial:offline-countdown', offlineSecondsLeft)
-
-      offlineCountdownInterval = setInterval(() => {
-        offlineSecondsLeft -= 1
-        mainWindow?.webContents.send('trial:offline-countdown', offlineSecondsLeft)
-
-        if (offlineSecondsLeft <= 0) {
-          clearInterval(offlineCountdownInterval!)
-          offlineCountdownInterval = null
-          log('Trial: offline for 5 minutes — locking app')
-          mainWindow?.webContents.send('trial:locked', 'offline')
-        }
-      }, 1000)
-    }
-    // If countdown already running, just let it continue
+    // Network error from fetch — the fast offline check handles countdown
   }
 }
 
 function setupTrialWatcher(): void {
-  // Initial check right after app loads (wait 3s for window to be ready)
-  setTimeout(() => { checkTrialOnline().catch(() => {}) }, 3000)
+  // Initial cloud check after 3s (window ready)
+  setTimeout(() => { checkTrialCloud().catch(() => {}) }, 3000)
 
-  // Recheck every 30 seconds for fast offline detection and admin action response
+  // Fast offline detection every 3 seconds using net.isOnline()
+  fastOfflineInterval = setInterval(checkOfflineInstant, FAST_OFFLINE_CHECK_MS)
+
+  // Cloud check every 30 seconds for admin actions
   trialCheckInterval = setInterval(() => {
-    checkTrialOnline().catch(() => {})
-  }, 30 * 1000)
+    checkTrialCloud().catch(() => {})
+  }, CLOUD_CHECK_MS)
 }
 
 // ─── Auto-updater setup ───────────────────────────────────────────────────────
@@ -214,6 +248,7 @@ function setupAutoUpdater(): void {
     })
     // Manual cleanup (window-all-closed is skipped when isInstallingUpdate = true).
     if (trialCheckInterval) clearInterval(trialCheckInterval)
+    if (fastOfflineInterval) clearInterval(fastOfflineInterval)
     if (offlineCountdownInterval) clearInterval(offlineCountdownInterval)
     stopBot()
     stopBackupSystem()
@@ -271,7 +306,7 @@ app.whenReady().then(() => {
         } else {
           // Watcher already running (from before reset) — trigger an immediate check
           log('Trial watcher already running — triggering immediate check')
-          checkTrialOnline().catch(() => {})
+          checkTrialCloud().catch(() => {})
         }
       }
     })
@@ -280,7 +315,7 @@ app.whenReady().then(() => {
     ipcMain.handle('trial:checkNow', () => {
       const activationType = settingsRepo.get('activation_type')
       if (activationType === 'trial') {
-        checkTrialOnline().catch(() => {})
+        checkTrialCloud().catch(() => {})
       }
     })
 
@@ -384,6 +419,7 @@ app.on('window-all-closed', () => {
   if (isInstallingUpdate) return
   log('App closing - cleaning up')
   if (trialCheckInterval) clearInterval(trialCheckInterval)
+  if (fastOfflineInterval) clearInterval(fastOfflineInterval)
   if (offlineCountdownInterval) clearInterval(offlineCountdownInterval)
   stopBot()
   stopBackupSystem()
