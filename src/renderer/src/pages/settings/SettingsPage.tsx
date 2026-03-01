@@ -453,7 +453,7 @@ export function SettingsPage() {
     { key: 'schedule' as const, label: t('settings.schedule') },
     { key: 'printer' as const, label: t('settings.printer') },
     { key: 'telegram' as const, label: t('settings.telegram') },
-    { key: 'tablet' as const, label: 'Remote Orders' },
+    { key: 'tablet' as const, label: t('settings.remoteOrders') },
     { key: 'security' as const, label: t('settings.security') }
   ]
 
@@ -997,38 +997,38 @@ export function SettingsPage() {
           <div className="mb-6 pb-6 border-b border-gray-200">
             <div className="flex items-center justify-between mb-3">
               <div>
-                <h3 className="font-semibold text-gray-900">Serveur de commandes tablette</h3>
-                <p className="text-xs text-gray-500 mt-0.5">Les serveurs peuvent commander depuis leur téléphone sur le même WiFi</p>
+                <h3 className="font-semibold text-gray-900">{t('settings.tabletServerTitle')}</h3>
+                <p className="text-xs text-gray-500 mt-0.5">{t('settings.tabletServerDesc')}</p>
               </div>
               <div className={`flex items-center gap-2 text-sm font-medium ${tabletRunning ? 'text-green-600' : 'text-gray-400'}`}>
                 <div className={`w-2.5 h-2.5 rounded-full ${tabletRunning ? 'bg-green-500' : 'bg-gray-300'}`} />
-                {tabletRunning ? 'Actif' : 'Arrêté'}
+                {tabletRunning ? t('settings.tabletActive') : t('settings.tabletStopped')}
               </div>
             </div>
             <Button onClick={handleTabletToggle} loading={tabletLoading} variant={tabletRunning ? 'danger' : 'primary'}>
-              {tabletRunning ? '⏹ Arrêter le serveur' : '▶ Démarrer le serveur'}
+              {tabletRunning ? `⏹ ${t('settings.tabletStop')}` : `▶ ${t('settings.tabletStart')}`}
             </Button>
           </div>
 
           {/* QR code + URL */}
           {tabletRunning && tabletQr && (
             <div className="mb-6 pb-6 border-b border-gray-200">
-              <h3 className="font-semibold mb-3">Accès tablette / téléphone</h3>
+              <h3 className="font-semibold mb-3">{t('settings.tabletAccess')}</h3>
               <div className="flex flex-col sm:flex-row gap-6 items-start">
                 <img src={tabletQr} alt="QR Code" className="w-48 h-48 rounded-lg border border-gray-200" />
                 <div className="flex-1">
-                  <p className="text-sm text-gray-500 mb-2">Scannez le QR code ou ouvrez cette adresse :</p>
+                  <p className="text-sm text-gray-500 mb-2">{t('settings.tabletScanQr')}</p>
                   <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
                     <span className="text-sm font-mono text-gray-800 flex-1 break-all">{tabletUrl}</span>
                     <button
                       onClick={handleCopyUrl}
                       className="flex-shrink-0 text-orange-500 hover:text-orange-600"
-                      title="Copier le lien"
+                      title={t('settings.tabletCopyLink')}
                     >
                       {urlCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                     </button>
                   </div>
-                  <p className="text-xs text-gray-400 mt-2">Le téléphone doit être sur le même réseau WiFi que ce PC.</p>
+                  <p className="text-xs text-gray-400 mt-2">{t('settings.tabletSameWifi')}</p>
                 </div>
               </div>
             </div>
@@ -1044,15 +1044,15 @@ export function SettingsPage() {
                 className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
               />
               <div>
-                <span className="text-sm font-medium text-gray-700">Démarrer automatiquement au lancement</span>
-                <p className="text-xs text-gray-400">Le serveur tablette démarre avec l'application</p>
+                <span className="text-sm font-medium text-gray-700">{t('settings.tabletAutoStart')}</span>
+                <p className="text-xs text-gray-400">{t('settings.tabletAutoStartDesc')}</p>
               </div>
             </label>
           </div>
 
           {/* PIN */}
           <div>
-            <h3 className="font-semibold mb-3">Sécurité PIN</h3>
+            <h3 className="font-semibold mb-3">{t('settings.tabletPinTitle')}</h3>
             <label className="flex items-center gap-3 cursor-pointer mb-4">
               <input
                 type="checkbox"
@@ -1061,13 +1061,13 @@ export function SettingsPage() {
                 className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
               />
               <div>
-                <span className="text-sm font-medium text-gray-700">Activer le PIN d'accès (4 chiffres)</span>
-                <p className="text-xs text-gray-400">Les serveurs doivent entrer ce PIN pour accéder à la page de commande</p>
+                <span className="text-sm font-medium text-gray-700">{t('settings.tabletPinEnable')}</span>
+                <p className="text-xs text-gray-400">{t('settings.tabletPinEnableDesc')}</p>
               </div>
             </label>
             {tabletPinEnabled && (
               <Button onClick={() => setTabletPinModal(true)} variant="secondary">
-                🔒 Modifier le PIN
+                🔒 {t('settings.tabletPinChange')}
               </Button>
             )}
           </div>
@@ -1076,8 +1076,8 @@ export function SettingsPage() {
           {tabletPinModal && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
               <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-xl">
-                <h3 className="font-bold text-lg mb-1">Modifier le PIN tablette</h3>
-                <p className="text-xs text-orange-600 mb-4">Tous les appareils connectés seront déconnectés et devront entrer le nouveau PIN.</p>
+                <h3 className="font-bold text-lg mb-1">{t('settings.tabletPinModalTitle')}</h3>
+                <p className="text-xs text-orange-600 mb-4">{t('settings.tabletPinModalWarning')}</p>
                 <div className="space-y-3">
                   <input
                     type="password"
@@ -1085,7 +1085,7 @@ export function SettingsPage() {
                     maxLength={4}
                     value={newPin}
                     onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
-                    placeholder="Nouveau PIN (4 chiffres)"
+                    placeholder={t('settings.tabletPinNew')}
                     className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
                   />
                   <input
@@ -1094,13 +1094,13 @@ export function SettingsPage() {
                     maxLength={4}
                     value={confirmPin}
                     onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
-                    placeholder="Confirmer le PIN"
+                    placeholder={t('settings.tabletPinConfirm')}
                     className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
                   />
                   {pinError && <p className="text-red-500 text-xs">{pinError}</p>}
                   <div className="flex gap-2">
-                    <Button onClick={handleSavePin} disabled={newPin.length !== 4}>Enregistrer</Button>
-                    <Button variant="secondary" onClick={() => { setTabletPinModal(false); setNewPin(''); setConfirmPin(''); setPinError('') }}>Annuler</Button>
+                    <Button onClick={handleSavePin} disabled={newPin.length !== 4}>{t('common.save')}</Button>
+                    <Button variant="secondary" onClick={() => { setTabletPinModal(false); setNewPin(''); setConfirmPin(''); setPinError('') }}>{t('common.cancel')}</Button>
                   </div>
                 </div>
               </div>
