@@ -97,7 +97,7 @@ function registerImageProtocol(): void {
 // Also checks Supabase every 30s for admin actions (pause/extend/terminate).
 // Offline countdown: 10 seconds for testing — increase later for production.
 
-const OFFLINE_LOCK_SECONDS = 10 // seconds before locking when offline (10s for testing)
+const OFFLINE_LOCK_SECONDS = 2 * 60 // 2 minutes before locking when offline
 const FAST_OFFLINE_CHECK_MS = 3000 // check net.isOnline() every 3 seconds
 const CLOUD_CHECK_MS = 30 * 1000 // check Supabase every 30 seconds
 

@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../../store/appStore'
 import { ShieldX, WifiOff, Copy, Check, KeyRound } from 'lucide-react'
-import { Button } from '../../components/ui/Button'
+import splashBg from '../../assets/splash-screen.png'
 
 interface TrialLockedPageProps {
   reason: 'expired' | 'paused' | 'offline' | string
@@ -11,7 +10,6 @@ interface TrialLockedPageProps {
 }
 
 export function TrialLockedPage({ reason, offlineSecondsLeft }: TrialLockedPageProps) {
-  const { t } = useTranslation()
   const navigate = useNavigate()
   const { setActivated, setTrialStatus } = useAppStore()
   const [machineId, setMachineId] = useState('')
@@ -35,7 +33,6 @@ export function TrialLockedPage({ reason, offlineSecondsLeft }: TrialLockedPageP
   }
 
   const handleEnterCode = () => {
-    // Reset activation state so they can enter a serial code
     setActivated(false)
     setTrialStatus(null)
     navigate('/activate')
@@ -48,20 +45,30 @@ export function TrialLockedPage({ reason, offlineSecondsLeft }: TrialLockedPageP
   }
 
   return (
-    <div className="fixed inset-0 z-[200] bg-gray-900 flex items-center justify-center">
-      <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4 text-center">
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center"
+      style={{
+        backgroundImage: `url(${splashBg})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center'
+      }}
+    >
+      {/* Dark overlay for readability */}
+      <div className="absolute inset-0 bg-black/40" />
+
+      <div className="relative z-10 bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4 text-center">
         {/* Icon */}
-        <div className={`inline-flex items-center justify-center w-20 h-20 rounded-full mb-5 ${
+        <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 ${
           isOffline ? 'bg-yellow-100' : 'bg-red-100'
         }`}>
           {isOffline
-            ? <WifiOff className="h-10 w-10 text-yellow-500" />
-            : <ShieldX className="h-10 w-10 text-red-500" />
+            ? <WifiOff className="h-8 w-8 text-yellow-500" />
+            : <ShieldX className="h-8 w-8 text-red-500" />
           }
         </div>
 
         {/* Title */}
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">
+        <h1 className="text-xl font-bold text-gray-900 mb-2">
           {isOffline
             ? (offlineSecondsLeft && offlineSecondsLeft > 0
                 ? `No Internet — ${formatCountdown(offlineSecondsLeft)}`
@@ -73,7 +80,7 @@ export function TrialLockedPage({ reason, offlineSecondsLeft }: TrialLockedPageP
         </h1>
 
         {/* Subtitle */}
-        <p className="text-gray-500 text-sm mb-6">
+        <p className="text-gray-500 text-sm mb-5">
           {isOffline
             ? 'The free trial requires an internet connection to verify your license. Please reconnect to continue.'
             : reason === 'paused'
@@ -82,13 +89,29 @@ export function TrialLockedPage({ reason, offlineSecondsLeft }: TrialLockedPageP
           }
         </p>
 
+        {/* Countdown progress bar for offline */}
+        {isOffline && offlineSecondsLeft != null && offlineSecondsLeft > 0 && (
+          <div className="mb-5">
+            <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-yellow-400 to-red-500 rounded-full transition-all duration-1000"
+                style={{ width: `${Math.max(0, (1 - offlineSecondsLeft / 120) * 100)}%` }}
+              />
+            </div>
+            <p className="text-xs text-gray-400 mt-1">App will lock when timer reaches zero</p>
+          </div>
+        )}
+
         {/* Actions */}
         <div className="space-y-3">
           {!isOffline && (
-            <Button onClick={handleEnterCode} className="w-full justify-center">
-              <KeyRound className="h-4 w-4 mr-2" />
+            <button
+              onClick={handleEnterCode}
+              className="w-full py-2.5 px-4 rounded-xl bg-orange-500 text-white text-sm font-semibold hover:bg-orange-600 transition-colors flex items-center justify-center gap-2"
+            >
+              <KeyRound className="h-4 w-4" />
               Enter Activation Code
-            </Button>
+            </button>
           )}
 
           <button
