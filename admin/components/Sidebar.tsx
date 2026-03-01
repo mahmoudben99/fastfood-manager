@@ -7,7 +7,8 @@ import { useState, useEffect } from 'react'
 const navItems = [
   { href: '/admin/users', label: 'Users', icon: '👥' },
   { href: '/admin/keygen', label: 'Keygen', icon: '🔑' },
-  { href: '/admin/reset', label: 'Reset Codes', icon: '🔓' }
+  { href: '/admin/reset', label: 'Reset Codes', icon: '🔓' },
+  { href: '/admin/menu-setup', label: 'Menu Setup', icon: '📋' }
 ]
 
 export function Sidebar() {
@@ -55,7 +56,7 @@ export function Sidebar() {
           <span className="text-lg">🚪</span>
           Sign Out
         </button>
-        <p className="text-center text-gray-600 text-xs mt-2">admin v1.0.7</p>
+        <p className="text-center text-gray-600 text-xs mt-2">admin v1.0.8</p>
       </div>
     </>
   )

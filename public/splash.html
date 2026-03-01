@@ -21,30 +21,31 @@
       position: relative;
     }
 
-    /* Main content — positioned in the lower half below the food tray */
+    /* Main content — centered on screen */
     .container {
       width: 100%;
       height: 100%;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: flex-end;
-      padding-bottom: 80px;
+      justify-content: center;
       position: relative;
       z-index: 10;
       text-align: center;
     }
 
-    /* Restaurant name */
+    /* Restaurant name — big and centered, the hero text */
     .restaurant-name {
-      font-size: 52px;
+      font-size: 72px;
       font-weight: 900;
       color: white;
-      text-shadow: 0 3px 12px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.3);
-      letter-spacing: -1px;
+      text-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), 0 2px 4px rgba(0, 0, 0, 0.4);
+      letter-spacing: -2px;
       opacity: 0;
       animation: popIn 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55) 0.4s forwards;
-      margin-bottom: 12px;
+      margin-bottom: 16px;
+      padding: 0 40px;
+      line-height: 1.1;
     }
 
     @keyframes popIn {

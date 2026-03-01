@@ -7,7 +7,7 @@ const TRIAL_DAYS = 7
 
 let _client: ReturnType<typeof createClient> | null = null
 
-function getClient() {
+export function getClient() {
   if (!_client) {
     _client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
   }

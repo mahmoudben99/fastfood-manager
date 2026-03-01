@@ -1,7 +1,7 @@
 # Fast Food Manager - Development Log
 
-**Current Version:** 1.5.0
-**Last Updated:** 2026-02-27
+**Current Version:** 1.5.8
+**Last Updated:** 2026-03-01
 **Repository:** https://github.com/mahmoudben99/fastfood-manager
 
 ---
@@ -38,6 +38,97 @@ src/
 ---
 
 ## Recent Changes
+
+### v1.5.8 (2026-03-01) - Splash Screen Redesign
+**Changes:**
+- **Splash screen redesign** — Replaced CSS gradient + animated food emojis with branded `splash-screen.png` background image
+- Restaurant name displayed big (72px bold) and centered on screen — the hero text clients see on startup
+- "Thank you for using" / "Fast Food Manager" subtitle with smooth fade-in animations
+- Loading dots at the bottom
+- Clean minimal look matching the FFM brand image
+
+**Files Modified:**
+- `public/splash.html` — Rewritten: image background, centered text layout, removed emojis/blobs
+- `public/splash-screen.png` — Added branded splash image
+- `package.json` — Version bump to 1.5.8
+
+---
+
+### v1.5.7 (2026-03-01) - Instant Offline Detection + Admin Dashboard Fixes
+**Critical Fixes:**
+- **Instant offline detection** — Replaced Supabase fetch-based detection (30-60s timeout) with Electron `net.isOnline()` — synchronous OS-level check every 3 seconds
+- **Offline countdown** — 2-minute countdown before locking (configurable via `OFFLINE_LOCK_SECONDS`). Auto-aborts if connection restored mid-countdown
+- **Cloud check** — Still runs every 30s for admin actions (pause/extend/terminate) but skips entirely when offline
+- **Lock screen redesign** — Uses splash-screen.png as background with dark overlay, progress bar filling yellow→red during countdown
+
+**Admin Dashboard (v1.0.7):**
+- **Fixed stale data** — Added `cache: 'no-store'` to Supabase client global fetch in `admin/lib/supabase.ts`. Next.js was caching internal `fetch()` calls even with `force-dynamic`
+- **Proper status display** — Now fetches `activations` table. Shows: Full License / Trial Active / Trial Expired / No Trial
+- **Simplified controls** — Replaced wall of buttons with: one +/- days input, exact date/time picker, 3-mode toggle (Trial / Full License / Expired)
+- **`setMode` API action** — Handles activation table inserts/deletes for mode switching
+- **Last Seen** — Shows relative time ("5m ago", "2h ago") instead of raw dates
+
+**Files Modified:**
+- `src/main/index.ts` — `net` import, `checkOfflineInstant()`, `startOfflineCountdown()`, `checkTrialCloud()`, `OFFLINE_LOCK_SECONDS`
+- `src/renderer/src/pages/activation/TrialLockedPage.tsx` — splash-screen.png background, progress bar
+- `src/renderer/src/assets/splash-screen.png` — Added for lock screen background
+- `admin/lib/supabase.ts` — Added `cache: 'no-store'` to global fetch
+- `admin/app/admin/users/page.tsx` — Fetch activations, combined StatusBadge, timeAgo display
+- `admin/app/admin/users/[machineId]/page.tsx` — Combined status badge, pass `hasActivation` to controls
+- `admin/app/admin/users/[machineId]/TrialControls.tsx` — Simplified: mode toggle, +/- days, date picker
+- `admin/app/api/trial/action/route.ts` — Added `setMode` case
+- `admin/components/Sidebar.tsx` — Version bump to v1.0.7
+
+---
+
+### v1.5.6 (2026-02-28) - Faster Offline Detection + Admin Feedback
+**Changes:**
+- Reduced trial check interval from 2 minutes to 30 seconds
+- Added `trial:checkNow` IPC handler for immediate on-demand checks
+- Browser `online`/`offline` events in App.tsx trigger `trial:checkNow`
+- Admin TrialControls: success/error/loading feedback (green/red banners)
+- AutoRefresh component (15s auto-refresh) on admin user detail page
+- Admin bumped to v1.0.6
+
+**Files Modified:**
+- `src/main/index.ts` — 30s interval, `trial:checkNow` handler
+- `src/preload/index.ts` — Exposed `checkNow`
+- `src/renderer/src/App.tsx` — Browser online/offline event listeners
+- `admin/app/admin/users/[machineId]/TrialControls.tsx` — Success/error/loading states
+- `admin/app/admin/users/[machineId]/AutoRefresh.tsx` — New component
+
+---
+
+### v1.5.5 (2026-02-28) - Trial Watcher Fix + Offline UI + Admin Controls
+**Critical Fixes:**
+- **Trial watcher not starting after factory reset** — Added `trial:ensureWatcher` IPC: if watcher not running, starts it; if already running, triggers immediate check
+- **Installation sync** — Added `installation:sync` IPC called after setup completes to push restaurant name/version to Supabase immediately
+
+**New Features:**
+- **Offline countdown UI** — Red banner with countdown timer in App.tsx, green "Internet restored" toast
+- **Admin reduce/custom expiry** — Reduce days (-1d/-3d/-7d) + set exact expiry date/time
+- **Tablet language fix** — Language fallback changed from `'fr'` to `'en'`
+- **Cache-Control headers** — Added `no-cache, no-store, must-revalidate` to tablet HTML responses
+
+**Files Modified:**
+- `src/main/index.ts` — `trial:ensureWatcher`, `installation:sync` IPC handlers
+- `src/preload/index.ts` — Exposed `ensureWatcher`, `installation.sync`
+- `src/renderer/src/App.tsx` — Offline banner, restored toast, browser events
+- `src/renderer/src/pages/activation/ActivationPage.tsx` — Call `ensureWatcher` after trial start
+- `src/renderer/src/pages/setup/SetupWizard.tsx` — Call `installation.sync` after setup
+- `src/main/tablet/server.ts` — Language fallback fix, Cache-Control headers
+- `admin/app/admin/users/[machineId]/TrialControls.tsx` — Reduce + custom expiry
+- `admin/app/api/trial/action/route.ts` — `reduce`, `setExpiry` cases
+- Admin bumped to v1.0.5
+
+---
+
+### v1.5.4 (2026-02-28) - Factory Reset on Logout + Faster Trial Checks
+**Changes:**
+- **Factory reset on logout** — Logout now calls `resetAllData()` (closes DB, deletes .db/.wal/.shm, reinitializes)
+- **Trial watcher interval** — Reduced from 15 minutes to 2 minutes for faster admin action response
+
+---
 
 ### v1.5.0 (2026-02-27) - Waiter Tablet Mode + Auto-Update Fix
 **New Features:**
@@ -375,12 +466,15 @@ src/
 
 ## Known Issues
 
-### 🐛 Active Bugs
-(None currently - all known bugs fixed in v1.2.0)
+### Active Bugs
+(None currently)
 
-### ✅ Recently Fixed
-1. ✅ Order timer showing incorrect time (v1.2.0) - UTC vs local time issue
-2. ✅ Cancel confirmation dialog z-index (v1.2.0)
+### Recently Fixed
+1. Offline detection not working (v1.5.7) — Supabase fetch hung 30-60s; replaced with `net.isOnline()`
+2. Admin dashboard showing stale data (v1.5.7) — Added `cache: 'no-store'` to Supabase client
+3. Trial watcher not starting after factory reset (v1.5.5) — Added `ensureWatcher` IPC
+4. Auto-update race condition (v1.5.0) — `isInstallingUpdate` flag prevents `app.quit()` during install
+5. Order timer UTC vs local time (v1.2.0)
 
 ---
 
@@ -504,4 +598,4 @@ unset ELECTRON_RUN_AS_NODE
 - New version entry at the top of "Recent Changes" with what changed and why
 - "Last context" updated at the bottom
 
-**Last context:** v1.4.4 deployed. Stock Management now has full virtual keyboard support. Worker category assignment buttons enlarged for touch. Order Alert Time uses quick-pick preset buttons (5-120 min) instead of keyboard to avoid covering the input. All touchscreen flows are now complete across OrderScreen, Settings, Workers, Menu, Stock, Telegram, PasswordGate, Setup Wizard.
+**Last context:** v1.5.8 deployed locally (not yet pushed — slow internet). Splash screen uses branded PNG background with centered restaurant name. Offline detection uses `net.isOnline()` (3s check) with 2-minute countdown. Admin dashboard v1.0.7 on Vercel with fresh data (no-store cache fix), proper status display (Full License/Trial Active/Expired), and simplified controls (mode toggle + days input + date picker).

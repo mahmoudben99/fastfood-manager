@@ -214,6 +214,12 @@ const api = {
   installation: {
     sync: () => ipcRenderer.invoke('installation:sync')
   },
+  menuUpload: {
+    selectImages: () => ipcRenderer.invoke('menu-upload:selectImages'),
+    upload: (paths: string[]) => ipcRenderer.invoke('menu-upload:upload', paths),
+    checkStatus: () => ipcRenderer.invoke('menu-upload:checkStatus'),
+    downloadExcel: (excelPath: string) => ipcRenderer.invoke('menu-upload:downloadExcel', excelPath)
+  },
   tablet: {
     start: () => ipcRenderer.invoke('tablet:start'),
     stop: () => ipcRenderer.invoke('tablet:stop'),
