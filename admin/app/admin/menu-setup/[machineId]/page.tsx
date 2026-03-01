@@ -52,8 +52,8 @@ export default async function MenuSetupDetailPage({
 
   // Get public URLs for each image
   const images = (imageFiles || [])
-    .filter(f => !f.name.startsWith('.'))
-    .map(f => {
+    .filter((f: { name: string }) => !f.name.startsWith('.'))
+    .map((f: { name: string }) => {
       const { data } = supabase.storage
         .from('menu-uploads')
         .getPublicUrl(`${machineId}/images/${f.name}`)
@@ -79,7 +79,7 @@ export default async function MenuSetupDetailPage({
           <p className="text-gray-400 text-sm">No images uploaded yet.</p>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {images.map((img) => (
+            {images.map((img: { name: string; url: string }) => (
               <div key={img.name} className="group relative">
                 <img
                   src={img.url}
