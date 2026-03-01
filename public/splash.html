@@ -14,117 +14,37 @@
       height: 600px;
       overflow: hidden;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: linear-gradient(135deg, #FF4500 0%, #FF6347 50%, #FF7F50 100%);
+      background: url('./splash-screen.png') center/cover no-repeat;
       display: flex;
       align-items: center;
       justify-content: center;
       position: relative;
     }
 
-    /* Animated background blobs */
-    .blob {
-      position: absolute;
-      border-radius: 50%;
-      filter: blur(60px);
-      opacity: 0.3;
-      animation: blob 8s infinite ease-in-out;
-    }
-
-    .blob1 {
-      width: 200px;
-      height: 200px;
-      background: rgba(255, 255, 255, 0.3);
-      top: 10%;
-      left: 10%;
-      animation-delay: 0s;
-    }
-
-    .blob2 {
-      width: 250px;
-      height: 250px;
-      background: rgba(255, 127, 80, 0.4);
-      top: 60%;
-      right: 10%;
-      animation-delay: 2s;
-    }
-
-    .blob3 {
-      width: 180px;
-      height: 180px;
-      background: rgba(255, 99, 71, 0.3);
-      bottom: 15%;
-      left: 30%;
-      animation-delay: 4s;
-    }
-
-    @keyframes blob {
-      0%, 100% {
-        transform: translate(0, 0) scale(1);
-      }
-      33% {
-        transform: translate(30px, -30px) scale(1.1);
-      }
-      66% {
-        transform: translate(-20px, 20px) scale(0.9);
-      }
-    }
-
-    /* Floating food emojis */
-    .emoji {
-      position: absolute;
-      font-size: 48px;
-      opacity: 0;
-      animation: float 5s ease-out forwards;
-    }
-
-    @keyframes float {
-      0% {
-        opacity: 0;
-        transform: scale(0) rotate(0deg);
-      }
-      20% {
-        opacity: 1;
-        transform: scale(1.2) rotate(180deg);
-      }
-      100% {
-        opacity: 0.2;
-        transform: scale(0.8) rotate(360deg);
-      }
-    }
-
-    /* Main content container */
+    /* Main content — positioned in the lower half below the food tray */
     .container {
       width: 100%;
       height: 100%;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-end;
+      padding-bottom: 80px;
       position: relative;
       z-index: 10;
       text-align: center;
     }
 
-    /* Logo */
-    .logo {
-      opacity: 0;
-      animation: popIn 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55) 0.4s forwards;
-      margin-bottom: 40px;
-    }
-
-    .logo img {
-      width: 160px;
-      height: 160px;
-      object-fit: contain;
-      filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.3));
-    }
-
-    .logo-text {
-      font-size: 82px;
+    /* Restaurant name */
+    .restaurant-name {
+      font-size: 52px;
       font-weight: 900;
       color: white;
-      text-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-      letter-spacing: -2px;
+      text-shadow: 0 3px 12px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.3);
+      letter-spacing: -1px;
+      opacity: 0;
+      animation: popIn 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55) 0.4s forwards;
+      margin-bottom: 12px;
     }
 
     @keyframes popIn {
@@ -133,7 +53,7 @@
         transform: scale(0.3);
       }
       60% {
-        transform: scale(1.15);
+        transform: scale(1.1);
       }
       100% {
         opacity: 1;
@@ -141,31 +61,31 @@
       }
     }
 
-    /* Thank you text */
-    .thank-you {
-      font-size: 20px;
+    /* Subtitle: "Thank you for using" */
+    .subtitle {
+      font-size: 18px;
       font-weight: 500;
-      color: rgba(255, 255, 255, 0.95);
-      text-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+      color: rgba(255, 255, 255, 0.9);
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
       opacity: 0;
-      animation: fadeIn 0.8s ease-out 1.2s forwards;
-      margin-bottom: 8px;
+      animation: fadeIn 0.6s ease-out 1.0s forwards;
+      margin-bottom: 4px;
     }
 
-    /* App name */
+    /* App name: "Fast Food Manager" */
     .app-name {
-      font-size: 36px;
+      font-size: 28px;
       font-weight: 800;
       color: white;
-      text-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
       opacity: 0;
-      animation: fadeIn 0.8s ease-out 1.5s forwards;
+      animation: fadeIn 0.6s ease-out 1.3s forwards;
     }
 
     @keyframes fadeIn {
       0% {
         opacity: 0;
-        transform: translateY(15px);
+        transform: translateY(12px);
       }
       100% {
         opacity: 1;
@@ -176,7 +96,7 @@
     /* Loading dots */
     .loading {
       position: absolute;
-      bottom: 60px;
+      bottom: 30px;
       left: 50%;
       transform: translateX(-50%);
       display: flex;
@@ -184,24 +104,16 @@
     }
 
     .dot {
-      width: 10px;
-      height: 10px;
-      background: white;
+      width: 8px;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.8);
       border-radius: 50%;
       animation: pulse 1.5s ease-in-out infinite;
     }
 
-    .dot:nth-child(1) {
-      animation-delay: 0s;
-    }
-
-    .dot:nth-child(2) {
-      animation-delay: 0.2s;
-    }
-
-    .dot:nth-child(3) {
-      animation-delay: 0.4s;
-    }
+    .dot:nth-child(1) { animation-delay: 0s; }
+    .dot:nth-child(2) { animation-delay: 0.2s; }
+    .dot:nth-child(3) { animation-delay: 0.4s; }
 
     @keyframes pulse {
       0%, 100% {
@@ -216,21 +128,9 @@
   </style>
 </head>
 <body>
-  <!-- Background blobs -->
-  <div class="blob blob1"></div>
-  <div class="blob blob2"></div>
-  <div class="blob blob3"></div>
-
-  <!-- Floating food emojis -->
-  <div id="emojis"></div>
-
-  <!-- Main content -->
   <div class="container">
-    <div class="logo" id="logo">
-      <!-- Will be populated by script -->
-    </div>
-
-    <div class="thank-you">Thank you for using</div>
+    <div class="restaurant-name" id="restaurantName">FFM</div>
+    <div class="subtitle">Thank you for using</div>
     <div class="app-name">Fast Food Manager</div>
 
     <div class="loading">
@@ -241,41 +141,18 @@
   </div>
 
   <script>
-    // Food emojis
-    const emojis = ['🍔', '🍕', '🍟', '🌭', '🥤', '🍗', '🌮', '🥗', '🍱', '🧆', '🥙', '🍜'];
-    const emojisContainer = document.getElementById('emojis');
-
-    // Scatter emojis
-    emojis.forEach((emoji, i) => {
-      const div = document.createElement('div');
-      div.className = 'emoji';
-      div.textContent = emoji;
-      div.style.left = `${20 + Math.random() * 60}%`;
-      div.style.top = `${15 + Math.random() * 70}%`;
-      div.style.animationDelay = `${i * 0.1}s`;
-      emojisContainer.appendChild(div);
-    });
-
-    // Load settings from electron
     async function loadSplash() {
       try {
-        // Get settings via IPC
         const settings = await window.electronAPI?.invoke('settings:getAll');
         const restaurantName = settings?.restaurant_name || 'My Restaurant';
-
-        // Always use restaurant name for consistent look
-        const logoDiv = document.getElementById('logo');
-        logoDiv.innerHTML = `<div class="logo-text">${restaurantName}</div>`;
+        document.getElementById('restaurantName').textContent = restaurantName;
       } catch (err) {
         console.error('Failed to load splash:', err);
-        document.getElementById('logo').innerHTML = '<div class="logo-text">FFM</div>';
       }
     }
 
-    // Load on start
     loadSplash();
 
-    // Close splash after 5 seconds
     setTimeout(() => {
       if (window.electronAPI?.invoke) {
         window.electronAPI.invoke('splash:close');
