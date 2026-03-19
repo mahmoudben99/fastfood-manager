@@ -15,7 +15,6 @@ asarUnpack:
 win:
   target: nsis
   icon: build/icon.ico
-  signAndEditExecutable: false
 nsis:
   oneClick: true
   allowToChangeInstallationDirectory: false
