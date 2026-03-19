@@ -126,7 +126,13 @@ const api = {
     printKitchenForWorker: (orderId: number, workerId: number) => ipcRenderer.invoke('printer:printKitchenForWorker', orderId, workerId),
     getOrderWorkers: (orderId: number) => ipcRenderer.invoke('printer:getOrderWorkers', orderId),
     previewReceipt: (orderId: number) => ipcRenderer.invoke('printer:previewReceipt', orderId),
-    testPrint: () => ipcRenderer.invoke('printer:testPrint')
+    testPrint: () => ipcRenderer.invoke('printer:testPrint'),
+    testPrintOnPrinter: (printerName: string) => ipcRenderer.invoke('printer:testPrintOnPrinter', printerName),
+    getAssignments: () => ipcRenderer.invoke('printer:getAssignments'),
+    setAssignment: (printerName: string, assignmentType: string, workerId?: number) => ipcRenderer.invoke('printer:setAssignment', printerName, assignmentType, workerId),
+    deleteAssignment: (id: number) => ipcRenderer.invoke('printer:deleteAssignment', id),
+    clearAssignments: () => ipcRenderer.invoke('printer:clearAssignments'),
+    saveFullConfig: (config: any) => ipcRenderer.invoke('printer:saveFullConfig', config)
   },
   telegram: {
     getConfig: () => ipcRenderer.invoke('telegram:getConfig'),

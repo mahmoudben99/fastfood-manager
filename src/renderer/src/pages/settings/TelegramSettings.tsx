@@ -215,14 +215,27 @@ export function TelegramSettings() {
         )}
 
         {/* Instructions */}
-        <div className="bg-blue-50 rounded-lg p-4 text-sm text-blue-800 space-y-1">
+        <div className="bg-blue-50 rounded-lg p-4 text-sm text-blue-800 space-y-2">
           <p className="font-medium">
             {t('settings.telegramInstructions', { defaultValue: 'How to set up:' })}
           </p>
-          <p>1. Open @BotFather on Telegram</p>
-          <p>2. Send /newbot and follow instructions</p>
-          <p>3. Copy the token and paste it above</p>
-          <p>4. Send /start to @userinfobot to get your Chat ID</p>
+          <div className="space-y-1">
+            <p className="font-medium">Step 1: Create a Bot</p>
+            <p>1. Open Telegram and search for <b>@BotFather</b></p>
+            <p>2. Send <b>/newbot</b> and follow the instructions to name your bot</p>
+            <p>3. BotFather will give you a <b>token</b> — copy and paste it above</p>
+          </div>
+          <div className="space-y-1 pt-1">
+            <p className="font-medium">Step 2: Get your Chat ID</p>
+            <p>1. Search for <b>@userinfobot</b> on Telegram (this is a different bot)</p>
+            <p>2. Send <b>/start</b> to @userinfobot</p>
+            <p>3. It will reply with your <b>Chat ID</b> — copy and paste it above</p>
+          </div>
+          <div className="space-y-1 pt-1">
+            <p className="font-medium">Step 3: Activate</p>
+            <p>1. Go to your new bot on Telegram and send <b>/start</b></p>
+            <p>2. Come back here and click <b>Save</b> then <b>Start Bot</b></p>
+          </div>
         </div>
       </div>
 

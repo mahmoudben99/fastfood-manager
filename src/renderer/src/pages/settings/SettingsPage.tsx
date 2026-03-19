@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check, Printer, AlertCircle, RefreshCw, LogOut, Upload, Image, ShieldCheck, ShieldX, Clock, Copy } from 'lucide-react'
+import { Check, Printer, AlertCircle, RefreshCw, LogOut, Upload, Image, ShieldCheck, ShieldX, Clock, Copy, Plus, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '../../store/appStore'
 import { Button } from '../../components/ui/Button'
@@ -59,6 +59,17 @@ export function SettingsPage() {
   const [testingPrint, setTestingPrint] = useState(false)
   const [workers, setWorkers] = useState<any[]>([])
   const [workerPrinters, setWorkerPrinters] = useState<Record<number, string>>({})
+
+  // New printer config system
+  interface PrinterConfig {
+    id: string
+    printerName: string
+    tasks: string[] // 'receipt', 'kitchen_all', 'worker_<id>'
+    autoPrint: boolean
+  }
+  const [printerConfigs, setPrinterConfigs] = useState<PrinterConfig[]>([])
+  const [printerTestResults, setPrinterTestResults] = useState<Record<string, { success: boolean; error?: string }>>({})
+  const [printerTestingIds, setPrinterTestingIds] = useState<Set<string>>(new Set())
 
   // Updates
   const [checking, setChecking] = useState(false)
@@ -172,7 +183,6 @@ export function SettingsPage() {
       const workersList = await window.api.workers.getAll()
       setWorkers(workersList)
 
-      // Load current printer assignments (we'll implement this IPC handler)
       const assignments: Record<number, string> = {}
       for (const worker of workersList) {
         if (worker.printer_name) {
@@ -181,8 +191,43 @@ export function SettingsPage() {
       }
       setWorkerPrinters(assignments)
     } catch {
-      // Workers API might not be available
       setWorkers([])
+    }
+
+    // Load printer assignments into new config format
+    try {
+      const dbAssignments = await window.api.printer.getAssignments()
+      // Group by printer_name
+      const configMap = new Map<string, PrinterConfig>()
+      for (const a of dbAssignments) {
+        if (!configMap.has(a.printer_name)) {
+          configMap.set(a.printer_name, {
+            id: crypto.randomUUID(),
+            printerName: a.printer_name,
+            tasks: [],
+            autoPrint: false
+          })
+        }
+        const config = configMap.get(a.printer_name)!
+        if (a.assignment_type === 'worker' && a.worker_id) {
+          config.tasks.push(`worker_${a.worker_id}`)
+        } else if (a.assignment_type !== 'default') {
+          config.tasks.push(a.assignment_type)
+        }
+      }
+      // Set autoPrint based on current settings
+      const configs = Array.from(configMap.values())
+      for (const config of configs) {
+        if (config.tasks.includes('receipt') && settings.auto_print_receipt === 'true') {
+          config.autoPrint = true
+        }
+        if ((config.tasks.includes('kitchen_all') || config.tasks.some(t => t.startsWith('worker_'))) && settings.auto_print_kitchen === 'true') {
+          config.autoPrint = true
+        }
+      }
+      setPrinterConfigs(configs)
+    } catch {
+      // Printer assignments might not exist yet
     }
 
     // Load auto-launch setting
@@ -233,24 +278,75 @@ export function SettingsPage() {
   }
 
   const savePrinter = async () => {
-    await window.api.settings.setMultiple({
-      printer_name: printerName,
-      kitchen_printer_name: kitchenPrinterName,
-      printer_width: paperWidth,
-      auto_print_receipt: autoPrintReceipt ? 'true' : 'false',
-      auto_print_kitchen: autoPrintKitchen ? 'true' : 'false',
-      receipt_font_size: receiptFontSize,
-      kitchen_font_size: kitchenFontSize,
-      split_kitchen_tickets: splitKitchenTickets ? 'true' : 'false'
+    // Use new printer config system
+    await window.api.printer.saveFullConfig({
+      assignments: printerConfigs.map(c => ({
+        printerName: c.printerName,
+        tasks: c.tasks,
+        autoPrint: c.autoPrint
+      })),
+      paperWidth,
+      receiptFontSize,
+      kitchenFontSize
     })
 
-    // Save worker printer assignments
-    for (const worker of workers) {
-      const printerName = workerPrinters[worker.id] || null
-      await window.api.workers.update(worker.id, { printer_name: printerName })
-    }
-
     flashSaved()
+  }
+
+  // New printer config helpers
+  const addPrinterConfig = () => {
+    setPrinterConfigs(prev => [...prev, {
+      id: crypto.randomUUID(),
+      printerName: '',
+      tasks: [],
+      autoPrint: false
+    }])
+  }
+
+  const removePrinterConfig = (id: string) => {
+    setPrinterConfigs(prev => prev.filter(p => p.id !== id))
+  }
+
+  const updatePrinterConfig = (id: string, updates: Partial<PrinterConfig>) => {
+    setPrinterConfigs(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p))
+  }
+
+  const toggleTask = (configId: string, task: string) => {
+    setPrinterConfigs(prev => prev.map(p => {
+      if (p.id !== configId) return p
+      const tasks = p.tasks.includes(task)
+        ? p.tasks.filter(t => t !== task)
+        : [...p.tasks, task]
+      return { ...p, tasks }
+    }))
+  }
+
+  const handleTestPrintForPrinter = async (configId: string, printerName: string) => {
+    if (!printerName) return
+    setPrinterTestingIds(prev => new Set(prev).add(configId))
+    try {
+      const result = await window.api.printer.testPrintOnPrinter(printerName)
+      setPrinterTestResults(prev => ({ ...prev, [configId]: result }))
+    } catch {
+      setPrinterTestResults(prev => ({ ...prev, [configId]: { success: false, error: 'Test failed' } }))
+    }
+    setPrinterTestingIds(prev => {
+      const next = new Set(prev)
+      next.delete(configId)
+      return next
+    })
+  }
+
+  // Available tasks for printer assignment
+  const getAvailableTasks = () => {
+    const tasks: { value: string; label: string }[] = [
+      { value: 'receipt', label: 'Customer Receipt' },
+      { value: 'kitchen_all', label: 'Kitchen Ticket (All Items)' }
+    ]
+    for (const worker of workers) {
+      tasks.push({ value: `worker_${worker.id}`, label: `Kitchen: ${worker.name}` })
+    }
+    return tasks
   }
 
   const handleWorkerPrinterChange = (workerId: number, printerName: string) => {
@@ -771,37 +867,23 @@ export function SettingsPage() {
 
       {tab === 'printer' && (
         <Card>
-          <div className="space-y-4 max-w-xl">
+          <div className="space-y-4 max-w-2xl">
             <div className="flex items-center gap-2 mb-2">
               <Printer className="h-5 w-5 text-gray-600" />
               <h3 className="font-semibold">{t('settings.printer')}</h3>
             </div>
 
-            <Select
-              label="Receipt Printer (Customer Receipt)"
-              value={printerName}
-              onChange={(e) => setPrinterName(e.target.value)}
-              options={[
-                { value: '', label: '-- Select Printer --' },
-                ...printers.map(p => ({
-                  value: p.name,
-                  label: p.name + (p.isDefault ? ' (Default)' : '')
-                }))
-              ]}
-            />
-
-            <Select
-              label={t('settings.paperWidth')}
-              value={paperWidth}
-              onChange={(e) => setPaperWidth(e.target.value)}
-              options={[
-                { value: '58', label: '58mm' },
-                { value: '80', label: '80mm' }
-              ]}
-            />
-
-            {/* Font size settings */}
-            <div className="grid grid-cols-2 gap-3 pt-3 mt-3 border-t border-gray-200">
+            {/* Global print settings */}
+            <div className="grid grid-cols-3 gap-3">
+              <Select
+                label={t('settings.paperWidth')}
+                value={paperWidth}
+                onChange={(e) => setPaperWidth(e.target.value)}
+                options={[
+                  { value: '58', label: '58mm' },
+                  { value: '80', label: '80mm' }
+                ]}
+              />
               <Select
                 label={t('settings.receiptFontSize', { defaultValue: 'Receipt Font Size' })}
                 value={receiptFontSize}
@@ -824,91 +906,122 @@ export function SettingsPage() {
               />
             </div>
 
-            {/* Auto-print toggles */}
-            <div className="pt-3 mt-3 border-t border-gray-200 space-y-3">
-              <h4 className="text-sm font-medium text-gray-700">{t('settings.autoPrint', { defaultValue: 'Auto-Print on New Order' })}</h4>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={autoPrintReceipt}
-                  onChange={(e) => setAutoPrintReceipt(e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
-                />
+            {/* Printer assignments */}
+            <div className="pt-3 mt-3 border-t border-gray-200">
+              <div className="flex items-center justify-between mb-3">
                 <div>
-                  <span className="text-sm text-gray-700">{t('settings.autoPrintReceipt', { defaultValue: 'Auto-print receipt' })}</span>
-                  <p className="text-xs text-gray-400">{t('settings.autoPrintReceiptDesc', { defaultValue: 'Automatically print customer receipt when a new order is placed' })}</p>
+                  <h4 className="text-sm font-medium text-gray-700">Printers</h4>
+                  <p className="text-xs text-gray-400">Add printers and assign what each one should print</p>
                 </div>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={autoPrintKitchen}
-                  onChange={(e) => setAutoPrintKitchen(e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
-                />
-                <div>
-                  <span className="text-sm text-gray-700">{t('settings.autoPrintKitchen', { defaultValue: 'Auto-print kitchen ticket' })}</span>
-                  <p className="text-xs text-gray-400">{t('settings.autoPrintKitchenDesc', { defaultValue: 'Automatically print kitchen ticket when a new order is placed' })}</p>
-                </div>
-              </label>
-            </div>
+                <Button variant="secondary" size="sm" onClick={addPrinterConfig}>
+                  <Plus className="h-4 w-4" />
+                  Add Printer
+                </Button>
+              </div>
 
-            {/* Worker Printer Assignments */}
-            {workers.length > 0 && (
-              <div className="pt-3 mt-3 border-t border-gray-200 space-y-3">
-                <div>
-                  <h4 className="text-sm font-medium text-gray-700">{t('settings.workerPrinters', { defaultValue: 'Worker Printer Assignments' })}</h4>
-                  <p className="text-xs text-gray-400 mt-1">{t('settings.workerPrintersDesc', { defaultValue: 'Assign specific printers to workers for kitchen ticket printing' })}</p>
+              {printerConfigs.length === 0 && (
+                <div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-xl">
+                  <Printer className="h-10 w-10 text-gray-300 mx-auto mb-2" />
+                  <p className="text-sm text-gray-400">No printers configured</p>
+                  <p className="text-xs text-gray-400 mt-1">Click "Add Printer" to set up your first printer</p>
                 </div>
-                {workers.map(worker => (
-                  <div key={worker.id} className="flex items-center gap-3">
-                    <label className="w-32 text-sm text-gray-700">{worker.name}:</label>
-                    <select
-                      value={workerPrinters[worker.id] || ''}
-                      onChange={(e) => handleWorkerPrinterChange(worker.id, e.target.value)}
-                      className="flex-1 border rounded-lg px-3 py-1.5 text-sm"
-                    >
-                      <option value="">{t('settings.noAssignment', { defaultValue: '-- Use Default --' })}</option>
-                      {printers.map(printer => (
-                        <option key={printer.name} value={printer.name}>
-                          {printer.name}{printer.isDefault ? ' (Default)' : ''}
-                        </option>
-                      ))}
-                    </select>
+              )}
+
+              <div className="space-y-3">
+                {printerConfigs.map((config, index) => (
+                  <div key={config.id} className="border border-gray-200 rounded-xl p-4 space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1">
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Printer {index + 1}</label>
+                        <select
+                          value={config.printerName}
+                          onChange={(e) => updatePrinterConfig(config.id, { printerName: e.target.value })}
+                          className="w-full border rounded-lg px-3 py-2 text-sm"
+                        >
+                          <option value="">-- Select Printer --</option>
+                          {printers.map(p => (
+                            <option key={p.name} value={p.name}>
+                              {p.name}{p.isDefault ? ' (Default)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <button
+                        onClick={() => removePrinterConfig(config.id)}
+                        className="mt-5 p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Remove printer"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    {/* Task toggles */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-2">Print Tasks</label>
+                      <div className="flex flex-wrap gap-2">
+                        {getAvailableTasks().map(task => (
+                          <button
+                            key={task.value}
+                            onClick={() => toggleTask(config.id, task.value)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+                              config.tasks.includes(task.value)
+                                ? 'bg-orange-100 text-orange-700 border-orange-300'
+                                : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'
+                            }`}
+                          >
+                            {config.tasks.includes(task.value) ? '✓ ' : ''}{task.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Auto-print + Test row */}
+                    <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={config.autoPrint}
+                          onChange={(e) => updatePrinterConfig(config.id, { autoPrint: e.target.checked })}
+                          className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+                        />
+                        <span className="text-sm text-gray-600">Auto-print on new order</span>
+                      </label>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => handleTestPrintForPrinter(config.id, config.printerName)}
+                        loading={printerTestingIds.has(config.id)}
+                        disabled={!config.printerName}
+                      >
+                        <Printer className="h-3.5 w-3.5" />
+                        Test
+                      </Button>
+                    </div>
+
+                    {/* Test result for this printer */}
+                    {printerTestResults[config.id] && (
+                      <div className={`flex items-center gap-2 p-2 rounded-lg text-xs ${
+                        printerTestResults[config.id].success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+                      }`}>
+                        {printerTestResults[config.id].success ? <Check className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
+                        {printerTestResults[config.id].success ? 'Test print sent!' : printerTestResults[config.id].error || 'Print failed'}
+                      </div>
+                    )}
                   </div>
                 ))}
-                <div className="mt-2 p-3 bg-blue-50 rounded-lg">
-                  <p className="text-xs text-blue-700">
-                    💡 {t('settings.workerPrintersHint', { defaultValue: 'When split kitchen tickets is enabled, each worker\'s items will print to their assigned printer.' })}
-                  </p>
-                </div>
               </div>
-            )}
-
-            <div className="flex gap-3">
-              <Button onClick={savePrinter}>{t('common.save')}</Button>
-              <Button
-                variant="secondary"
-                onClick={handleTestPrint}
-                loading={testingPrint}
-                disabled={!printerName}
-              >
-                <Printer className="h-4 w-4" />
-                {t('settings.testPrint')}
-              </Button>
             </div>
 
-            {testResult && (
-              <div className={`flex items-center gap-2 p-3 rounded-lg text-sm ${
-                testResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
-              }`}>
-                {testResult.success ? <Check className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-                {testResult.success ? 'Test print sent successfully!' : testResult.error || 'Print failed'}
-              </div>
-            )}
+            {/* Save button */}
+            <div className="flex gap-3 pt-2">
+              <Button onClick={savePrinter}>{t('common.save')}</Button>
+            </div>
 
             {printers.length === 0 && (
-              <p className="text-sm text-gray-400">No printers detected on this system.</p>
+              <div className="flex items-center gap-2 p-3 bg-orange-50 rounded-lg">
+                <AlertCircle className="h-4 w-4 text-orange-500" />
+                <p className="text-sm text-orange-700">No printers detected on this system. Make sure your printer is connected and turned on.</p>
+              </div>
             )}
           </div>
         </Card>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Lock, ShoppingCart, Trash2, Minus, Plus, Phone, MessageSquare, Check, Printer, Moon, Sun, Search, ClipboardList, X, Hash, Pencil, AlertTriangle, RefreshCw, ArrowLeft } from 'lucide-react'
+import { Lock, ShoppingCart, Trash2, Minus, Plus, Phone, MessageSquare, Check, Printer, Moon, Sun, Search, ClipboardList, X, Hash, Pencil, AlertTriangle, RefreshCw, ArrowLeft, ArrowUpAZ, ArrowDownAZ, ArrowUp01, ArrowDown01, Layers, LayoutGrid } from 'lucide-react'
 import { useOrderStore, type CartItem } from '../../store/orderStore'
 import { useAppStore } from '../../store/appStore'
 import { Button } from '../../components/ui/Button'
@@ -98,6 +98,12 @@ export function OrderScreen() {
   // Size group expansion
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null)
 
+  // Sort & compact mode
+  const [sortMode, setSortMode] = useState<'name' | 'price'>('name')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
+  const [compactMode, setCompactMode] = useState(true)
+  const [sortAnimating, setSortAnimating] = useState(false)
+
   // Order alert settings
   const [orderAlertMinutes, setOrderAlertMinutes] = useState(20)
   const [currentTime, setCurrentTime] = useState(Date.now())
@@ -156,6 +162,10 @@ export function OrderScreen() {
   const loadAlertSettings = async () => {
     const settings = await window.api.settings.getAll()
     setOrderAlertMinutes(parseInt(settings.order_alert_minutes || '20'))
+    // Load sort & compact preferences
+    if (settings.menu_sort_mode) setSortMode(settings.menu_sort_mode as 'name' | 'price')
+    if (settings.menu_sort_direction) setSortDirection(settings.menu_sort_direction as 'asc' | 'desc')
+    if (settings.menu_compact_mode !== undefined) setCompactMode(settings.menu_compact_mode !== 'false')
   }
 
   const loadNoteSuggestions = async () => {
@@ -387,10 +397,32 @@ export function OrderScreen() {
   // Size suffixes to detect (order matters — check longer patterns first)
   const SIZE_PATTERNS = /\s+(XXL|XL|XS|S|M|L|Grande|Grand|Petit|Small|Medium|Large)\s*$/i
 
-  // Group items that share the same base name but differ by size suffix (3+ variants only)
+  // Group items that share the same base name but differ by size suffix
   const groupedItems = useMemo(() => {
+    type GridEntry = { type: 'single'; item: MenuItemData } | { type: 'group'; key: string; baseName: string; emoji: string | null; categoryIcon: string | null; items: MenuItemData[] }
+
+    // If compact mode is OFF, treat every item as individual (no grouping)
+    if (!compactMode) {
+      const result: GridEntry[] = filteredItems.map(item => ({ type: 'single' as const, item }))
+
+      // Sort the flat list
+      result.sort((a, b) => {
+        const itemA = (a as { type: 'single'; item: MenuItemData }).item
+        const itemB = (b as { type: 'single'; item: MenuItemData }).item
+        if (sortMode === 'name') {
+          const nameA = getItemName(itemA).toLowerCase()
+          const nameB = getItemName(itemB).toLowerCase()
+          return sortDirection === 'asc' ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA)
+        } else {
+          return sortDirection === 'asc' ? itemA.price - itemB.price : itemB.price - itemA.price
+        }
+      })
+
+      return result
+    }
+
+    // Compact mode ON — group items with 3+ size variants
     const groups: Record<string, { baseName: string; items: MenuItemData[] }> = {}
-    const ungrouped: MenuItemData[] = []
 
     for (const item of filteredItems) {
       const name = getItemName(item)
@@ -400,16 +432,12 @@ export function OrderScreen() {
         const key = `${item.category_id}::${baseName.toLowerCase()}`
         if (!groups[key]) groups[key] = { baseName, items: [] }
         groups[key].items.push(item)
-      } else {
-        ungrouped.push(item)
       }
     }
 
-    // Build final list: groups with 3+ sizes become grouped, rest stay individual
-    type GridEntry = { type: 'single'; item: MenuItemData } | { type: 'group'; key: string; baseName: string; emoji: string | null; categoryIcon: string | null; items: MenuItemData[] }
     const result: GridEntry[] = []
-
     const groupedIds = new Set<number>()
+
     for (const [key, group] of Object.entries(groups)) {
       if (group.items.length >= 3) {
         const first = group.items[0]
@@ -432,8 +460,48 @@ export function OrderScreen() {
       }
     }
 
+    // Sort the result
+    result.sort((a, b) => {
+      const nameA = a.type === 'single' ? getItemName(a.item).toLowerCase() : a.baseName.toLowerCase()
+      const nameB = b.type === 'single' ? getItemName(b.item).toLowerCase() : b.baseName.toLowerCase()
+      const priceA = a.type === 'single' ? a.item.price : a.items[0].price
+      const priceB = b.type === 'single' ? b.item.price : b.items[0].price
+
+      if (sortMode === 'name') {
+        return sortDirection === 'asc' ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA)
+      } else {
+        return sortDirection === 'asc' ? priceA - priceB : priceB - priceA
+      }
+    })
+
     return result
-  }, [filteredItems, categories, foodLanguage])
+  }, [filteredItems, categories, foodLanguage, compactMode, sortMode, sortDirection])
+
+  // Sort toggle handlers
+  const handleSortByName = () => {
+    const newDir = sortMode === 'name' ? (sortDirection === 'asc' ? 'desc' : 'asc') : 'asc'
+    setSortMode('name')
+    setSortDirection(newDir)
+    setSortAnimating(true)
+    setTimeout(() => setSortAnimating(false), 300)
+    window.api.settings.setMultiple({ menu_sort_mode: 'name', menu_sort_direction: newDir })
+  }
+
+  const handleSortByPrice = () => {
+    const newDir = sortMode === 'price' ? (sortDirection === 'asc' ? 'desc' : 'asc') : 'asc'
+    setSortMode('price')
+    setSortDirection(newDir)
+    setSortAnimating(true)
+    setTimeout(() => setSortAnimating(false), 300)
+    window.api.settings.setMultiple({ menu_sort_mode: 'price', menu_sort_direction: newDir })
+  }
+
+  const handleToggleCompact = () => {
+    const newVal = !compactMode
+    setCompactMode(newVal)
+    setExpandedGroup(null)
+    window.api.settings.set('menu_compact_mode', newVal ? 'true' : 'false')
+  }
 
   const getSizeLabel = (item: MenuItemData): string => {
     const name = getItemName(item)
@@ -753,6 +821,49 @@ export function OrderScreen() {
                 </div>
               </div>
 
+              {/* Sort & Compact toolbar (touch) */}
+              <div className="bg-white border-b px-4 py-2 flex items-center gap-2 shrink-0">
+                <button
+                  onClick={handleSortByName}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
+                    sortMode === 'name'
+                      ? 'bg-orange-100 text-orange-700 border border-orange-300'
+                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }`}
+                >
+                  <span className={sortAnimating && sortMode === 'name' ? 'animate-flip-sort' : ''}>
+                    {sortMode === 'name' && sortDirection === 'desc' ? <ArrowDownAZ className="h-4 w-4" /> : <ArrowUpAZ className="h-4 w-4" />}
+                  </span>
+                  A-Z
+                </button>
+                <button
+                  onClick={handleSortByPrice}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
+                    sortMode === 'price'
+                      ? 'bg-orange-100 text-orange-700 border border-orange-300'
+                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }`}
+                >
+                  <span className={sortAnimating && sortMode === 'price' ? 'animate-flip-sort' : ''}>
+                    {sortMode === 'price' && sortDirection === 'desc' ? <ArrowDown01 className="h-4 w-4" /> : <ArrowUp01 className="h-4 w-4" />}
+                  </span>
+                  {t('orders.price', { defaultValue: 'Price' })}
+                </button>
+                <div className="ms-auto">
+                  <button
+                    onClick={handleToggleCompact}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
+                      compactMode
+                        ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    }`}
+                  >
+                    {compactMode ? <Layers className="h-4 w-4" /> : <LayoutGrid className="h-4 w-4" />}
+                    {compactMode ? t('orders.compact', { defaultValue: 'Compact' }) : t('orders.expanded', { defaultValue: 'Expanded' })}
+                  </button>
+                </div>
+              </div>
+
               {/* Items grid - bigger cards */}
               <div className="flex-1 overflow-y-auto p-4">
                 <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -892,6 +1003,50 @@ export function OrderScreen() {
                   {cat.icon && <span>{cat.icon}</span>} {getCategoryName(cat)}
                 </button>
               ))}
+            </div>
+
+            {/* Sort & Compact toolbar */}
+            <div className="bg-white border-b px-2 sm:px-4 py-1.5 flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={handleSortByName}
+                className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors ${
+                  sortMode === 'name'
+                    ? 'bg-orange-100 text-orange-700 border border-orange-300'
+                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                }`}
+              >
+                <span className={sortAnimating && sortMode === 'name' ? 'animate-flip-sort' : ''}>
+                  {sortMode === 'name' && sortDirection === 'desc' ? <ArrowDownAZ className="h-3.5 w-3.5" /> : <ArrowUpAZ className="h-3.5 w-3.5" />}
+                </span>
+                A-Z
+              </button>
+              <button
+                onClick={handleSortByPrice}
+                className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors ${
+                  sortMode === 'price'
+                    ? 'bg-orange-100 text-orange-700 border border-orange-300'
+                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                }`}
+              >
+                <span className={sortAnimating && sortMode === 'price' ? 'animate-flip-sort' : ''}>
+                  {sortMode === 'price' && sortDirection === 'desc' ? <ArrowDown01 className="h-3.5 w-3.5" /> : <ArrowUp01 className="h-3.5 w-3.5" />}
+                </span>
+                {t('orders.price', { defaultValue: 'Price' })}
+              </button>
+              <div className="ms-auto">
+                <button
+                  onClick={handleToggleCompact}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors ${
+                    compactMode
+                      ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }`}
+                  title={compactMode ? 'Compact: sizes grouped' : 'Expanded: each size separate'}
+                >
+                  {compactMode ? <Layers className="h-3.5 w-3.5" /> : <LayoutGrid className="h-3.5 w-3.5" />}
+                  {compactMode ? t('orders.compact', { defaultValue: 'Compact' }) : t('orders.expanded', { defaultValue: 'Expanded' })}
+                </button>
+              </div>
             </div>
 
             {/* Menu items grid */}

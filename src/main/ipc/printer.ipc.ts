@@ -188,6 +188,109 @@ export function registerPrinterHandlers(): void {
     return workers.sort((a, b) => a.name.localeCompare(b.name))
   })
 
+  // Printer assignment CRUD
+  ipcMain.handle('printer:getAssignments', () => {
+    return printerAssignmentsRepo.getAll()
+  })
+
+  ipcMain.handle('printer:setAssignment', (_, printerName: string, assignmentType: string, workerId?: number) => {
+    printerAssignmentsRepo.setAssignment(printerName, assignmentType as any, workerId)
+    return { success: true }
+  })
+
+  ipcMain.handle('printer:deleteAssignment', (_, id: number) => {
+    printerAssignmentsRepo.deleteAssignment(id)
+    return { success: true }
+  })
+
+  ipcMain.handle('printer:clearAssignments', () => {
+    const db = require('../database/connection').getDb()
+    db.prepare('DELETE FROM printer_assignments').run()
+    return { success: true }
+  })
+
+  ipcMain.handle('printer:saveFullConfig', (_, config: {
+    assignments: { printerName: string; tasks: string[]; autoPrint: boolean; workerId?: number }[]
+    paperWidth: string
+    receiptFontSize: string
+    kitchenFontSize: string
+  }) => {
+    // Clear all existing assignments
+    const db = require('../database/connection').getDb()
+    db.prepare('DELETE FROM printer_assignments').run()
+
+    // Save new assignments
+    for (const printer of config.assignments) {
+      for (const task of printer.tasks) {
+        if (task.startsWith('worker_')) {
+          const workerId = parseInt(task.replace('worker_', ''))
+          printerAssignmentsRepo.setAssignment(printer.printerName, 'worker', workerId)
+        } else {
+          printerAssignmentsRepo.setAssignment(printer.printerName, task as any)
+        }
+      }
+    }
+
+    // Save auto-print settings: find if any printer has autoPrint for receipt/kitchen
+    const hasAutoReceipt = config.assignments.some(p => p.autoPrint && p.tasks.includes('receipt'))
+    const hasAutoKitchen = config.assignments.some(p => p.autoPrint && (p.tasks.includes('kitchen_all') || p.tasks.some(t => t.startsWith('worker_'))))
+
+    settingsRepo.setMultiple({
+      printer_width: config.paperWidth,
+      receipt_font_size: config.receiptFontSize,
+      kitchen_font_size: config.kitchenFontSize,
+      auto_print_receipt: hasAutoReceipt ? 'true' : 'false',
+      auto_print_kitchen: hasAutoKitchen ? 'true' : 'false',
+      split_kitchen_tickets: config.assignments.some(p => p.tasks.some(t => t.startsWith('worker_'))) ? 'true' : 'false'
+    })
+
+    // Also update the legacy printer_name / kitchen_printer_name settings for backward compat
+    const receiptPrinter = config.assignments.find(p => p.tasks.includes('receipt'))
+    const kitchenPrinter = config.assignments.find(p => p.tasks.includes('kitchen_all') || p.tasks.some(t => t.startsWith('worker_')))
+    settingsRepo.setMultiple({
+      printer_name: receiptPrinter?.printerName || config.assignments[0]?.printerName || '',
+      kitchen_printer_name: kitchenPrinter?.printerName || receiptPrinter?.printerName || config.assignments[0]?.printerName || ''
+    })
+
+    // Update worker printer assignments in workers table
+    for (const printer of config.assignments) {
+      for (const task of printer.tasks) {
+        if (task.startsWith('worker_')) {
+          const workerId = parseInt(task.replace('worker_', ''))
+          workersRepo.update(workerId, { printer_name: printer.printerName } as any)
+        }
+      }
+    }
+
+    return { success: true }
+  })
+
+  ipcMain.handle('printer:testPrintOnPrinter', async (_, printerName: string) => {
+    const settings = settingsRepo.getAll()
+    const paperWidth = parseInt(settings.printer_width || '80')
+    const maxWidth = paperWidth === 58 ? '48mm' : '72mm'
+    const html = `<!DOCTYPE html><html>
+<head><meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; }
+  body { font-family: 'Courier New', monospace; font-size: 12px; width: ${maxWidth}; padding: 4mm 2mm; text-align: center; }
+  .line { border-top: 1px dashed #000; margin: 8px 0; }
+</style></head>
+<body>
+  <div style="font-size:16px; font-weight:bold;">TEST PRINT</div>
+  <div class="line"></div>
+  <div>${settings.restaurant_name || 'Fast Food Manager'}</div>
+  <div class="line"></div>
+  <div>Printer: ${printerName}</div>
+  <div>Width: ${paperWidth}mm</div>
+  <div>Time: ${new Date().toLocaleString()}</div>
+  <div class="line"></div>
+  <div>Printer is working!</div>
+  <br><br>
+</body></html>`
+    return doPrint(html, printerName)
+  })
+
   ipcMain.handle('printer:testPrint', async () => {
     const settings = settingsRepo.getAll()
     const printerName = settings.printer_name
