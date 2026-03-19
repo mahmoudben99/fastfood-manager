@@ -90,6 +90,8 @@ export function OrderScreen() {
 
   // Workers for selected order
   const [orderWorkers, setOrderWorkers] = useState<{ id: number; name: string; itemCount: number }[]>([])
+  // Workers for order success modal
+  const [successOrderWorkers, setSuccessOrderWorkers] = useState<{ id: number; name: string; itemCount: number }[]>([])
 
   // History search
   const [historySearch, setHistorySearch] = useState('')
@@ -395,7 +397,9 @@ export function OrderScreen() {
   }
 
   // Size suffixes to detect (order matters — check longer patterns first)
-  const SIZE_PATTERNS = /\s+(XXL|XL|XS|S|M|L|Grande|Grand|Petit|Small|Medium|Large)\s*$/i
+  // Includes: standard S/M/L/XL/XS/XXL, French Grande/Grand/Petit/Moyen/Normal/Geant,
+  // abbreviations N/G (Normal/Geant common in Algeria), P (Petit), Small/Medium/Large
+  const SIZE_PATTERNS = /\s+(XXL|XL|XS|Small|Medium|Large|Grande|Grand|Geant|Géant|Petit|Moyen|Normal|S|M|L|N|G|P)\s*$/i
 
   // Group items that share the same base name but differ by size suffix
   const groupedItems = useMemo(() => {
@@ -606,6 +610,11 @@ export function OrderScreen() {
       })
 
       setOrderSuccess({ orderId: order.id, orderNumber: order.daily_number })
+      // Load workers for this order so the success modal can show worker-specific print buttons
+      try {
+        const workers = await window.api.printer.getOrderWorkers(order.id)
+        setSuccessOrderWorkers(workers)
+      } catch { setSuccessOrderWorkers([]) }
       store.clearOrder()
       loadOngoingCount()
     } catch (err) {
@@ -1460,7 +1469,7 @@ export function OrderScreen() {
 
       {/* Order success modal */}
       {orderSuccess && (
-        <Modal isOpen onClose={() => setOrderSuccess(null)} size="sm">
+        <Modal isOpen onClose={() => { setOrderSuccess(null); setSuccessOrderWorkers([]) }} size="sm">
           <div className="text-center py-6">
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Check className="h-8 w-8 text-green-600" />
@@ -1469,25 +1478,44 @@ export function OrderScreen() {
             <p className="text-3xl font-bold text-orange-600">
               {t('orders.orderNumber', { number: orderSuccess.orderNumber })}
             </p>
-            <div className="flex gap-2 mt-6 justify-center">
+            <div className="flex flex-col gap-2 mt-6">
               <Button
                 variant="secondary"
                 size="sm"
                 onClick={() => window.api.printer.printReceipt(orderSuccess.orderId)}
+                className="w-full"
               >
                 <Printer className="h-4 w-4" />
                 {t('orders.printReceipt')}
               </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => window.api.printer.printKitchen(orderSuccess.orderId)}
-              >
-                <Printer className="h-4 w-4" />
-                {t('orders.printKitchen')}
-              </Button>
+              {successOrderWorkers.length > 0 ? (
+                <>
+                  {successOrderWorkers.map(worker => (
+                    <Button
+                      key={worker.id}
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => window.api.printer.printKitchenForWorker(orderSuccess.orderId, worker.id)}
+                      className="w-full"
+                    >
+                      <Printer className="h-4 w-4" />
+                      Print {worker.name} Recipe ({worker.itemCount} {worker.itemCount === 1 ? 'item' : 'items'})
+                    </Button>
+                  ))}
+                </>
+              ) : (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => window.api.printer.printKitchen(orderSuccess.orderId)}
+                  className="w-full"
+                >
+                  <Printer className="h-4 w-4" />
+                  {t('orders.printKitchen')}
+                </Button>
+              )}
             </div>
-            <Button onClick={() => setOrderSuccess(null)} className="mt-4">
+            <Button onClick={() => { setOrderSuccess(null); setSuccessOrderWorkers([]) }} className="mt-4">
               {t('common.close')}
             </Button>
           </div>

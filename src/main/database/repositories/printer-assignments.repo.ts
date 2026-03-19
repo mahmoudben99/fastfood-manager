@@ -6,6 +6,10 @@ export interface PrinterAssignment {
   assignment_type: 'worker' | 'receipt' | 'kitchen_all' | 'default'
   worker_id: number | null
   is_active: number
+  auto_print: number
+  paper_width: string
+  receipt_font_size: string
+  kitchen_font_size: string
 }
 
 export const printerAssignmentsRepo = {
@@ -27,9 +31,31 @@ export const printerAssignmentsRepo = {
       .get() as { printer_name: string } | undefined
 
     if (assignment) return assignment.printer_name
-
-    // Fallback to default printer
     return this.getDefaultPrinter()
+  },
+
+  // Get receipt printer settings (paper width, font size)
+  getReceiptSettings(): { paper_width: string; receipt_font_size: string } | null {
+    const assignment = getDb()
+      .prepare(
+        `SELECT paper_width, receipt_font_size FROM printer_assignments
+         WHERE assignment_type = 'receipt' AND is_active = 1
+         LIMIT 1`
+      )
+      .get() as { paper_width: string; receipt_font_size: string } | undefined
+    return assignment || null
+  },
+
+  // Get kitchen printer settings
+  getKitchenSettings(): { paper_width: string; kitchen_font_size: string } | null {
+    const assignment = getDb()
+      .prepare(
+        `SELECT paper_width, kitchen_font_size FROM printer_assignments
+         WHERE assignment_type IN ('kitchen_all', 'worker') AND is_active = 1
+         LIMIT 1`
+      )
+      .get() as { paper_width: string; kitchen_font_size: string } | undefined
+    return assignment || null
   },
 
   // Get printer for kitchen (all workers) - fallback to default
@@ -43,8 +69,6 @@ export const printerAssignmentsRepo = {
       .get() as { printer_name: string } | undefined
 
     if (assignment) return assignment.printer_name
-
-    // Fallback to default
     return this.getDefaultPrinter()
   },
 
@@ -57,7 +81,7 @@ export const printerAssignmentsRepo = {
 
     if (worker?.printer_name) return worker.printer_name
 
-    // Fallback to printer_assignments table (legacy)
+    // Fallback to printer_assignments table
     const assignment = getDb()
       .prepare(
         `SELECT printer_name FROM printer_assignments
@@ -67,8 +91,6 @@ export const printerAssignmentsRepo = {
       .get(workerId) as { printer_name: string } | undefined
 
     if (assignment) return assignment.printer_name
-
-    // Fallback to kitchen_all printer
     return this.getKitchenAllPrinter()
   },
 
@@ -85,31 +107,50 @@ export const printerAssignmentsRepo = {
     return assignment?.printer_name || null
   },
 
-  // Create or update assignment
-  setAssignment(
-    printerName: string,
-    assignmentType: 'worker' | 'receipt' | 'kitchen_all' | 'default',
-    workerId?: number
-  ): void {
-    // Deactivate existing assignments of same type (and worker if applicable)
-    if (assignmentType === 'worker' && workerId) {
-      getDb()
-        .prepare(
-          'UPDATE printer_assignments SET is_active = 0 WHERE assignment_type = ? AND worker_id = ?'
-        )
-        .run(assignmentType, workerId)
-    } else {
-      getDb()
-        .prepare('UPDATE printer_assignments SET is_active = 0 WHERE assignment_type = ?')
-        .run(assignmentType)
-    }
+  // Save full printer configuration — clears everything and rebuilds
+  saveFullConfig(configs: {
+    printerName: string
+    tasks: string[]
+    autoPrint: boolean
+    paperWidth: string
+    receiptFontSize: string
+    kitchenFontSize: string
+  }[]): void {
+    const db = getDb()
+    db.transaction(() => {
+      // Clear all existing
+      db.prepare('DELETE FROM printer_assignments').run()
 
-    // Create new assignment
-    getDb()
-      .prepare(
-        'INSERT INTO printer_assignments (printer_name, assignment_type, worker_id) VALUES (?, ?, ?)'
+      const insert = db.prepare(
+        `INSERT INTO printer_assignments
+         (printer_name, assignment_type, worker_id, is_active, auto_print, paper_width, receipt_font_size, kitchen_font_size)
+         VALUES (?, ?, ?, 1, ?, ?, ?, ?)`
       )
-      .run(printerName, assignmentType, workerId || null)
+
+      for (const config of configs) {
+        if (config.tasks.length === 0) continue
+
+        for (const task of config.tasks) {
+          let assignmentType = task
+          let workerId: number | null = null
+
+          if (task.startsWith('worker_')) {
+            assignmentType = 'worker'
+            workerId = parseInt(task.replace('worker_', ''))
+          }
+
+          insert.run(
+            config.printerName,
+            assignmentType,
+            workerId,
+            config.autoPrint ? 1 : 0,
+            config.paperWidth,
+            config.receiptFontSize,
+            config.kitchenFontSize
+          )
+        }
+      }
+    })()
   },
 
   // Delete assignment

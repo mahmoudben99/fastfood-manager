@@ -66,6 +66,9 @@ export function SettingsPage() {
     printerName: string
     tasks: string[] // 'receipt', 'kitchen_all', 'worker_<id>'
     autoPrint: boolean
+    paperWidth: string
+    receiptFontSize: string
+    kitchenFontSize: string
   }
   const [printerConfigs, setPrinterConfigs] = useState<PrinterConfig[]>([])
   const [printerTestResults, setPrinterTestResults] = useState<Record<string, { success: boolean; error?: string }>>({})
@@ -205,7 +208,10 @@ export function SettingsPage() {
             id: crypto.randomUUID(),
             printerName: a.printer_name,
             tasks: [],
-            autoPrint: false
+            autoPrint: !!a.auto_print,
+            paperWidth: a.paper_width || '80',
+            receiptFontSize: a.receipt_font_size || 'medium',
+            kitchenFontSize: a.kitchen_font_size || 'large'
           })
         }
         const config = configMap.get(a.printer_name)!
@@ -214,18 +220,10 @@ export function SettingsPage() {
         } else if (a.assignment_type !== 'default') {
           config.tasks.push(a.assignment_type)
         }
+        // Use auto_print from any row for this printer (they should all be the same)
+        if (a.auto_print) config.autoPrint = true
       }
-      // Set autoPrint based on current settings
-      const configs = Array.from(configMap.values())
-      for (const config of configs) {
-        if (config.tasks.includes('receipt') && settings.auto_print_receipt === 'true') {
-          config.autoPrint = true
-        }
-        if ((config.tasks.includes('kitchen_all') || config.tasks.some(t => t.startsWith('worker_'))) && settings.auto_print_kitchen === 'true') {
-          config.autoPrint = true
-        }
-      }
-      setPrinterConfigs(configs)
+      setPrinterConfigs(Array.from(configMap.values()))
     } catch {
       // Printer assignments might not exist yet
     }
@@ -278,16 +276,15 @@ export function SettingsPage() {
   }
 
   const savePrinter = async () => {
-    // Use new printer config system
     await window.api.printer.saveFullConfig({
       assignments: printerConfigs.map(c => ({
         printerName: c.printerName,
         tasks: c.tasks,
-        autoPrint: c.autoPrint
-      })),
-      paperWidth,
-      receiptFontSize,
-      kitchenFontSize
+        autoPrint: c.autoPrint,
+        paperWidth: c.paperWidth,
+        receiptFontSize: c.receiptFontSize,
+        kitchenFontSize: c.kitchenFontSize
+      }))
     })
 
     flashSaved()
@@ -299,7 +296,10 @@ export function SettingsPage() {
       id: crypto.randomUUID(),
       printerName: '',
       tasks: [],
-      autoPrint: false
+      autoPrint: false,
+      paperWidth: '80',
+      receiptFontSize: 'medium',
+      kitchenFontSize: 'large'
     }])
   }
 
@@ -868,154 +868,155 @@ export function SettingsPage() {
       {tab === 'printer' && (
         <Card>
           <div className="space-y-4 max-w-2xl">
-            <div className="flex items-center gap-2 mb-2">
-              <Printer className="h-5 w-5 text-gray-600" />
-              <h3 className="font-semibold">{t('settings.printer')}</h3>
-            </div>
-
-            {/* Global print settings */}
-            <div className="grid grid-cols-3 gap-3">
-              <Select
-                label={t('settings.paperWidth')}
-                value={paperWidth}
-                onChange={(e) => setPaperWidth(e.target.value)}
-                options={[
-                  { value: '58', label: '58mm' },
-                  { value: '80', label: '80mm' }
-                ]}
-              />
-              <Select
-                label={t('settings.receiptFontSize', { defaultValue: 'Receipt Font Size' })}
-                value={receiptFontSize}
-                onChange={(e) => setReceiptFontSize(e.target.value)}
-                options={[
-                  { value: 'small', label: t('settings.fontSmall', { defaultValue: 'Small' }) },
-                  { value: 'medium', label: t('settings.fontMedium', { defaultValue: 'Medium' }) },
-                  { value: 'large', label: t('settings.fontLarge', { defaultValue: 'Large' }) }
-                ]}
-              />
-              <Select
-                label={t('settings.kitchenFontSize', { defaultValue: 'Kitchen Font Size' })}
-                value={kitchenFontSize}
-                onChange={(e) => setKitchenFontSize(e.target.value)}
-                options={[
-                  { value: 'small', label: t('settings.fontSmall', { defaultValue: 'Small' }) },
-                  { value: 'medium', label: t('settings.fontMedium', { defaultValue: 'Medium' }) },
-                  { value: 'large', label: t('settings.fontLarge', { defaultValue: 'Large' }) }
-                ]}
-              />
-            </div>
-
-            {/* Printer assignments */}
-            <div className="pt-3 mt-3 border-t border-gray-200">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <h4 className="text-sm font-medium text-gray-700">Printers</h4>
-                  <p className="text-xs text-gray-400">Add printers and assign what each one should print</p>
-                </div>
-                <Button variant="secondary" size="sm" onClick={addPrinterConfig}>
-                  <Plus className="h-4 w-4" />
-                  Add Printer
-                </Button>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Printer className="h-5 w-5 text-gray-600" />
+                <h3 className="font-semibold">{t('settings.printer')}</h3>
               </div>
+              <Button variant="secondary" size="sm" onClick={addPrinterConfig}>
+                <Plus className="h-4 w-4" />
+                Add Printer
+              </Button>
+            </div>
 
-              {printerConfigs.length === 0 && (
-                <div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-xl">
-                  <Printer className="h-10 w-10 text-gray-300 mx-auto mb-2" />
-                  <p className="text-sm text-gray-400">No printers configured</p>
-                  <p className="text-xs text-gray-400 mt-1">Click "Add Printer" to set up your first printer</p>
-                </div>
-              )}
+            {printerConfigs.length === 0 && (
+              <div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-xl">
+                <Printer className="h-10 w-10 text-gray-300 mx-auto mb-2" />
+                <p className="text-sm text-gray-400">No printers configured</p>
+                <p className="text-xs text-gray-400 mt-1">Click "Add Printer" to set up your first printer</p>
+              </div>
+            )}
 
-              <div className="space-y-3">
-                {printerConfigs.map((config, index) => (
-                  <div key={config.id} className="border border-gray-200 rounded-xl p-4 space-y-3">
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1">
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Printer {index + 1}</label>
-                        <select
-                          value={config.printerName}
-                          onChange={(e) => updatePrinterConfig(config.id, { printerName: e.target.value })}
-                          className="w-full border rounded-lg px-3 py-2 text-sm"
-                        >
-                          <option value="">-- Select Printer --</option>
-                          {printers.map(p => (
-                            <option key={p.name} value={p.name}>
-                              {p.name}{p.isDefault ? ' (Default)' : ''}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <button
-                        onClick={() => removePrinterConfig(config.id)}
-                        className="mt-5 p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Remove printer"
+            <div className="space-y-3">
+              {printerConfigs.map((config, index) => (
+                <div key={config.id} className="border border-gray-200 rounded-xl p-4 space-y-3">
+                  {/* Printer selection + remove */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1">
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Printer {index + 1}</label>
+                      <select
+                        value={config.printerName}
+                        onChange={(e) => updatePrinterConfig(config.id, { printerName: e.target.value })}
+                        className="w-full border rounded-lg px-3 py-2 text-sm"
                       >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-
-                    {/* Task toggles */}
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-2">Print Tasks</label>
-                      <div className="flex flex-wrap gap-2">
-                        {getAvailableTasks().map(task => (
-                          <button
-                            key={task.value}
-                            onClick={() => toggleTask(config.id, task.value)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
-                              config.tasks.includes(task.value)
-                                ? 'bg-orange-100 text-orange-700 border-orange-300'
-                                : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'
-                            }`}
-                          >
-                            {config.tasks.includes(task.value) ? '✓ ' : ''}{task.label}
-                          </button>
+                        <option value="">-- Select Printer --</option>
+                        {printers.map(p => (
+                          <option key={p.name} value={p.name}>
+                            {p.name}{p.isDefault ? ' (Default)' : ''}
+                          </option>
                         ))}
-                      </div>
+                      </select>
                     </div>
-
-                    {/* Auto-print + Test row */}
-                    <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={config.autoPrint}
-                          onChange={(e) => updatePrinterConfig(config.id, { autoPrint: e.target.checked })}
-                          className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
-                        />
-                        <span className="text-sm text-gray-600">Auto-print on new order</span>
-                      </label>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => handleTestPrintForPrinter(config.id, config.printerName)}
-                        loading={printerTestingIds.has(config.id)}
-                        disabled={!config.printerName}
-                      >
-                        <Printer className="h-3.5 w-3.5" />
-                        Test
-                      </Button>
-                    </div>
-
-                    {/* Test result for this printer */}
-                    {printerTestResults[config.id] && (
-                      <div className={`flex items-center gap-2 p-2 rounded-lg text-xs ${
-                        printerTestResults[config.id].success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
-                      }`}>
-                        {printerTestResults[config.id].success ? <Check className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
-                        {printerTestResults[config.id].success ? 'Test print sent!' : printerTestResults[config.id].error || 'Print failed'}
-                      </div>
-                    )}
+                    <button
+                      onClick={() => removePrinterConfig(config.id)}
+                      className="mt-5 p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Remove printer"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
-                ))}
-              </div>
+
+                  {/* Task toggles */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-2">Print Tasks</label>
+                    <div className="flex flex-wrap gap-2">
+                      {getAvailableTasks().map(task => (
+                        <button
+                          key={task.value}
+                          onClick={() => toggleTask(config.id, task.value)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+                            config.tasks.includes(task.value)
+                              ? 'bg-orange-100 text-orange-700 border-orange-300'
+                              : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'
+                          }`}
+                        >
+                          {config.tasks.includes(task.value) ? '✓ ' : ''}{task.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Per-printer settings: paper width + font sizes */}
+                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-100">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">{t('settings.paperWidth')}</label>
+                      <select
+                        value={config.paperWidth}
+                        onChange={(e) => updatePrinterConfig(config.id, { paperWidth: e.target.value })}
+                        className="w-full border rounded-lg px-2 py-1.5 text-xs"
+                      >
+                        <option value="58">58mm</option>
+                        <option value="80">80mm</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Receipt Font</label>
+                      <select
+                        value={config.receiptFontSize}
+                        onChange={(e) => updatePrinterConfig(config.id, { receiptFontSize: e.target.value })}
+                        className="w-full border rounded-lg px-2 py-1.5 text-xs"
+                      >
+                        <option value="small">{t('settings.fontSmall', { defaultValue: 'Small' })}</option>
+                        <option value="medium">{t('settings.fontMedium', { defaultValue: 'Medium' })}</option>
+                        <option value="large">{t('settings.fontLarge', { defaultValue: 'Large' })}</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Kitchen Font</label>
+                      <select
+                        value={config.kitchenFontSize}
+                        onChange={(e) => updatePrinterConfig(config.id, { kitchenFontSize: e.target.value })}
+                        className="w-full border rounded-lg px-2 py-1.5 text-xs"
+                      >
+                        <option value="small">{t('settings.fontSmall', { defaultValue: 'Small' })}</option>
+                        <option value="medium">{t('settings.fontMedium', { defaultValue: 'Medium' })}</option>
+                        <option value="large">{t('settings.fontLarge', { defaultValue: 'Large' })}</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Auto-print + Test row */}
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={config.autoPrint}
+                        onChange={(e) => updatePrinterConfig(config.id, { autoPrint: e.target.checked })}
+                        className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+                      />
+                      <span className="text-sm text-gray-600">Auto-print on new order</span>
+                    </label>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => handleTestPrintForPrinter(config.id, config.printerName)}
+                      loading={printerTestingIds.has(config.id)}
+                      disabled={!config.printerName}
+                    >
+                      <Printer className="h-3.5 w-3.5" />
+                      Test
+                    </Button>
+                  </div>
+
+                  {/* Test result */}
+                  {printerTestResults[config.id] && (
+                    <div className={`flex items-center gap-2 p-2 rounded-lg text-xs ${
+                      printerTestResults[config.id].success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+                    }`}>
+                      {printerTestResults[config.id].success ? <Check className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
+                      {printerTestResults[config.id].success ? 'Test print sent!' : printerTestResults[config.id].error || 'Print failed'}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
 
             {/* Save button */}
-            <div className="flex gap-3 pt-2">
-              <Button onClick={savePrinter}>{t('common.save')}</Button>
-            </div>
+            {printerConfigs.length > 0 && (
+              <div className="flex gap-3 pt-2">
+                <Button onClick={savePrinter}>{t('common.save')}</Button>
+              </div>
+            )}
 
             {printers.length === 0 && (
               <div className="flex items-center gap-2 p-3 bg-orange-50 rounded-lg">

@@ -193,63 +193,32 @@ export function registerPrinterHandlers(): void {
     return printerAssignmentsRepo.getAll()
   })
 
-  ipcMain.handle('printer:setAssignment', (_, printerName: string, assignmentType: string, workerId?: number) => {
-    printerAssignmentsRepo.setAssignment(printerName, assignmentType as any, workerId)
-    return { success: true }
-  })
-
   ipcMain.handle('printer:deleteAssignment', (_, id: number) => {
     printerAssignmentsRepo.deleteAssignment(id)
     return { success: true }
   })
 
-  ipcMain.handle('printer:clearAssignments', () => {
-    const db = require('../database/connection').getDb()
-    db.prepare('DELETE FROM printer_assignments').run()
-    return { success: true }
-  })
-
   ipcMain.handle('printer:saveFullConfig', (_, config: {
-    assignments: { printerName: string; tasks: string[]; autoPrint: boolean; workerId?: number }[]
-    paperWidth: string
-    receiptFontSize: string
-    kitchenFontSize: string
+    assignments: { printerName: string; tasks: string[]; autoPrint: boolean; paperWidth: string; receiptFontSize: string; kitchenFontSize: string }[]
   }) => {
-    // Clear all existing assignments
-    const db = require('../database/connection').getDb()
-    db.prepare('DELETE FROM printer_assignments').run()
+    // Save via repo (handles clearing + rebuilding)
+    printerAssignmentsRepo.saveFullConfig(config.assignments)
 
-    // Save new assignments
-    for (const printer of config.assignments) {
-      for (const task of printer.tasks) {
-        if (task.startsWith('worker_')) {
-          const workerId = parseInt(task.replace('worker_', ''))
-          printerAssignmentsRepo.setAssignment(printer.printerName, 'worker', workerId)
-        } else {
-          printerAssignmentsRepo.setAssignment(printer.printerName, task as any)
-        }
-      }
-    }
-
-    // Save auto-print settings: find if any printer has autoPrint for receipt/kitchen
+    // Sync legacy settings for backward compat with printing logic
     const hasAutoReceipt = config.assignments.some(p => p.autoPrint && p.tasks.includes('receipt'))
     const hasAutoKitchen = config.assignments.some(p => p.autoPrint && (p.tasks.includes('kitchen_all') || p.tasks.some(t => t.startsWith('worker_'))))
+    const receiptPrinter = config.assignments.find(p => p.tasks.includes('receipt'))
+    const kitchenPrinter = config.assignments.find(p => p.tasks.includes('kitchen_all') || p.tasks.some(t => t.startsWith('worker_')))
 
     settingsRepo.setMultiple({
-      printer_width: config.paperWidth,
-      receipt_font_size: config.receiptFontSize,
-      kitchen_font_size: config.kitchenFontSize,
+      printer_name: receiptPrinter?.printerName || config.assignments[0]?.printerName || '',
+      kitchen_printer_name: kitchenPrinter?.printerName || receiptPrinter?.printerName || config.assignments[0]?.printerName || '',
+      printer_width: receiptPrinter?.paperWidth || config.assignments[0]?.paperWidth || '80',
+      receipt_font_size: receiptPrinter?.receiptFontSize || 'medium',
+      kitchen_font_size: kitchenPrinter?.kitchenFontSize || 'large',
       auto_print_receipt: hasAutoReceipt ? 'true' : 'false',
       auto_print_kitchen: hasAutoKitchen ? 'true' : 'false',
       split_kitchen_tickets: config.assignments.some(p => p.tasks.some(t => t.startsWith('worker_'))) ? 'true' : 'false'
-    })
-
-    // Also update the legacy printer_name / kitchen_printer_name settings for backward compat
-    const receiptPrinter = config.assignments.find(p => p.tasks.includes('receipt'))
-    const kitchenPrinter = config.assignments.find(p => p.tasks.includes('kitchen_all') || p.tasks.some(t => t.startsWith('worker_')))
-    settingsRepo.setMultiple({
-      printer_name: receiptPrinter?.printerName || config.assignments[0]?.printerName || '',
-      kitchen_printer_name: kitchenPrinter?.printerName || receiptPrinter?.printerName || config.assignments[0]?.printerName || ''
     })
 
     // Update worker printer assignments in workers table
