@@ -203,6 +203,7 @@ function setupTrialWatcher(): void {
 function setupAutoUpdater(): void {
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = false // Must be false — setting to true causes a race condition
+  autoUpdater.verifyUpdateCodeSignature = false // We don't code-sign, skip signature verification
   // with the explicit quitAndInstall() call, resulting in two NSIS instances conflicting
   // and the app not relaunching after update (the update loop bug)
 
