@@ -243,21 +243,26 @@ function setupAutoUpdater(): void {
   ipcMain.handle('updater:install', () => {
     // Set flag so window-all-closed doesn't call app.quit() and kill us before quitAndInstall runs.
     isInstallingUpdate = true
-    // Destroy all windows to release file locks on app.asar before the NSIS installer runs.
-    BrowserWindow.getAllWindows().forEach((win) => {
-      if (!win.isDestroyed()) win.destroy()
-    })
-    // Manual cleanup (window-all-closed is skipped when isInstallingUpdate = true).
+    // Manual cleanup first — stop all background tasks
     if (trialCheckInterval) clearInterval(trialCheckInterval)
     if (fastOfflineInterval) clearInterval(fastOfflineInterval)
     if (offlineCountdownInterval) clearInterval(offlineCountdownInterval)
     stopBot()
     stopBackupSystem()
     closeDatabase()
-    // Give child processes (GPU, renderer) 800ms to fully terminate, then install.
+    // Destroy all windows to release file locks on app.asar before the NSIS installer runs.
+    BrowserWindow.getAllWindows().forEach((win) => {
+      if (!win.isDestroyed()) win.destroy()
+    })
+    // Give child processes (GPU, renderer) time to fully terminate, then install.
+    // 2 seconds is safer than 800ms — ensures all file handles are released.
     setTimeout(() => {
-      autoUpdater.quitAndInstall(true, true)
-    }, 800)
+      autoUpdater.quitAndInstall(false, true)
+      // If quitAndInstall doesn't exit the app within 3 seconds, force quit
+      setTimeout(() => {
+        app.exit(0)
+      }, 3000)
+    }, 2000)
   })
 
   ipcMain.handle('updater:check', async () => {
