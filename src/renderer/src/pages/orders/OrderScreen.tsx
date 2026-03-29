@@ -1827,12 +1827,14 @@ export function OrderScreen() {
                                 <span className="font-bold text-sm text-gray-900">{formatCurrency(order.total)}</span>
                               </button>
                               {/* Quick action buttons */}
-                              <div className="flex items-center gap-1 px-2 pb-2">
+                              <div className={`flex items-center gap-1.5 px-2 pb-2 ${isTouch ? 'gap-2' : ''}`}>
                                 <button
                                   onClick={(e) => { e.stopPropagation(); markDone(order.id) }}
-                                  className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-700 transition-colors"
+                                  className={`flex-1 flex items-center justify-center gap-1.5 font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 active:bg-green-800 transition-colors ${
+                                    isTouch ? 'px-3 py-3 text-sm' : 'px-2 py-1.5 text-xs'
+                                  }`}
                                 >
-                                  <Check className="h-3.5 w-3.5" />
+                                  <Check className={isTouch ? 'h-5 w-5' : 'h-3.5 w-3.5'} />
                                   Done
                                 </button>
                                 <div className="flex-1 relative">
@@ -1849,18 +1851,22 @@ export function OrderScreen() {
                                         setPrintDropdown(order.id)
                                       }
                                     }}
-                                    className="w-full flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md bg-gray-600 text-white hover:bg-gray-700 transition-colors"
+                                    className={`w-full flex items-center justify-center gap-1.5 font-medium rounded-lg bg-gray-600 text-white hover:bg-gray-700 active:bg-gray-800 transition-colors ${
+                                      isTouch ? 'px-3 py-3 text-sm' : 'px-2 py-1.5 text-xs'
+                                    }`}
                                   >
-                                    <Printer className="h-3.5 w-3.5" />
+                                    <Printer className={isTouch ? 'h-5 w-5' : 'h-3.5 w-3.5'} />
                                     Print
                                   </button>
                                   {printDropdown === order.id && (
                                     <div className="absolute bottom-full left-0 right-0 mb-1 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50">
                                       <button
                                         onClick={(e) => { e.stopPropagation(); window.api.printer.printReceipt(order.id); setPrintDropdown(null) }}
-                                        className="w-full text-left px-3 py-2 text-xs hover:bg-gray-100 flex items-center gap-2"
+                                        className={`w-full text-left hover:bg-gray-100 flex items-center gap-2 ${
+                                          isTouch ? 'px-4 py-3 text-sm' : 'px-3 py-2 text-xs'
+                                        }`}
                                       >
-                                        <Printer className="h-3.5 w-3.5 text-gray-500" />
+                                        <Printer className={`text-gray-500 ${isTouch ? 'h-5 w-5' : 'h-3.5 w-3.5'}`} />
                                         {t('orders.printReceipt')}
                                       </button>
                                       {printDropdownWorkers.length > 0 ? (
@@ -1868,18 +1874,22 @@ export function OrderScreen() {
                                           <button
                                             key={worker.id}
                                             onClick={(e) => { e.stopPropagation(); window.api.printer.printKitchenForWorker(order.id, worker.id); setPrintDropdown(null) }}
-                                            className="w-full text-left px-3 py-2 text-xs hover:bg-gray-100 flex items-center gap-2"
+                                            className={`w-full text-left hover:bg-gray-100 flex items-center gap-2 ${
+                                              isTouch ? 'px-4 py-3 text-sm' : 'px-3 py-2 text-xs'
+                                            }`}
                                           >
-                                            <Printer className="h-3.5 w-3.5 text-gray-500" />
+                                            <Printer className={`text-gray-500 ${isTouch ? 'h-5 w-5' : 'h-3.5 w-3.5'}`} />
                                             {worker.name} ({worker.itemCount} {worker.itemCount === 1 ? 'item' : 'items'})
                                           </button>
                                         ))
                                       ) : (
                                         <button
                                           onClick={(e) => { e.stopPropagation(); window.api.printer.printKitchen(order.id); setPrintDropdown(null) }}
-                                          className="w-full text-left px-3 py-2 text-xs hover:bg-gray-100 flex items-center gap-2"
+                                          className={`w-full text-left hover:bg-gray-100 flex items-center gap-2 ${
+                                            isTouch ? 'px-4 py-3 text-sm' : 'px-3 py-2 text-xs'
+                                          }`}
                                         >
-                                          <Printer className="h-3.5 w-3.5 text-gray-500" />
+                                          <Printer className={`text-gray-500 ${isTouch ? 'h-5 w-5' : 'h-3.5 w-3.5'}`} />
                                           {t('orders.printKitchen')}
                                         </button>
                                       )}
@@ -1888,9 +1898,11 @@ export function OrderScreen() {
                                 </div>
                                 <button
                                   onClick={(e) => { e.stopPropagation(); setCancelConfirm(order) }}
-                                  className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md bg-red-600 text-white hover:bg-red-700 transition-colors"
+                                  className={`flex-1 flex items-center justify-center gap-1.5 font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 active:bg-red-800 transition-colors ${
+                                    isTouch ? 'px-3 py-3 text-sm' : 'px-2 py-1.5 text-xs'
+                                  }`}
                                 >
-                                  <X className="h-3.5 w-3.5" />
+                                  <X className={isTouch ? 'h-5 w-5' : 'h-3.5 w-3.5'} />
                                   Cancel
                                 </button>
                               </div>

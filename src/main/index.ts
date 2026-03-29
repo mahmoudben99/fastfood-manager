@@ -58,6 +58,7 @@ function createWindow(): void {
     show: false,
     autoHideMenuBar: true,
     title: 'Fast Food Manager',
+    icon: join(__dirname, '../../resources/resources/icon.ico'),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
