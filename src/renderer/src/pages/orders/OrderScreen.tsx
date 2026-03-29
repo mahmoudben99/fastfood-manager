@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Lock, ShoppingCart, Trash2, Minus, Plus, Phone, MessageSquare, Check, Printer, Moon, Sun, Search, ClipboardList, X, Hash, Pencil, AlertTriangle, RefreshCw, ArrowLeft, ArrowUpAZ, ArrowDownAZ, ArrowUp01, ArrowDown01, Layers, LayoutGrid } from 'lucide-react'
+import { Lock, ShoppingCart, Trash2, Minus, Plus, Phone, MessageSquare, Check, Printer, Moon, Sun, Search, ClipboardList, X, Hash, Pencil, AlertTriangle, RefreshCw, ArrowLeft, ArrowUpAZ, ArrowDownAZ, ArrowUp01, ArrowDown01, Layers, LayoutGrid, Trophy, Star } from 'lucide-react'
 import { useOrderStore, type CartItem } from '../../store/orderStore'
 import { useAppStore } from '../../store/appStore'
 import { Button } from '../../components/ui/Button'
@@ -92,6 +92,13 @@ export function OrderScreen() {
   const [orderWorkers, setOrderWorkers] = useState<{ id: number; name: string; itemCount: number }[]>([])
   // Workers for order success modal
   const [successOrderWorkers, setSuccessOrderWorkers] = useState<{ id: number; name: string; itemCount: number }[]>([])
+
+  // Milestone celebration
+  const [milestone, setMilestone] = useState<{ number: number; label: string } | null>(null)
+
+  // Quick print dropdown
+  const [printDropdown, setPrintDropdown] = useState<number | null>(null)
+  const [printDropdownWorkers, setPrintDropdownWorkers] = useState<{ id: number; name: string; itemCount: number }[]>([])
 
   // History search
   const [historySearch, setHistorySearch] = useState('')
@@ -299,6 +306,7 @@ export function OrderScreen() {
     setSelectedOrder(null)
     setEditMode(false)
     setHistorySearch('')
+    setPrintDropdown(null)
     setTimeout(() => historySearchRef.current?.focus(), 100)
   }
 
@@ -610,6 +618,15 @@ export function OrderScreen() {
       })
 
       setOrderSuccess({ orderId: order.id, orderNumber: order.daily_number })
+
+      // Check for milestone
+      const MILESTONES = [500, 250, 100, 50, 10]
+      const hit = MILESTONES.find(m => order.daily_number === m)
+      if (hit) {
+        setMilestone({ number: hit, label: `${hit}th Order Today!` })
+        setTimeout(() => setMilestone(null), 4000)
+      }
+
       // Load workers for this order so the success modal can show worker-specific print buttons
       try {
         const workers = await window.api.printer.getOrderWorkers(order.id)
@@ -1765,45 +1782,119 @@ export function OrderScreen() {
                         {ongoingOrders.map((order) => {
                           const overdue = isOrderOverdue(order.created_at)
                           return (
-                            <button
+                            <div
                               key={order.id}
-                              onClick={() => viewOrderDetails(order)}
-                              className={`w-full flex items-center justify-between p-3 rounded-lg hover:shadow-md transition-all text-start border-2 ${
+                              className={`rounded-lg border-2 transition-all ${
                                 overdue
-                                  ? 'bg-red-50 border-red-400 hover:bg-red-100 animate-pulse'
-                                  : 'bg-blue-50 border-blue-200 hover:bg-blue-100'
+                                  ? 'bg-red-50 border-red-400 animate-pulse'
+                                  : 'bg-blue-50 border-blue-200'
                               }`}
                             >
-                              <div className="flex items-center gap-3">
-                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm ${
-                                  overdue ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-600'
-                                }`}>
-                                  #{order.daily_number}
-                                </div>
-                                <div>
-                                  <div className="flex items-center gap-2">
-                                    <p className="text-sm font-medium text-gray-900">
-                                      {t('orders.orderNumber', { number: order.daily_number })}
-                                      {order.table_number && <span className="text-gray-500 ms-2">T{order.table_number}</span>}
-                                    </p>
-                                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                                      overdue ? 'bg-red-200 text-red-800' : 'bg-blue-200 text-blue-700'
-                                    }`}>
-                                      {formatOrderAge(order.created_at)}
-                                    </span>
+                              <button
+                                onClick={() => viewOrderDetails(order)}
+                                className={`w-full flex items-center justify-between p-3 text-start hover:shadow-md transition-all rounded-t-lg ${
+                                  overdue ? 'hover:bg-red-100' : 'hover:bg-blue-100'
+                                }`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm ${
+                                    overdue ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-600'
+                                  }`}>
+                                    #{order.daily_number}
                                   </div>
-                                  <p className="text-xs text-gray-500">
-                                    {formatTime(order.created_at)} &middot; {t(`orders.${order.order_type === 'local' ? 'local' : order.order_type}`)}
-                                  </p>
-                                  {order.items && order.items.length > 0 && (
-                                    <p className="text-xs text-gray-600 mt-0.5 truncate">
-                                      {order.items.map((item) => `${item.quantity}x ${item.menu_item_name}`).join(', ')}
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <p className="text-sm font-medium text-gray-900">
+                                        {t('orders.orderNumber', { number: order.daily_number })}
+                                        {order.table_number && <span className="text-gray-500 ms-2">T{order.table_number}</span>}
+                                      </p>
+                                      <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                                        overdue ? 'bg-red-200 text-red-800' : 'bg-blue-200 text-blue-700'
+                                      }`}>
+                                        {formatOrderAge(order.created_at)}
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-gray-500">
+                                      {formatTime(order.created_at)} &middot; {t(`orders.${order.order_type === 'local' ? 'local' : order.order_type}`)}
                                     </p>
+                                    {order.items && order.items.length > 0 && (
+                                      <p className="text-xs text-gray-600 mt-0.5 truncate max-w-[200px]">
+                                        {order.items.map((item) => `${item.quantity}x ${item.menu_item_name}`).join(', ')}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                                <span className="font-bold text-sm text-gray-900">{formatCurrency(order.total)}</span>
+                              </button>
+                              {/* Quick action buttons */}
+                              <div className="flex items-center gap-1 px-2 pb-2">
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); markDone(order.id) }}
+                                  className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-700 transition-colors"
+                                >
+                                  <Check className="h-3.5 w-3.5" />
+                                  Done
+                                </button>
+                                <div className="flex-1 relative">
+                                  <button
+                                    onClick={async (e) => {
+                                      e.stopPropagation()
+                                      if (printDropdown === order.id) {
+                                        setPrintDropdown(null)
+                                      } else {
+                                        try {
+                                          const workers = await window.api.printer.getOrderWorkers(order.id)
+                                          setPrintDropdownWorkers(workers)
+                                        } catch { setPrintDropdownWorkers([]) }
+                                        setPrintDropdown(order.id)
+                                      }
+                                    }}
+                                    className="w-full flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md bg-gray-600 text-white hover:bg-gray-700 transition-colors"
+                                  >
+                                    <Printer className="h-3.5 w-3.5" />
+                                    Print
+                                  </button>
+                                  {printDropdown === order.id && (
+                                    <div className="absolute bottom-full left-0 right-0 mb-1 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50">
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); window.api.printer.printReceipt(order.id); setPrintDropdown(null) }}
+                                        className="w-full text-left px-3 py-2 text-xs hover:bg-gray-100 flex items-center gap-2"
+                                      >
+                                        <Printer className="h-3.5 w-3.5 text-gray-500" />
+                                        {t('orders.printReceipt')}
+                                      </button>
+                                      {printDropdownWorkers.length > 0 ? (
+                                        printDropdownWorkers.map(worker => (
+                                          <button
+                                            key={worker.id}
+                                            onClick={(e) => { e.stopPropagation(); window.api.printer.printKitchenForWorker(order.id, worker.id); setPrintDropdown(null) }}
+                                            className="w-full text-left px-3 py-2 text-xs hover:bg-gray-100 flex items-center gap-2"
+                                          >
+                                            <Printer className="h-3.5 w-3.5 text-gray-500" />
+                                            {worker.name} ({worker.itemCount} {worker.itemCount === 1 ? 'item' : 'items'})
+                                          </button>
+                                        ))
+                                      ) : (
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); window.api.printer.printKitchen(order.id); setPrintDropdown(null) }}
+                                          className="w-full text-left px-3 py-2 text-xs hover:bg-gray-100 flex items-center gap-2"
+                                        >
+                                          <Printer className="h-3.5 w-3.5 text-gray-500" />
+                                          {t('orders.printKitchen')}
+                                        </button>
+                                      )}
+                                    </div>
                                   )}
                                 </div>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setCancelConfirm(order) }}
+                                  className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md bg-red-600 text-white hover:bg-red-700 transition-colors"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                  Cancel
+                                </button>
                               </div>
-                              <span className="font-bold text-sm text-gray-900">{formatCurrency(order.total)}</span>
-                            </button>
+                            </div>
                           )
                         })}
                       </div>
@@ -1860,6 +1951,24 @@ export function OrderScreen() {
             </div>
           )}
         </Modal>
+      )}
+
+      {/* Milestone Celebration Overlay */}
+      {milestone && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center pointer-events-none">
+          <div className="animate-bounce">
+            <div className="bg-gradient-to-br from-yellow-400 via-orange-500 to-red-500 text-white rounded-3xl px-12 py-8 text-center shadow-2xl" style={{ animation: 'milestoneIn 0.5s ease-out' }}>
+              <Trophy className="h-16 w-16 mx-auto mb-3 text-yellow-200" />
+              <p className="text-5xl font-black mb-2">{milestone.number}</p>
+              <p className="text-xl font-bold">{milestone.label}</p>
+              <div className="flex justify-center gap-1 mt-3">
+                {[...Array(5)].map((_, i) => (
+                  <Star key={i} className="h-6 w-6 text-yellow-200 fill-yellow-200" style={{ animation: `spin 1s ease-in-out ${i * 0.15}s` }} />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Virtual Keyboard for touchscreen mode */}

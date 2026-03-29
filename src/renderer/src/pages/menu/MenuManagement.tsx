@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Plus, Search, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Layers } from 'lucide-react'
 import { useAppStore } from '../../store/appStore'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
@@ -34,6 +34,11 @@ export function MenuManagement() {
     { stock_item_id: number; quantity: number; unit: string }[]
   >([])
   const [saving, setSaving] = useState(false)
+
+  // Multi-size mode
+  const [multiSize, setMultiSize] = useState(false)
+  const [formSizes, setFormSizes] = useState<{ label: string; price: string }[]>([])
+  const PRESET_SIZES = ['S', 'M', 'L', 'XL']
 
   // Virtual keyboard
   const [keyboardTarget, setKeyboardTarget] = useState<{ field: string; type: 'numeric' | 'text' } | null>(null)
@@ -116,27 +121,48 @@ export function MenuManagement() {
       setFormImagePath('')
       setFormEmoji('')
       setFormIngredients([])
+      setMultiSize(false)
+      setFormSizes([])
     }
     setShowForm(true)
   }
 
   const handleSave = async () => {
     setSaving(true)
-    const data = {
-      name: formName,
-      name_ar: formNameAr || undefined,
-      name_fr: formNameFr || undefined,
-      price: Number(formPrice),
-      category_id: Number(formCategory),
-      image_path: formImagePath || undefined,
-      emoji: formEmoji || undefined,
-      ingredients: formIngredients
-    }
 
-    if (editItem) {
-      await window.api.menu.update(editItem.id, data)
+    if (multiSize && !editItem && formSizes.length > 0) {
+      // Create one menu item per size
+      for (const size of formSizes) {
+        if (!size.price) continue
+        const data = {
+          name: `${formName} ${size.label}`,
+          name_ar: formNameAr ? `${formNameAr} ${size.label}` : undefined,
+          name_fr: formNameFr ? `${formNameFr} ${size.label}` : undefined,
+          price: Number(size.price),
+          category_id: Number(formCategory),
+          image_path: formImagePath || undefined,
+          emoji: formEmoji || undefined,
+          ingredients: formIngredients
+        }
+        await window.api.menu.create(data)
+      }
     } else {
-      await window.api.menu.create(data)
+      const data = {
+        name: formName,
+        name_ar: formNameAr || undefined,
+        name_fr: formNameFr || undefined,
+        price: Number(formPrice),
+        category_id: Number(formCategory),
+        image_path: formImagePath || undefined,
+        emoji: formEmoji || undefined,
+        ingredients: formIngredients
+      }
+
+      if (editItem) {
+        await window.api.menu.update(editItem.id, data)
+      } else {
+        await window.api.menu.create(data)
+      }
     }
 
     setShowForm(false)
@@ -274,16 +300,18 @@ export function MenuManagement() {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <Input
-              label={t('menu.price')}
-              type={isTouch ? 'text' : 'number'}
-              inputMode="numeric"
-              value={formPrice}
-              readOnly={isTouch}
-              onClick={isTouch ? () => setKeyboardTarget({ field: 'formPrice', type: 'numeric' }) : undefined}
-              onChange={isTouch ? undefined : (e) => setFormPrice(e.target.value)}
-              step="0.01"
-            />
+            {!multiSize && (
+              <Input
+                label={t('menu.price')}
+                type={isTouch ? 'text' : 'number'}
+                inputMode="numeric"
+                value={formPrice}
+                readOnly={isTouch}
+                onClick={isTouch ? () => setKeyboardTarget({ field: 'formPrice', type: 'numeric' }) : undefined}
+                onChange={isTouch ? undefined : (e) => setFormPrice(e.target.value)}
+                step="0.01"
+              />
+            )}
             <Select
               label={t('menu.category')}
               value={formCategory}
@@ -291,6 +319,77 @@ export function MenuManagement() {
               options={categories.map((c: any) => ({ value: String(c.id), label: `${c.icon ? c.icon + ' ' : ''}${getName(c)}` }))}
             />
           </div>
+
+          {/* Multi-size toggle (only for new items) */}
+          {!editItem && (
+            <div>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !multiSize
+                  setMultiSize(next)
+                  if (next && formSizes.length === 0) {
+                    setFormSizes(PRESET_SIZES.map(s => ({ label: s, price: '' })))
+                  }
+                }}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  multiSize
+                    ? 'bg-orange-100 text-orange-700 border-2 border-orange-400'
+                    : 'bg-gray-100 text-gray-600 border-2 border-transparent hover:bg-gray-200'
+                }`}
+              >
+                <Layers className="h-4 w-4" />
+                Multiple Sizes
+              </button>
+            </div>
+          )}
+
+          {/* Size rows */}
+          {multiSize && !editItem && (
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">Sizes & Prices</label>
+              {formSizes.map((size, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input
+                    value={size.label}
+                    onChange={(e) => {
+                      const updated = [...formSizes]
+                      updated[i] = { ...updated[i], label: e.target.value }
+                      setFormSizes(updated)
+                    }}
+                    placeholder="Size label"
+                    className="w-24 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  />
+                  <input
+                    type="number"
+                    value={size.price}
+                    onChange={(e) => {
+                      const updated = [...formSizes]
+                      updated[i] = { ...updated[i], price: e.target.value }
+                      setFormSizes(updated)
+                    }}
+                    placeholder="Price"
+                    step="0.01"
+                    className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  />
+                  <button
+                    onClick={() => setFormSizes(formSizes.filter((_, idx) => idx !== i))}
+                    className="p-2 hover:bg-red-100 rounded text-gray-400 hover:text-red-500"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => setFormSizes([...formSizes, { label: '', price: '' }])}
+                className="flex items-center gap-1 text-sm text-orange-600 hover:text-orange-700 font-medium"
+              >
+                <Plus className="h-4 w-4" />
+                Add Size
+              </button>
+            </div>
+          )}
 
           {/* Emoji */}
           <div>
@@ -379,7 +478,7 @@ export function MenuManagement() {
             <Button
               onClick={handleSave}
               loading={saving}
-              disabled={!formName || !formPrice || !formCategory}
+              disabled={!formName || (!multiSize && !formPrice) || (multiSize && formSizes.filter(s => s.label && s.price).length === 0) || !formCategory}
               className="flex-1"
             >
               {t('common.save')}
