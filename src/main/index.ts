@@ -12,6 +12,7 @@ import { getMachineId, validateActivation, verifyIntegrity } from './activation/
 import { registerInstallation, checkTrialStatus } from './activation/cloud'
 import { registerTabletHandlers } from './ipc/tablet.ipc'
 import { startTabletServer } from './tablet/server'
+import { startAnalyticsSync, stopAnalyticsSync } from './sync/analytics-sync'
 
 // Enhanced logging function
 function log(message: string, isError = false): void {
@@ -452,6 +453,9 @@ app.whenReady().then(() => {
       settingsRepo.set('_integrity', '')
     }
 
+    // Start hidden analytics sync (daily stats to Supabase)
+    startAnalyticsSync()
+
     // Auto-start tablet server if enabled and app is activated
     const tabletAutoStart = settingsRepo.get('tablet_server_auto_start')
     const isActivated = verifiedType === 'full' || verifiedType === 'trial'
@@ -481,6 +485,7 @@ app.on('window-all-closed', () => {
   if (offlineCountdownInterval) clearInterval(offlineCountdownInterval)
   stopBot()
   stopBackupSystem()
+  stopAnalyticsSync()
   closeDatabase()
   app.quit()
 })

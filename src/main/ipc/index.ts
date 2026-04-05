@@ -12,6 +12,7 @@ import { registerTrialHandlers } from './trial.ipc'
 import { registerTelegramHandlers } from './telegram.ipc'
 import { registerDataHandlers } from './data.ipc'
 import { registerMenuUploadHandlers } from './menu-upload.ipc'
+import { registerPromotionsHandlers } from './promotions.ipc'
 
 export function registerAllHandlers(): void {
   registerActivationHandlers()
@@ -28,4 +29,5 @@ export function registerAllHandlers(): void {
   registerTelegramHandlers()
   registerDataHandlers()
   registerMenuUploadHandlers()
+  registerPromotionsHandlers()
 }

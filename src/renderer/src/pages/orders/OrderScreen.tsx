@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Lock, ShoppingCart, Trash2, Minus, Plus, Phone, MessageSquare, Check, Printer, Moon, Sun, Search, ClipboardList, X, Hash, Pencil, AlertTriangle, RefreshCw, ArrowLeft, ArrowUpAZ, ArrowDownAZ, ArrowUp01, ArrowDown01, Layers, LayoutGrid, Trophy, Star } from 'lucide-react'
+import { Lock, ShoppingCart, Trash2, Minus, Plus, Phone, MessageSquare, Check, Printer, Moon, Sun, Search, ClipboardList, X, Hash, Pencil, AlertTriangle, RefreshCw, ArrowLeft, ArrowUpAZ, ArrowDownAZ, ArrowUp01, ArrowDown01, Layers, LayoutGrid, Trophy, Star, BarChart3 } from 'lucide-react'
+import { DayRecapModal } from '../analytics/DayRecapModal'
 import { useOrderStore, type CartItem } from '../../store/orderStore'
 import { useAppStore } from '../../store/appStore'
 import { Button } from '../../components/ui/Button'
@@ -96,6 +97,12 @@ export function OrderScreen() {
   // Milestone celebration
   const [milestone, setMilestone] = useState<{ number: number; label: string } | null>(null)
 
+  // Day Recap
+  const [showRecap, setShowRecap] = useState(false)
+  const [recapPasswordModal, setRecapPasswordModal] = useState(false)
+  const [recapPassword, setRecapPassword] = useState('')
+  const [recapPasswordError, setRecapPasswordError] = useState(false)
+
   // Quick print dropdown
   const [printDropdown, setPrintDropdown] = useState<number | null>(null)
   const [printDropdownWorkers, setPrintDropdownWorkers] = useState<{ id: number; name: string; itemCount: number }[]>([])
@@ -133,6 +140,7 @@ export function OrderScreen() {
     loadOngoingCount()
     loadAlertSettings()
     loadNoteSuggestions()
+    store.loadActivePromos()
 
     // Update current time every 30 seconds for live timer display
     const interval = setInterval(() => {
@@ -602,12 +610,14 @@ export function OrderScreen() {
 
     setPlacing(true)
     try {
+      const currentDiscount = store.getDiscount()
       const order = await window.api.orders.create({
         order_type: store.orderType,
         table_number: store.tableNumber || undefined,
         customer_phone: store.customerPhone || undefined,
         customer_name: store.customerName || undefined,
         notes: store.notes || undefined,
+        discount_amount: currentDiscount > 0 ? currentDiscount : undefined,
         items: store.items.map((item) => ({
           menu_item_id: item.menu_item_id,
           quantity: item.quantity,
@@ -761,6 +771,8 @@ export function OrderScreen() {
   const editTotal = editItems.reduce((sum, item) => sum + item.unit_price * item.quantity, 0)
 
   const subtotal = store.getSubtotal()
+  const discount = store.getDiscount()
+  const total = store.getTotal()
 
   return (
     <div className="h-screen flex bg-gray-100">
@@ -770,6 +782,14 @@ export function OrderScreen() {
         <div className={`bg-white border-b ${isTouch ? 'px-4 py-3' : 'px-2 sm:px-4 py-2 sm:py-3'} flex items-center justify-between shrink-0`}>
           <h1 className={`${isTouch ? 'text-xl' : 'text-lg sm:text-xl'} font-bold text-gray-900`}>{t('orders.title')}</h1>
           <div className={`flex items-center ${isTouch ? 'gap-3' : 'gap-1 sm:gap-2'}`}>
+            <button
+              onClick={() => setRecapPasswordModal(true)}
+              className={`flex items-center ${isTouch ? 'gap-2 px-4 py-3 rounded-xl text-base' : 'gap-1 px-2 py-1.5 rounded-lg text-xs sm:text-sm'} bg-orange-50 text-orange-600 font-medium hover:bg-orange-100 transition-colors active:scale-95`}
+              title="Day Recap"
+            >
+              <BarChart3 className={isTouch ? 'h-5 w-5' : 'h-4 w-4'} />
+              {isTouch && 'Recap'}
+            </button>
             <button
               onClick={openHistory}
               className={`relative flex items-center ${isTouch ? 'gap-2 px-5 py-3 rounded-xl text-base' : 'gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm'} bg-gray-100 text-gray-600 font-medium hover:bg-gray-200 transition-colors active:scale-95`}
@@ -1354,9 +1374,15 @@ export function OrderScreen() {
             <span className="text-xs sm:text-sm text-gray-600">{t('orders.subtotal')}</span>
             <span className="font-bold text-sm sm:text-lg">{formatCurrency(subtotal)}</span>
           </div>
+          {discount > 0 && (
+            <div className="flex justify-between items-center">
+              <span className="text-xs sm:text-sm text-green-600 font-medium">Discount</span>
+              <span className="font-bold text-sm text-green-600">-{formatCurrency(discount)}</span>
+            </div>
+          )}
           <div className="flex justify-between items-center">
             <span className="font-bold text-sm sm:text-base text-gray-900">{t('orders.total')}</span>
-            <span className="font-bold text-lg sm:text-xl text-orange-600">{formatCurrency(subtotal)}</span>
+            <span className="font-bold text-lg sm:text-xl text-orange-600">{formatCurrency(total)}</span>
           </div>
 
           <Button
@@ -1964,6 +1990,45 @@ export function OrderScreen() {
           )}
         </Modal>
       )}
+
+      {/* Day Recap Password Gate */}
+      {recapPasswordModal && (
+        <Modal isOpen onClose={() => { setRecapPasswordModal(false); setRecapPassword(''); setRecapPasswordError(false) }} title="Enter Admin Password" size="sm">
+          <div className="space-y-4 py-2">
+            <input
+              type="password"
+              value={recapPassword}
+              onChange={(e) => { setRecapPassword(e.target.value); setRecapPasswordError(false) }}
+              onKeyDown={async (e) => {
+                if (e.key === 'Enter') {
+                  const valid = await window.api.settings.verifyPassword(recapPassword)
+                  if (valid) { setRecapPasswordModal(false); setRecapPassword(''); setShowRecap(true) }
+                  else setRecapPasswordError(true)
+                }
+              }}
+              placeholder="Password"
+              autoFocus
+              className={`w-full px-4 py-3 border-2 rounded-lg text-center text-lg focus:outline-none focus:ring-2 focus:ring-orange-500 ${
+                recapPasswordError ? 'border-red-400 bg-red-50' : 'border-gray-200'
+              }`}
+            />
+            {recapPasswordError && <p className="text-red-500 text-sm text-center">Wrong password</p>}
+            <Button
+              onClick={async () => {
+                const valid = await window.api.settings.verifyPassword(recapPassword)
+                if (valid) { setRecapPasswordModal(false); setRecapPassword(''); setShowRecap(true) }
+                else setRecapPasswordError(true)
+              }}
+              className="w-full"
+            >
+              Unlock
+            </Button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Day Recap Modal */}
+      <DayRecapModal isOpen={showRecap} onClose={() => setShowRecap(false)} />
 
       {/* Milestone Celebration Overlay */}
       {milestone && (

@@ -13,6 +13,15 @@ export interface CartItem {
   worker_id: number | null
 }
 
+interface ActivePromo {
+  id: number
+  name: string
+  type: 'percentage' | 'fixed'
+  discount_value: number
+  applies_to: 'all' | 'specific'
+  menu_item_ids?: number[]
+}
+
 interface OrderState {
   items: CartItem[]
   orderType: 'local' | 'takeout' | 'delivery'
@@ -20,6 +29,9 @@ interface OrderState {
   customerPhone: string
   customerName: string
   notes: string
+  activePromos: ActivePromo[]
+  discountAmount: number
+  discountDetails: string
 
   addItem: (item: Omit<CartItem, 'quantity' | 'notes' | 'worker_id'>) => Promise<void>
   removeItem: (index: number) => void
@@ -32,7 +44,9 @@ interface OrderState {
   setCustomerPhone: (phone: string) => void
   setCustomerName: (name: string) => void
   setNotes: (notes: string) => void
+  loadActivePromos: () => Promise<void>
   getSubtotal: () => number
+  getDiscount: () => number
   getTotal: () => number
   clearOrder: () => void
 }
@@ -44,6 +58,9 @@ export const useOrderStore = create<OrderState>((set, get) => ({
   customerPhone: '',
   customerName: '',
   notes: '',
+  activePromos: [],
+  discountAmount: 0,
+  discountDetails: '',
 
   addItem: async (item) => {
     const { items } = get()
@@ -111,12 +128,51 @@ export const useOrderStore = create<OrderState>((set, get) => ({
   setCustomerName: (name) => set({ customerName: name }),
   setNotes: (notes) => set({ notes }),
 
+  loadActivePromos: async () => {
+    try {
+      const promos = await window.api.promotions.getActive()
+      set({ activePromos: promos })
+    } catch {
+      set({ activePromos: [] })
+    }
+  },
+
   getSubtotal: () => {
     return get().items.reduce((sum, item) => sum + item.price * item.quantity, 0)
   },
 
+  getDiscount: () => {
+    const { items, activePromos } = get()
+    if (activePromos.length === 0 || items.length === 0) return 0
+
+    let totalDiscount = 0
+    const details: string[] = []
+
+    for (const promo of activePromos) {
+      let promoDiscount = 0
+      for (const item of items) {
+        const applies = promo.applies_to === 'all' ||
+          (promo.menu_item_ids && promo.menu_item_ids.includes(item.menu_item_id))
+        if (!applies) continue
+
+        const itemTotal = item.price * item.quantity
+        if (promo.type === 'percentage') {
+          promoDiscount += itemTotal * (promo.discount_value / 100)
+        } else {
+          promoDiscount += Math.min(promo.discount_value * item.quantity, itemTotal)
+        }
+      }
+      if (promoDiscount > 0) {
+        totalDiscount += promoDiscount
+        details.push(`${promo.name}: -${Math.round(promoDiscount)}`)
+      }
+    }
+
+    return Math.round(totalDiscount * 100) / 100
+  },
+
   getTotal: () => {
-    return get().getSubtotal()
+    return Math.max(0, get().getSubtotal() - get().getDiscount())
   },
 
   clearOrder: () =>
@@ -126,6 +182,8 @@ export const useOrderStore = create<OrderState>((set, get) => ({
       tableNumber: '',
       customerPhone: '',
       customerName: '',
-      notes: ''
+      notes: '',
+      discountAmount: 0,
+      discountDetails: ''
     })
 }))

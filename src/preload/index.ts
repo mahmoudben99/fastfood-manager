@@ -226,6 +226,22 @@ const api = {
     checkStatus: () => ipcRenderer.invoke('menu-upload:checkStatus'),
     downloadExcel: (excelPath: string) => ipcRenderer.invoke('menu-upload:downloadExcel', excelPath)
   },
+  promotions: {
+    getAll: () => ipcRenderer.invoke('promotions:getAll'),
+    getActive: () => ipcRenderer.invoke('promotions:getActive'),
+    create: (input: any) => ipcRenderer.invoke('promotions:create', input),
+    update: (id: number, input: any) => ipcRenderer.invoke('promotions:update', id, input),
+    delete: (id: number) => ipcRenderer.invoke('promotions:delete', id),
+    toggle: (id: number) => ipcRenderer.invoke('promotions:toggle', id)
+  },
+  packs: {
+    getAll: () => ipcRenderer.invoke('packs:getAll'),
+    getActive: () => ipcRenderer.invoke('packs:getActive'),
+    create: (input: any) => ipcRenderer.invoke('packs:create', input),
+    update: (id: number, input: any) => ipcRenderer.invoke('packs:update', id, input),
+    delete: (id: number) => ipcRenderer.invoke('packs:delete', id),
+    toggle: (id: number) => ipcRenderer.invoke('packs:toggle', id)
+  },
   tablet: {
     start: () => ipcRenderer.invoke('tablet:start'),
     stop: () => ipcRenderer.invoke('tablet:stop'),

@@ -13,7 +13,8 @@ import {
   Settings,
   ShoppingCart,
   Moon,
-  Sun
+  Sun,
+  Tag
 } from 'lucide-react'
 
 const menuItems = [
@@ -22,6 +23,7 @@ const menuItems = [
   { path: '/admin/workers', icon: Users, label: 'nav.workers' },
   { path: '/admin/orders-history', icon: ClipboardList, label: 'nav.ordersHistory' },
   { path: '/admin/analytics', icon: BarChart3, label: 'nav.analytics' },
+  { path: '/admin/promotions', icon: Tag, label: 'nav.promotions' },
   { path: '/admin/excel', icon: FileSpreadsheet, label: 'nav.excel' },
   { path: '/admin/backup', icon: HardDrive, label: 'nav.backup' },
   { path: '/admin/settings', icon: Settings, label: 'nav.settings' }
