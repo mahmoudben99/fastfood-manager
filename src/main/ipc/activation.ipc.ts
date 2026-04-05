@@ -6,7 +6,8 @@ import {
   activate,
   validateUnlockCode,
   saveTelegramResetCode,
-  validateTelegramResetCode
+  validateTelegramResetCode,
+  saveIntegrityChecksum
 } from '../activation/activation'
 import { settingsRepo } from '../database/repositories/settings.repo'
 import { recordActivation } from '../activation/cloud'
@@ -25,6 +26,7 @@ export function registerActivationHandlers(): void {
     const result = activate(serialCode)
     if (result.success) {
       settingsRepo.set('activation_type', 'full')
+      saveIntegrityChecksum()
       // Record full license in cloud (fire-and-forget — works offline too)
       recordActivation(result.machineId).catch(() => {})
     }

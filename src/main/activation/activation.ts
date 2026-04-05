@@ -4,6 +4,34 @@ import { settingsRepo } from '../database/repositories/settings.repo'
 
 const SECRET_KEY = 'FFM-2024-SERIAL-KEY-DO-NOT-SHARE'
 const UNLOCK_KEY = 'FFM-2024-UNLOCK-KEY-DO-NOT-SHARE'
+const INTEGRITY_SALT = 'FFM-INTEGRITY-2024-SALT'
+
+/** Generate a checksum for critical activation settings to detect DB tampering */
+export function computeIntegrityChecksum(): string {
+  const type = settingsRepo.get('activation_type') || ''
+  const status = settingsRepo.get('activation_status') || ''
+  const code = settingsRepo.get('activation_code') || ''
+  const machineId = getMachineId()
+  const raw = `${INTEGRITY_SALT}::${type}::${status}::${code}::${machineId}`
+  return createHash('sha256').update(raw).digest('hex').substring(0, 32)
+}
+
+/** Save the integrity checksum after a legitimate activation change */
+export function saveIntegrityChecksum(): void {
+  const checksum = computeIntegrityChecksum()
+  settingsRepo.set('_integrity', checksum)
+}
+
+/** Verify the integrity checksum matches current activation settings */
+export function verifyIntegrity(): boolean {
+  const stored = settingsRepo.get('_integrity')
+  if (!stored) {
+    // No checksum yet — only valid if no activation set
+    const type = settingsRepo.get('activation_type')
+    return !type || type === ''
+  }
+  return stored === computeIntegrityChecksum()
+}
 
 export function getMachineId(): string {
   const cpuModel = cpus()[0]?.model || 'unknown'
@@ -40,6 +68,7 @@ export function activate(
   settingsRepo.set('activation_status', 'activated')
   settingsRepo.set('activation_code', serialCode.toUpperCase().trim())
   settingsRepo.set('machine_id', machineId)
+  saveIntegrityChecksum()
   return { success: true, machineId }
 }
 

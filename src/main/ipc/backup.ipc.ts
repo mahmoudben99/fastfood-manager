@@ -100,12 +100,26 @@ export function registerBackupHandlers(): void {
     if (result.canceled || !result.filePaths[0]) return { success: false, error: 'Cancelled' }
 
     try {
+      // Preserve current activation settings before restore
+      const currentActivationType = settingsRepo.get('activation_type')
+      const currentActivationStatus = settingsRepo.get('activation_status')
+      const currentActivationCode = settingsRepo.get('activation_code')
+      const currentMachineId = settingsRepo.get('machine_id')
+      const currentIntegrity = settingsRepo.get('_integrity')
+
       const backupPath = result.filePaths[0]
       const dbPath = getDbPath()
 
       closeDatabase()
       copyFileSync(backupPath, dbPath)
       initDatabase()
+
+      // Restore the activation settings from before the backup (prevent activation injection)
+      if (currentActivationType) settingsRepo.set('activation_type', currentActivationType)
+      if (currentActivationStatus) settingsRepo.set('activation_status', currentActivationStatus)
+      if (currentActivationCode) settingsRepo.set('activation_code', currentActivationCode)
+      if (currentMachineId) settingsRepo.set('machine_id', currentMachineId)
+      if (currentIntegrity) settingsRepo.set('_integrity', currentIntegrity)
 
       return { success: true }
     } catch (err: any) {

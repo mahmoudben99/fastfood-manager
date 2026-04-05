@@ -8,7 +8,7 @@ import { startBot, stopBot } from './telegram/bot'
 import { settingsRepo } from './database/repositories/settings.repo'
 import { startBackupSystem, stopBackupSystem } from './database/backup'
 import { createSplashWindow, closeSplashWindow } from './splash'
-import { getMachineId } from './activation/activation'
+import { getMachineId, validateActivation, verifyIntegrity } from './activation/activation'
 import { registerInstallation, checkTrialStatus } from './activation/cloud'
 import { registerTabletHandlers } from './ipc/tablet.ipc'
 import { startTabletServer } from './tablet/server'
@@ -63,9 +63,20 @@ function createWindow(): void {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      devTools: !app.isPackaged
     }
   })
+
+  // Block DevTools shortcuts in production
+  if (app.isPackaged) {
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+      if (input.key === 'F12') { event.preventDefault(); return }
+      if (input.control && input.shift && (input.key === 'I' || input.key === 'i')) { event.preventDefault(); return }
+      if (input.control && input.shift && (input.key === 'J' || input.key === 'j')) { event.preventDefault(); return }
+      if (input.control && (input.key === 'U' || input.key === 'u')) { event.preventDefault(); return }
+    })
+  }
 
   // Don't show immediately - wait for splash to close
   mainWindow.on('ready-to-show', () => {
@@ -107,6 +118,10 @@ let fastOfflineInterval: ReturnType<typeof setInterval> | null = null
 let offlineCountdownInterval: ReturnType<typeof setInterval> | null = null
 let isInstallingUpdate = false
 let offlineSecondsLeft = 0
+let cumulativeOfflineSeconds = 0 // Total offline time this session (never resets)
+const MAX_CUMULATIVE_OFFLINE = 5 * 60 // Lock after 5 min total offline time per session
+let lastCloudSuccessTime = Date.now() // Track when we last verified with cloud
+const CLOUD_STALE_SECONDS = 10 * 60 // If no cloud check for 10 min, lock
 
 function clearOfflineCountdown(): void {
   if (offlineCountdownInterval) {
@@ -122,23 +137,25 @@ function clearOfflineCountdown(): void {
 function startOfflineCountdown(): void {
   if (offlineCountdownInterval) return // already running
   offlineSecondsLeft = OFFLINE_LOCK_SECONDS
-  log(`Trial: offline detected (net.isOnline=false), starting ${OFFLINE_LOCK_SECONDS}s countdown`)
+  log(`Trial: offline detected (net.isOnline=false), starting ${OFFLINE_LOCK_SECONDS}s countdown (cumulative: ${cumulativeOfflineSeconds}s)`)
   mainWindow?.webContents.send('trial:offline-countdown', offlineSecondsLeft)
 
   offlineCountdownInterval = setInterval(() => {
-    // If we came back online mid-countdown, abort
+    // If we came back online mid-countdown, pause but don't reset cumulative
     if (net.isOnline()) {
-      log('Trial: back online during countdown — aborting lock')
+      log('Trial: back online during countdown — pausing (cumulative offline preserved)')
       clearOfflineCountdown()
       return
     }
     offlineSecondsLeft -= 1
+    cumulativeOfflineSeconds += 1
     mainWindow?.webContents.send('trial:offline-countdown', offlineSecondsLeft)
 
-    if (offlineSecondsLeft <= 0) {
+    // Lock if current countdown expired OR cumulative limit hit
+    if (offlineSecondsLeft <= 0 || cumulativeOfflineSeconds >= MAX_CUMULATIVE_OFFLINE) {
       clearInterval(offlineCountdownInterval!)
       offlineCountdownInterval = null
-      log(`Trial: offline for ${OFFLINE_LOCK_SECONDS}s — locking app`)
+      log(`Trial: offline lock triggered (countdown=${offlineSecondsLeft}, cumulative=${cumulativeOfflineSeconds}s)`)
       mainWindow?.webContents.send('trial:locked', 'offline')
     }
   }, 1000)
@@ -148,6 +165,14 @@ function startOfflineCountdown(): void {
 function checkOfflineInstant(): void {
   const activationType = settingsRepo.get('activation_type')
   if (activationType !== 'trial') return
+
+  // Check if cloud verification is stale (no success for too long)
+  const secondsSinceCloud = Math.floor((Date.now() - lastCloudSuccessTime) / 1000)
+  if (secondsSinceCloud >= CLOUD_STALE_SECONDS) {
+    log(`Trial: cloud verification stale (${secondsSinceCloud}s since last success) — locking`)
+    mainWindow?.webContents.send('trial:locked', 'offline')
+    return
+  }
 
   if (!net.isOnline()) {
     startOfflineCountdown()
@@ -170,8 +195,10 @@ async function checkTrialCloud(): Promise<void> {
     const machineId = getMachineId()
     const result = await checkTrialStatus(machineId)
 
-    // Clear any offline countdown since we got a cloud response
+    // Cloud check succeeded — reset cumulative offline counter and update timestamp
     clearOfflineCountdown()
+    cumulativeOfflineSeconds = 0
+    lastCloudSuccessTime = Date.now()
 
     if (result.status === 'active' && result.expiresAt) {
       settingsRepo.set('trial_expires_at', result.expiresAt)
@@ -401,9 +428,33 @@ app.whenReady().then(() => {
       setupTrialWatcher()
     }
 
+    // Verify full license on startup — re-validate serial code AND integrity checksum
+    if (activationType === 'full') {
+      log('Full license detected — verifying integrity')
+      const storedCode = settingsRepo.get('activation_code')
+      const { valid } = validateActivation(storedCode || '')
+      const integrityOk = verifyIntegrity()
+      if (!valid || !integrityOk) {
+        log(`SECURITY: License verification failed (serial=${valid}, integrity=${integrityOk}) — reverting`, true)
+        settingsRepo.set('activation_type', '')
+        settingsRepo.set('activation_status', '')
+        settingsRepo.set('activation_code', '')
+        settingsRepo.set('_integrity', '')
+      }
+    }
+
+    // Verify activation_type wasn't tampered (only valid values allowed)
+    const verifiedType = settingsRepo.get('activation_type')
+    if (verifiedType && !['full', 'trial', ''].includes(verifiedType)) {
+      log('SECURITY: Invalid activation_type detected — resetting', true)
+      settingsRepo.set('activation_type', '')
+      settingsRepo.set('activation_status', '')
+      settingsRepo.set('_integrity', '')
+    }
+
     // Auto-start tablet server if enabled and app is activated
     const tabletAutoStart = settingsRepo.get('tablet_server_auto_start')
-    const isActivated = activationType === 'full' || activationType === 'trial'
+    const isActivated = verifiedType === 'full' || verifiedType === 'trial'
     if (tabletAutoStart !== '0' && isActivated && mainWindow) {
       log('Auto-starting tablet server')
       startTabletServer(mainWindow).catch((e) => log(`Tablet server auto-start failed: ${e}`, true))

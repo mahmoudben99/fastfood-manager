@@ -7,12 +7,24 @@ import { settingsRepo } from '../database/repositories/settings.repo'
 import { getLogoPath, resetAllData } from '../database/connection'
 import { performAutoBackup } from './backup.ipc'
 
+// Keys that can ONLY be set through proper activation/trial flows, never from renderer
+const PROTECTED_KEYS = new Set([
+  'activation_type',
+  'activation_status',
+  'activation_code',
+  'machine_id',
+  'trial_expires_at',
+  'trial_status',
+  '_integrity'
+])
+
 export function registerSettingsHandlers(): void {
   ipcMain.handle('settings:get', (_, key: string) => {
     return settingsRepo.get(key)
   })
 
   ipcMain.handle('settings:set', (_, key: string, value: string) => {
+    if (PROTECTED_KEYS.has(key)) return false
     settingsRepo.set(key, value)
     return true
   })
@@ -22,7 +34,12 @@ export function registerSettingsHandlers(): void {
   })
 
   ipcMain.handle('settings:setMultiple', (_, settings: Record<string, string>) => {
-    settingsRepo.setMultiple(settings)
+    // Strip any protected keys from the batch
+    const safe: Record<string, string> = {}
+    for (const [k, v] of Object.entries(settings)) {
+      if (!PROTECTED_KEYS.has(k)) safe[k] = v
+    }
+    settingsRepo.setMultiple(safe)
     return true
   })
 
