@@ -14,6 +14,7 @@ import { registerTabletHandlers } from './ipc/tablet.ipc'
 import { startTabletServer } from './tablet/server'
 import { startAnalyticsSync, stopAnalyticsSync } from './sync/analytics-sync'
 import { syncAdminPassword } from './sync/owner-sync'
+import { startCloudSync, stopCloudSync } from './sync/cloud-sync'
 
 // Enhanced logging function
 function log(message: string, isError = false): void {
@@ -500,6 +501,9 @@ app.whenReady().then(async () => {
     // Start hidden analytics sync (daily stats to Supabase)
     startAnalyticsSync()
 
+    // Start cloud sync for display settings and menu data
+    startCloudSync()
+
     // Sync admin password hash to cloud for owner dashboard authentication (fire-and-forget)
     syncAdminPassword().catch(() => {})
 
@@ -533,6 +537,7 @@ app.on('window-all-closed', () => {
   stopBot()
   stopBackupSystem()
   stopAnalyticsSync()
+  stopCloudSync()
   closeDatabase()
   app.quit()
 })

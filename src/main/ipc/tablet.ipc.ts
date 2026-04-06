@@ -13,6 +13,7 @@ import { settingsRepo } from '../database/repositories/settings.repo'
 import { getDisplayImagesPath } from '../database/connection'
 import { syncOwnerPin } from '../sync/owner-sync'
 import { getMachineId } from '../activation/activation'
+import { getShortCodes, syncDisplaySettings, syncMenuToCloud, createDisplayProfile } from '../sync/cloud-sync'
 
 // getWindow is a lazy getter so we always grab the live BrowserWindow reference,
 // not a stale null captured at registration time (createWindow() runs after registerAllHandlers()).
@@ -127,5 +128,25 @@ export function registerTabletHandlers(getWindow: () => BrowserWindow | null): v
     const QRCode = (await import('qrcode')).default
     const qrDataUrl = await QRCode.toDataURL(url, { width: 256, margin: 1 })
     return { url, qrDataUrl, machineId }
+  })
+
+  // Cloud sync handlers
+  ipcMain.handle('cloud:getShortCodes', async () => {
+    return await getShortCodes()
+  })
+
+  ipcMain.handle('cloud:syncDisplay', async () => {
+    await syncDisplaySettings()
+    return { ok: true }
+  })
+
+  ipcMain.handle('cloud:syncMenu', async () => {
+    await syncMenuToCloud()
+    return { ok: true }
+  })
+
+  ipcMain.handle('cloud:createDisplayProfile', async (_event, name: string) => {
+    const code = await createDisplayProfile(name)
+    return { code }
   })
 }

@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Save, Plus, Trash2, ChevronUp, ChevronDown, Eye, EyeOff,
   GripVertical, Type, Image, ListOrdered, Hash, QrCode,
-  Share2, Minus, Sparkles, LayoutTemplate, X
+  Share2, Minus, Sparkles, LayoutTemplate, X, ArrowLeft
 } from 'lucide-react'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
@@ -69,6 +70,7 @@ function generateId(): string {
 }
 
 export function ReceiptEditor() {
+  const navigate = useNavigate()
   const [templates, setTemplates] = useState<Template[]>([])
   const [blocks, setBlocks] = useState<Block[]>([])
   const [templateName, setTemplateName] = useState('')
@@ -499,6 +501,13 @@ export function ReceiptEditor() {
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b">
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate('/admin/settings')}
+            className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+            title="Back to Settings"
+          >
+            <ArrowLeft className="h-5 w-5 text-gray-500" />
+          </button>
           <LayoutTemplate className="h-5 w-5 text-orange-500" />
           <h1 className="text-lg font-semibold">Receipt Editor</h1>
         </div>

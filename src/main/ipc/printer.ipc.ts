@@ -4,6 +4,7 @@ import { settingsRepo } from '../database/repositories/settings.repo'
 import { ordersRepo } from '../database/repositories/orders.repo'
 import { printerAssignmentsRepo } from '../database/repositories/printer-assignments.repo'
 import { workersRepo } from '../database/repositories/workers.repo'
+import { receiptTemplatesRepo } from '../database/repositories/receipt-templates.repo'
 
 function getOrderTypeLabel(orderType: string, isRTL: boolean): string {
   if (orderType === 'delivery') return isRTL ? 'توصيل' : 'Delivery'
@@ -30,7 +31,98 @@ function getLogoHTML(settings: Record<string, string>): string {
   }
 }
 
+function buildFromTemplate(template: any, order: any, settings: Record<string, string>): string | null {
+  try {
+    const blocks = JSON.parse(template.blocks)
+    if (!blocks || blocks.length === 0) return null
+
+    const paperWidth = parseInt(settings.printer_width || '80')
+    const maxWidth = paperWidth === 58 ? '48mm' : '72mm'
+    const lang = settings.language || 'en'
+    const isRTL = lang === 'ar'
+    const items = order.items || []
+
+    let body = ''
+    for (const block of blocks) {
+      if (!block.enabled) continue
+      const cfg = block.config || {}
+      const fontSize = cfg.fontSize === 'large' ? '18px' : cfg.fontSize === 'small' ? '10px' : '12px'
+      const align = cfg.alignment || 'center'
+      const bold = cfg.bold ? 'font-weight:bold;' : ''
+
+      switch (block.type) {
+        case 'logo':
+          body += getLogoHTML(settings)
+          break
+        case 'restaurant_name':
+          body += `<div style="text-align:${align};font-size:${fontSize};${bold}">${settings.restaurant_name || 'Restaurant'}</div>`
+          if (settings.restaurant_address) body += `<div style="text-align:center;font-size:10px;color:#666;">${settings.restaurant_address}</div>`
+          if (settings.restaurant_phone) body += `<div style="text-align:center;font-size:10px;color:#666;">${settings.restaurant_phone}</div>`
+          break
+        case 'order_details': {
+          const time = new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          body += `<div style="font-size:11px;margin:8px 0;">Order #${order.daily_number} | ${time}</div>`
+          if (order.table_number) body += `<div style="font-size:11px;">Table: ${order.table_number}</div>`
+          if (order.order_type) body += `<div style="font-size:11px;">${order.order_type === 'delivery' ? 'Delivery' : order.order_type === 'takeout' ? 'Take Out' : 'At Table'}</div>`
+          break
+        }
+        case 'items_table':
+          body += '<div style="margin:8px 0;">'
+          for (const item of items) {
+            body += `<div style="display:flex;justify-content:space-between;font-size:${fontSize};${bold}padding:2px 0;"><span>${item.quantity}x ${item.menu_item_name}</span><span>${Number(item.total_price).toLocaleString()} ${settings.currency_symbol || 'DA'}</span></div>`
+            if (item.notes) body += `<div style="font-size:9px;color:#888;padding-left:16px;">* ${item.notes}</div>`
+          }
+          body += '</div>'
+          break
+        case 'total':
+          body += `<div style="display:flex;justify-content:space-between;font-size:${fontSize};${bold}margin:8px 0;border-top:1px dashed #000;padding-top:6px;"><span>Total</span><span>${Number(order.total).toLocaleString()} ${settings.currency_symbol || 'DA'}</span></div>`
+          if (order.discount_amount > 0) {
+            body += `<div style="font-size:10px;color:#666;">Discount: -${Number(order.discount_amount).toLocaleString()} ${settings.currency_symbol || 'DA'}</div>`
+          }
+          break
+        case 'divider':
+          body += '<hr style="border:none;border-top:1px dashed #000;margin:8px 0;">'
+          break
+        case 'custom_text':
+          body += `<div style="text-align:${align};font-size:${fontSize};${bold}margin:6px 0;">${cfg.text || ''}</div>`
+          break
+        case 'social_media': {
+          try {
+            const social = JSON.parse(settings.social_media || '[]')
+            if (social.length > 0) {
+              body += '<div style="text-align:center;font-size:10px;margin:6px 0;">'
+              for (const s of social) {
+                body += `<div>${s.platform}: ${s.handle}</div>`
+              }
+              body += '</div>'
+            }
+          } catch { /* skip */ }
+          break
+        }
+        case 'qr_code':
+          body += '<div style="text-align:center;margin:8px 0;font-size:10px;">[QR Code]</div>'
+          break
+      }
+    }
+
+    return `<!DOCTYPE html><html dir="${isRTL ? 'rtl' : 'ltr'}"><head><meta charset="utf-8"><style>*{margin:0;padding:0;box-sizing:border-box;}body{width:${maxWidth};font-family:monospace;padding:8px;font-size:12px;}</style></head><body>${body}</body></html>`
+  } catch {
+    return null
+  }
+}
+
 function getReceiptHTML(order: any, settings: Record<string, string>, type: 'receipt' | 'kitchen'): string {
+  // Check for active custom template (only for receipts, not kitchen tickets)
+  if (type === 'receipt') {
+    try {
+      const template = receiptTemplatesRepo.getActiveTemplate()
+      if (template) {
+        const customHTML = buildFromTemplate(template, order, settings)
+        if (customHTML) return customHTML
+      }
+    } catch { /* fall through to default */ }
+  }
+
   const paperWidth = parseInt(settings.printer_width || '80')
   const maxWidth = paperWidth === 58 ? '48mm' : '72mm'
   const lang = settings.language || 'en'

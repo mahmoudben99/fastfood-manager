@@ -7,8 +7,18 @@ const SESSION_SECRET = new TextEncoder().encode(process.env.SESSION_SECRET!)
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Allow login page, API login, and owner dashboard (has its own PIN auth)
-  if (pathname === '/login' || pathname.startsWith('/api/login') || pathname.startsWith('/owner') || pathname.startsWith('/api/owner')) {
+  // Allow login page, API login, owner dashboard (has its own PIN auth), TV display, remote ordering, and short codes
+  if (
+    pathname === '/login' ||
+    pathname.startsWith('/api/login') ||
+    pathname.startsWith('/owner') ||
+    pathname.startsWith('/api/owner') ||
+    pathname.startsWith('/tv/') ||
+    pathname.startsWith('/api/tv-') ||
+    pathname.startsWith('/r/') ||
+    pathname.startsWith('/api/remote-order') ||
+    /^\/\d{4}$/.test(pathname)
+  ) {
     return NextResponse.next()
   }
 

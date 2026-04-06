@@ -278,6 +278,12 @@ const api = {
     getDisplayImages: () => ipcRenderer.invoke('display:getImages'),
     removeDisplayImage: (path: string) => ipcRenderer.invoke('display:removeImage', path),
     getOwnerDashboard: () => ipcRenderer.invoke('owner:getQR')
+  },
+  cloud: {
+    getShortCodes: () => ipcRenderer.invoke('cloud:getShortCodes'),
+    syncDisplay: () => ipcRenderer.invoke('cloud:syncDisplay'),
+    syncMenu: () => ipcRenderer.invoke('cloud:syncMenu'),
+    createDisplayProfile: (name: string) => ipcRenderer.invoke('cloud:createDisplayProfile', name)
   }
 }
 

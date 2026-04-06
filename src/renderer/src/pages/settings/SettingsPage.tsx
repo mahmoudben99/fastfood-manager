@@ -133,6 +133,14 @@ export function SettingsPage() {
   const [ownerDashQr, setOwnerDashQr] = useState('')
   const [ownerUrlCopied, setOwnerUrlCopied] = useState(false)
 
+  // Cloud short codes
+  const [shortCodes, setShortCodes] = useState<{ tv: string; owner: string; order: string }>({ tv: '', owner: '', order: '' })
+  const [shortCodesLoading, setShortCodesLoading] = useState(false)
+  const [copiedCode, setCopiedCode] = useState<string | null>(null)
+  const [newProfileName, setNewProfileName] = useState('')
+  const [newProfileCode, setNewProfileCode] = useState('')
+  const [creatingProfile, setCreatingProfile] = useState(false)
+
   // Display customization
   const [displayYoutubeUrl, setDisplayYoutubeUrl] = useState('')
   const [displayThemeColor, setDisplayThemeColor] = useState('#f97316')
@@ -284,6 +292,12 @@ export function SettingsPage() {
       const ownerData = await window.api.tablet.getOwnerDashboard()
       setOwnerDashUrl(ownerData.url)
       setOwnerDashQr(ownerData.qrDataUrl)
+    } catch { /* ignore */ }
+
+    // Load cloud short codes
+    try {
+      const codes = await window.api.cloud.getShortCodes()
+      setShortCodes(codes)
     } catch { /* ignore */ }
 
     // Display customization
@@ -1169,38 +1183,122 @@ export function SettingsPage() {
           <div className="space-y-6">
             <div>
               <h3 className="text-lg font-semibold mb-1">Owner Dashboard</h3>
-              <p className="text-sm text-gray-500">Restaurant owner scans this QR code to access their live dashboard from any phone.</p>
+              <p className="text-sm text-gray-500">Access your restaurant remotely from any device with these short links.</p>
               <p className="text-xs text-orange-600 mt-1 font-medium">The owner logs in with the admin password (set in Security tab).</p>
             </div>
 
-            {ownerDashQr ? (
-              <div className="flex flex-col sm:flex-row gap-6 items-start">
-                <img src={ownerDashQr} alt="Owner Dashboard QR" className="w-48 h-48 rounded-lg border border-gray-200" />
-                <div className="flex-1">
-                  <p className="text-sm text-gray-500 mb-2">Dashboard URL:</p>
-                  <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
-                    <span className="text-sm font-mono text-gray-800 flex-1 break-all">{ownerDashUrl}</span>
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(ownerDashUrl)
-                        setOwnerUrlCopied(true)
-                        setTimeout(() => setOwnerUrlCopied(false), 2000)
-                      }}
-                      className="flex-shrink-0 text-orange-500 hover:text-orange-600"
-                      title="Copy link"
-                    >
-                      {ownerUrlCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                    </button>
+            {/* Short code links */}
+            {(shortCodes.tv || shortCodes.owner || shortCodes.order) ? (
+              <div className="space-y-4">
+                {[
+                  { label: 'TV Display', code: shortCodes.tv, path: '', desc: 'Show menu & promos on a TV screen' },
+                  { label: 'Owner Dashboard', code: shortCodes.owner, path: 'o/', desc: 'Monitor orders, revenue & analytics' },
+                  { label: 'Remote Ordering', code: shortCodes.order, path: 'r/', desc: 'Let customers order from their phone' }
+                ].map(item => item.code && (
+                  <div key={item.label} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <div className="flex items-center justify-between mb-1">
+                      <h4 className="font-medium text-sm">{item.label}</h4>
+                      <span className="text-xs text-gray-400">{item.desc}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-mono text-gray-800 flex-1 bg-white rounded px-3 py-2 border border-gray-200">
+                        fastfood-manager.vercel.app/{item.path}{item.code}
+                      </span>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(`https://fastfood-manager.vercel.app/${item.path}${item.code}`)
+                          setCopiedCode(item.label)
+                          setTimeout(() => setCopiedCode(null), 2000)
+                        }}
+                        className="flex-shrink-0 text-orange-500 hover:text-orange-600 p-2"
+                        title="Copy link"
+                      >
+                        {copiedCode === item.label ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-xs text-gray-400 mt-2">This link works from any device with internet access — no WiFi restriction.</p>
-                </div>
+                ))}
               </div>
             ) : (
               <div className="flex items-center gap-2 p-3 bg-orange-50 rounded-lg">
                 <AlertCircle className="h-4 w-4 text-orange-500" />
-                <p className="text-sm text-orange-700">Start the tablet server (in Remote Orders tab) to generate the Owner Dashboard QR code.</p>
+                <p className="text-sm text-orange-700">Short codes could not be loaded. Check your internet connection.</p>
               </div>
             )}
+
+            {/* Legacy QR code section */}
+            {ownerDashQr && (
+              <div className="border-t pt-4">
+                <h4 className="font-medium text-sm mb-2">Direct Dashboard QR (LAN)</h4>
+                <div className="flex flex-col sm:flex-row gap-6 items-start">
+                  <img src={ownerDashQr} alt="Owner Dashboard QR" className="w-48 h-48 rounded-lg border border-gray-200" />
+                  <div className="flex-1">
+                    <p className="text-sm text-gray-500 mb-2">Dashboard URL:</p>
+                    <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
+                      <span className="text-sm font-mono text-gray-800 flex-1 break-all">{ownerDashUrl}</span>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(ownerDashUrl)
+                          setOwnerUrlCopied(true)
+                          setTimeout(() => setOwnerUrlCopied(false), 2000)
+                        }}
+                        className="flex-shrink-0 text-orange-500 hover:text-orange-600"
+                        title="Copy link"
+                      >
+                        {ownerUrlCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2">This link works from any device with internet access.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Create new display profile */}
+            <div className="border-t pt-4">
+              <h4 className="font-medium text-sm mb-2">Create New Display Profile</h4>
+              <p className="text-xs text-gray-500 mb-3">Create a separate TV display with its own settings and short code.</p>
+              <div className="flex items-center gap-2">
+                <Input
+                  className="w-64"
+                  placeholder="Profile name (e.g. Terrace TV)"
+                  value={newProfileName}
+                  onChange={e => setNewProfileName(e.target.value)}
+                />
+                <Button
+                  disabled={!newProfileName.trim() || creatingProfile}
+                  onClick={async () => {
+                    setCreatingProfile(true)
+                    try {
+                      const result = await window.api.cloud.createDisplayProfile(newProfileName.trim())
+                      setNewProfileCode(result.code)
+                      setNewProfileName('')
+                    } catch { /* ignore */ }
+                    setCreatingProfile(false)
+                  }}
+                >
+                  <Plus className="h-4 w-4" /> {creatingProfile ? 'Creating...' : 'Create'}
+                </Button>
+              </div>
+              {newProfileCode && (
+                <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <p className="text-sm text-green-800">
+                    Profile created! TV Display link:{' '}
+                    <span className="font-mono font-medium">fastfood-manager.vercel.app/{newProfileCode}</span>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(`https://fastfood-manager.vercel.app/${newProfileCode}`)
+                        setCopiedCode('newProfile')
+                        setTimeout(() => setCopiedCode(null), 2000)
+                      }}
+                      className="ml-2 text-green-600 hover:text-green-700"
+                    >
+                      {copiedCode === 'newProfile' ? <Check className="h-4 w-4 inline" /> : <Copy className="h-4 w-4 inline" />}
+                    </button>
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </Card>
       )}
