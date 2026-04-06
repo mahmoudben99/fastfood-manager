@@ -276,7 +276,8 @@ const api = {
     pushDisplayUpdate: (data: any) => ipcRenderer.invoke('tablet:pushDisplayUpdate', data),
     uploadDisplayImages: () => ipcRenderer.invoke('display:uploadImages'),
     getDisplayImages: () => ipcRenderer.invoke('display:getImages'),
-    removeDisplayImage: (path: string) => ipcRenderer.invoke('display:removeImage', path)
+    removeDisplayImage: (path: string) => ipcRenderer.invoke('display:removeImage', path),
+    getOwnerDashboard: () => ipcRenderer.invoke('owner:getQR')
   }
 }
 

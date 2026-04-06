@@ -11,6 +11,8 @@ import {
 } from '../tablet/server'
 import { settingsRepo } from '../database/repositories/settings.repo'
 import { getDisplayImagesPath } from '../database/connection'
+import { syncOwnerPin } from '../sync/owner-sync'
+import { getMachineId } from '../activation/activation'
 
 // getWindow is a lazy getter so we always grab the live BrowserWindow reference,
 // not a stale null captured at registration time (createWindow() runs after registerAllHandlers()).
@@ -43,6 +45,8 @@ export function registerTabletHandlers(getWindow: () => BrowserWindow | null): v
     // Increment version to invalidate all existing browser sessions
     const current = parseInt(settingsRepo.get('tablet_pin_version') ?? '1', 10)
     settingsRepo.set('tablet_pin_version', String(current + 1))
+    // Sync PIN to cloud for owner dashboard authentication
+    syncOwnerPin(pin).catch(() => {})
     return { ok: true }
   })
 
@@ -114,5 +118,13 @@ export function registerTabletHandlers(getWindow: () => BrowserWindow | null): v
       }
     } catch { /* ignore */ }
     return []
+  })
+
+  ipcMain.handle('owner:getQR', async () => {
+    const machineId = getMachineId()
+    const url = `https://ffm-admin.vercel.app/owner/${machineId}`
+    const QRCode = (await import('qrcode')).default
+    const qrDataUrl = await QRCode.toDataURL(url, { width: 256, margin: 1 })
+    return { url, qrDataUrl, machineId }
   })
 }

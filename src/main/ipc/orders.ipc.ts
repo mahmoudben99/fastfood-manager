@@ -5,6 +5,7 @@ import { performAutoBackup } from './backup.ipc'
 import { sendOrderNotification } from '../telegram/bot'
 import { printOrder } from './printer.ipc'
 import { settingsRepo } from '../database/repositories/settings.repo'
+import { syncOrderToCloud, syncOrderStatusToCloud } from '../sync/owner-sync'
 
 export function registerOrdersHandlers(): void {
   ipcMain.handle('orders:create', (_, input: CreateOrderInput) => {
@@ -24,6 +25,8 @@ export function registerOrdersHandlers(): void {
     const autoPrintKitchen = settingsRepo.get('auto_print_kitchen') === 'true'
     if (autoPrintReceipt) printOrder(order.id, 'receipt').catch(() => {})
     if (autoPrintKitchen) printOrder(order.id, 'kitchen').catch(() => {})
+    // Sync order to owner dashboard (fire-and-forget)
+    syncOrderToCloud(order).catch(() => {})
     return order
   })
 
@@ -40,11 +43,15 @@ export function registerOrdersHandlers(): void {
   })
 
   ipcMain.handle('orders:updateStatus', (_, id: number, status: string) => {
-    return ordersRepo.updateStatus(id, status)
+    const result = ordersRepo.updateStatus(id, status)
+    syncOrderStatusToCloud(id, status).catch(() => {})
+    return result
   })
 
   ipcMain.handle('orders:cancel', (_, id: number) => {
-    return ordersRepo.cancelOrder(id)
+    const result = ordersRepo.cancelOrder(id)
+    syncOrderStatusToCloud(id, 'cancelled').catch(() => {})
+    return result
   })
 
   ipcMain.handle('orders:getToday', () => {
