@@ -9,6 +9,7 @@ export function getDisplayHTML(lang: string): string {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Customer Display</title>
   <style>
+    :root { --accent: #f97316; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body {
       height: 100%; width: 100%;
@@ -17,17 +18,63 @@ export function getDisplayHTML(lang: string): string {
       overflow: hidden;
     }
 
+    /* ── Fullscreen mode ── */
+    body.fullscreen { font-size: 120%; }
+    body.fullscreen .header { padding: 20px 32px; }
+    body.fullscreen .items-list { padding: 20px 32px; }
+    body.fullscreen .totals { padding: 28px 32px; }
+    body.fullscreen .idle-view { padding: 40px; gap: 40px; }
+
+    /* ── Fullscreen button ── */
+    .fs-btn {
+      position: fixed; bottom: 20px; right: 20px; z-index: 9999;
+      background: rgba(255,255,255,0.15); backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.25); color: #fff;
+      padding: 10px 18px; border-radius: 10px; cursor: pointer;
+      font-size: 14px; font-weight: 600;
+      transition: opacity 0.3s, background 0.2s;
+    }
+    .fs-btn:hover { background: rgba(255,255,255,0.25); }
+    .fs-btn.fs-hidden { opacity: 0; pointer-events: none; }
+
+    /* ── Slideshow ── */
+    .slideshow-container {
+      position: absolute; inset: 0; z-index: 1;
+      overflow: hidden;
+    }
+    .slideshow-bg {
+      position: absolute; inset: -20px;
+      width: calc(100% + 40px); height: calc(100% + 40px);
+      object-fit: cover; filter: blur(20px) brightness(0.4);
+    }
+    .slideshow-img {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      object-fit: contain; z-index: 2;
+      animation: slideZoom 8s ease-in-out forwards;
+    }
+    .slideshow-container.fade-out { animation: fadeOut 1s ease forwards; }
+    .slideshow-container.fade-in { animation: fadeIn 1s ease forwards; }
+    @keyframes slideZoom {
+      from { transform: scale(1); }
+      to { transform: scale(1.05); }
+    }
+    @keyframes fadeOut {
+      from { opacity: 1; }
+      to { opacity: 0; }
+    }
+
     /* ── Shared ── */
     .container { height: 100vh; display: flex; flex-direction: column; }
     .header {
       background: #1a1a1a; padding: 16px 24px;
       display: flex; align-items: center; justify-content: space-between;
-      border-bottom: 2px solid #f97316;
+      border-bottom: 2px solid var(--accent);
       flex-shrink: 0;
     }
     .header-name {
       font-size: clamp(1.4rem, 3vw, 2.2rem);
-      font-weight: 800; color: #f97316;
+      font-weight: 800; color: var(--accent);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .header-logo {
@@ -36,7 +83,7 @@ export function getDisplayHTML(lang: string): string {
     }
     .header-left { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; }
     .order-type-badge {
-      background: #f97316; color: #fff; padding: 6px 16px;
+      background: var(--accent); color: #fff; padding: 6px 16px;
       border-radius: 20px; font-size: clamp(0.9rem, 1.8vw, 1.2rem);
       font-weight: 700; white-space: nowrap; flex-shrink: 0;
     }
@@ -60,7 +107,7 @@ export function getDisplayHTML(lang: string): string {
     }
     .item-qty {
       font-size: clamp(1rem, 2vw, 1.4rem);
-      color: #f97316; font-weight: 700;
+      color: var(--accent); font-weight: 700;
       margin-inline-start: 12px; flex-shrink: 0; min-width: 40px; text-align: center;
     }
     .item-price {
@@ -87,7 +134,7 @@ export function getDisplayHTML(lang: string): string {
     }
     .total-row.discount .total-value { color: #ef4444; }
     .total-row.grand {
-      border-top: 2px solid #f97316; margin-top: 8px; padding-top: 12px;
+      border-top: 2px solid var(--accent); margin-top: 8px; padding-top: 12px;
     }
     .total-row.grand .total-label {
       font-size: clamp(1.4rem, 2.8vw, 2rem);
@@ -95,7 +142,7 @@ export function getDisplayHTML(lang: string): string {
     }
     .total-row.grand .total-value {
       font-size: clamp(1.6rem, 3.2vw, 2.4rem);
-      color: #f97316; font-weight: 900;
+      color: var(--accent); font-weight: 900;
     }
     .table-number {
       font-size: clamp(0.9rem, 1.6vw, 1.1rem);
@@ -115,7 +162,7 @@ export function getDisplayHTML(lang: string): string {
     }
     .idle-name {
       font-size: clamp(2rem, 5vw, 4rem);
-      font-weight: 900; color: #f97316;
+      font-weight: 900; color: var(--accent);
       text-align: center; animation: fadeIn 1.5s ease-out;
     }
 
@@ -137,7 +184,7 @@ export function getDisplayHTML(lang: string): string {
       font-size: clamp(1.2rem, 2.5vw, 1.8rem);
       font-weight: 800; min-width: 60px; text-align: center;
     }
-    .badge-preparing { background: #f97316; color: #fff; }
+    .badge-preparing { background: var(--accent); color: #fff; }
     .badge-ready {
       background: #22c55e; color: #fff;
       animation: readyPulse 1.5s ease-in-out infinite;
@@ -165,7 +212,7 @@ export function getDisplayHTML(lang: string): string {
     }
     .promo-value {
       font-size: clamp(1.2rem, 2.5vw, 1.6rem);
-      font-weight: 800; color: #f97316;
+      font-weight: 800; color: var(--accent);
     }
     .promo-emoji {
       font-size: clamp(1.6rem, 3vw, 2.2rem);
@@ -223,6 +270,15 @@ export function getDisplayHTML(lang: string): string {
   </style>
 </head>
 <body>
+  <!-- Fullscreen button -->
+  <button id="fsBtn" class="fs-btn" onclick="toggleFullscreen()">Fullscreen</button>
+
+  <!-- YouTube hidden iframe -->
+  <div id="ytContainer" style="position:absolute;top:-9999px;left:-9999px;width:1px;height:1px;overflow:hidden;"></div>
+
+  <!-- Slideshow overlay (shown during idle) -->
+  <div id="slideshowOverlay" class="hidden" style="position:absolute;inset:0;z-index:5;pointer-events:none;"></div>
+
   <div class="container">
     <div class="header">
       <div class="header-left">
@@ -298,7 +354,7 @@ export function getDisplayHTML(lang: string): string {
 
     let state = {
       mode: 'idle',
-      info: { name: '', logo: '', promos: [], packs: [], social: [] },
+      info: { name: '', logo: '', promos: [], packs: [], social: [], youtubeUrl: '', themeColor: '#f97316', slideshowImages: [] },
       cart: { items: [], subtotal: 0, discount: 0, total: 0, orderType: 'local', tableNumber: '' },
       queue: { preparing: [], ready: [] },
       currency: ''
@@ -312,14 +368,142 @@ export function getDisplayHTML(lang: string): string {
       return val.toLocaleString();
     }
 
+    // ── Fullscreen ──
+    let fsHideTimer = null;
+    function toggleFullscreen() {
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      } else {
+        document.documentElement.requestFullscreen();
+      }
+    }
+
+    document.addEventListener('fullscreenchange', () => {
+      const isFs = !!document.fullscreenElement;
+      document.body.classList.toggle('fullscreen', isFs);
+      $('fsBtn').textContent = isFs ? 'Exit Fullscreen' : 'Fullscreen';
+    });
+
+    document.addEventListener('mousemove', () => {
+      const btn = $('fsBtn');
+      btn.classList.remove('fs-hidden');
+      clearTimeout(fsHideTimer);
+      fsHideTimer = setTimeout(() => btn.classList.add('fs-hidden'), 3000);
+    });
+    // Auto-hide after initial 3s
+    fsHideTimer = setTimeout(() => $('fsBtn').classList.add('fs-hidden'), 3000);
+
+    // ── Theme Color ──
+    function applyThemeColor(color) {
+      if (color && /^#[0-9a-fA-F]{3,8}$/.test(color)) {
+        document.documentElement.style.setProperty('--accent', color);
+      }
+    }
+
+    // ── YouTube Music ──
+    let currentYoutubeUrl = '';
+    function extractYoutubeId(url) {
+      if (!url) return null;
+      // Playlist detection
+      const listMatch = url.match(/[?&]list=([a-zA-Z0-9_-]+)/);
+      if (listMatch) return { type: 'playlist', id: listMatch[1] };
+      // Video ID
+      const vidMatch = url.match(/(?:youtu\\.be\\/|v=|embed\\/)([a-zA-Z0-9_-]{11})/);
+      if (vidMatch) return { type: 'video', id: vidMatch[1] };
+      return null;
+    }
+
+    function setupYoutube(url) {
+      if (url === currentYoutubeUrl) return;
+      currentYoutubeUrl = url;
+      const container = $('ytContainer');
+      if (!url) { container.innerHTML = ''; return; }
+      const info = extractYoutubeId(url);
+      if (!info) { container.innerHTML = ''; return; }
+      let src = '';
+      if (info.type === 'playlist') {
+        src = 'https://www.youtube.com/embed/videoseries?list=' + info.id + '&autoplay=1&loop=1&mute=0';
+      } else {
+        src = 'https://www.youtube.com/embed/' + info.id + '?autoplay=1&loop=1&playlist=' + info.id + '&mute=0';
+      }
+      container.innerHTML = '<iframe width="1" height="1" src="' + src + '" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>';
+    }
+
+    // ── Slideshow ──
+    let slideshowImages = [];
+    let slideshowIndex = 0;
+    let slideshowTimer = null;
+    let slideshowPhase = 'branding'; // 'branding' | 'image'
+    const BRANDING_DURATION = 10000;
+    const IMAGE_DURATION = 8000;
+    const FADE_DURATION = 1000;
+
+    function startSlideshow() {
+      stopSlideshow();
+      if (slideshowImages.length === 0) return;
+      slideshowPhase = 'branding';
+      slideshowIndex = 0;
+      $('idleView').style.position = 'relative';
+      scheduleSlideshowNext();
+    }
+
+    function stopSlideshow() {
+      clearTimeout(slideshowTimer);
+      slideshowTimer = null;
+      const overlay = $('slideshowOverlay');
+      overlay.classList.add('hidden');
+      overlay.innerHTML = '';
+    }
+
+    function scheduleSlideshowNext() {
+      if (state.mode !== 'idle' || slideshowImages.length === 0) return;
+      if (slideshowPhase === 'branding') {
+        // Show branding for BRANDING_DURATION, then switch to image
+        $('slideshowOverlay').classList.add('hidden');
+        $('idleView').style.opacity = '1';
+        slideshowTimer = setTimeout(() => {
+          slideshowPhase = 'image';
+          showSlideshowImage();
+        }, BRANDING_DURATION);
+      }
+    }
+
+    function showSlideshowImage() {
+      if (state.mode !== 'idle' || slideshowImages.length === 0) return;
+      const overlay = $('slideshowOverlay');
+      const imgSrc = slideshowImages[slideshowIndex % slideshowImages.length];
+      slideshowIndex = (slideshowIndex + 1) % slideshowImages.length;
+
+      overlay.innerHTML =
+        '<div class="slideshow-container fade-in">' +
+          '<img class="slideshow-bg" src="' + imgSrc + '" alt="">' +
+          '<img class="slideshow-img" src="' + imgSrc + '" alt="">' +
+        '</div>';
+      overlay.classList.remove('hidden');
+
+      // After IMAGE_DURATION, fade out and go back to branding
+      slideshowTimer = setTimeout(() => {
+        const container = overlay.querySelector('.slideshow-container');
+        if (container) container.classList.add('fade-out');
+        setTimeout(() => {
+          overlay.classList.add('hidden');
+          overlay.innerHTML = '';
+          slideshowPhase = 'branding';
+          scheduleSlideshowNext();
+        }, FADE_DURATION);
+      }, IMAGE_DURATION);
+    }
+
     function showMode(mode) {
       state.mode = mode;
       if (mode === 'active') {
         $('activeView').classList.remove('hidden');
         $('idleView').classList.add('hidden');
+        stopSlideshow();
       } else {
         $('activeView').classList.add('hidden');
         $('idleView').classList.remove('hidden');
+        startSlideshow();
       }
     }
 
@@ -335,6 +519,21 @@ export function getDisplayHTML(lang: string): string {
         $('headerLogo').classList.remove('hidden');
         $('idleLogo').src = src;
         $('idleLogo').classList.remove('hidden');
+      }
+
+      // Theme color
+      if (info.themeColor) applyThemeColor(info.themeColor);
+
+      // YouTube
+      if (info.youtubeUrl !== undefined) setupYoutube(info.youtubeUrl);
+
+      // Slideshow images
+      if (info.slideshowImages && info.slideshowImages.length > 0) {
+        slideshowImages = info.slideshowImages;
+        if (state.mode === 'idle') startSlideshow();
+      } else {
+        slideshowImages = [];
+        stopSlideshow();
       }
 
       // Promos + packs

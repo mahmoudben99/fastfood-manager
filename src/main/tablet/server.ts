@@ -48,7 +48,30 @@ function getDisplayInfoPayload(): Record<string, unknown> {
     if (raw) social = JSON.parse(raw)
   } catch { /* ignore */ }
 
-  return { type: 'info', name, logo, currency, promos, packs, social }
+  // YouTube URL
+  const youtubeUrl = settingsRepo.get('display_youtube_url') || ''
+
+  // Theme color
+  const themeColor = settingsRepo.get('display_theme_color') || '#f97316'
+
+  // Slideshow images (stored as JSON array of file paths)
+  let slideshowImages: string[] = []
+  try {
+    const raw = settingsRepo.get('display_slideshow_images')
+    if (raw) {
+      const paths: string[] = JSON.parse(raw)
+      slideshowImages = paths.slice(0, 10).map(p => {
+        try {
+          const buf = readFileSync(p)
+          const ext = p.split('.').pop()?.toLowerCase() || 'png'
+          const mime = ext === 'jpg' ? 'jpeg' : ext
+          return `data:image/${mime};base64,` + buf.toString('base64')
+        } catch { return '' }
+      }).filter(Boolean)
+    }
+  } catch { /* ignore */ }
+
+  return { type: 'info', name, logo, currency, promos, packs, social, youtubeUrl, themeColor, slideshowImages }
 }
 
 function getQueuePayload(): Record<string, unknown> {

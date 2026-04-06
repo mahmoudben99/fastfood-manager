@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { ordersRepo, type CreateOrderInput } from '../database/repositories/orders.repo'
+import { customersRepo } from '../database/repositories/customers.repo'
 import { performAutoBackup } from './backup.ipc'
 import { sendOrderNotification } from '../telegram/bot'
 import { printOrder } from './printer.ipc'
@@ -8,6 +9,12 @@ import { settingsRepo } from '../database/repositories/settings.repo'
 export function registerOrdersHandlers(): void {
   ipcMain.handle('orders:create', (_, input: CreateOrderInput) => {
     const order = ordersRepo.create(input)
+    // Track customer by phone number (loyalty system)
+    if (input.customer_phone) {
+      try {
+        customersRepo.upsertFromOrder(input.customer_phone, order.total, input.customer_name)
+      } catch { /* non-critical */ }
+    }
     // Auto-backup after each order (overwrites today's file)
     performAutoBackup()
     // Send Telegram notification

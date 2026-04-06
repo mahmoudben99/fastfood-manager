@@ -14,6 +14,7 @@ import { registerDataHandlers } from './data.ipc'
 import { registerMenuUploadHandlers } from './menu-upload.ipc'
 import { registerPromotionsHandlers } from './promotions.ipc'
 import { registerReceiptEditorHandlers } from './receipt-editor.ipc'
+import { registerCustomersHandlers } from './customers.ipc'
 
 export function registerAllHandlers(): void {
   registerActivationHandlers()
@@ -32,4 +33,5 @@ export function registerAllHandlers(): void {
   registerMenuUploadHandlers()
   registerPromotionsHandlers()
   registerReceiptEditorHandlers()
+  registerCustomersHandlers()
 }

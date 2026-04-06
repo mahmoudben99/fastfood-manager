@@ -116,6 +116,12 @@ export function SettingsPage() {
   const [tabletLoading, setTabletLoading] = useState(false)
   const [urlCopied, setUrlCopied] = useState(false)
 
+  // Display customization
+  const [displayYoutubeUrl, setDisplayYoutubeUrl] = useState('')
+  const [displayThemeColor, setDisplayThemeColor] = useState('#f97316')
+  const [displayImages, setDisplayImages] = useState<string[]>([])
+  const [customHex, setCustomHex] = useState('')
+
   const getKeyboardValue = (): string => {
     if (!keyboardTarget) return ''
     switch (keyboardTarget.field) {
@@ -243,6 +249,14 @@ export function SettingsPage() {
     setTabletQr(tabletStatus.qrDataUrl || '')
     setTabletAutoStart(settings.tablet_server_auto_start !== '0')
     setTabletPinEnabled(settings.tablet_pin_enabled === '1')
+
+    // Display customization
+    setDisplayYoutubeUrl(settings.display_youtube_url || '')
+    setDisplayThemeColor(settings.display_theme_color || '#f97316')
+    try {
+      const imgs = await window.api.tablet.getDisplayImages()
+      setDisplayImages(imgs || [])
+    } catch { /* ignore */ }
   }
 
   const saveGeneral = async () => {
@@ -1103,6 +1117,146 @@ export function SettingsPage() {
                 <li>• Restaurant name, logo, and social media</li>
                 <li>• Animated idle screen when no orders</li>
               </ul>
+            </div>
+
+            {/* Theme Color */}
+            <div className="pt-4 border-t">
+              <h4 className="text-sm font-medium text-gray-700 mb-2">
+                <Palette className="h-4 w-4 inline mr-1" />
+                Theme Color
+              </h4>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {[
+                  { color: '#f97316', label: 'Orange' },
+                  { color: '#3b82f6', label: 'Blue' },
+                  { color: '#22c55e', label: 'Green' },
+                  { color: '#ef4444', label: 'Red' },
+                  { color: '#a855f7', label: 'Purple' },
+                  { color: '#ec4899', label: 'Pink' }
+                ].map(({ color, label }) => (
+                  <button
+                    key={color}
+                    title={label}
+                    onClick={async () => {
+                      setDisplayThemeColor(color)
+                      await window.api.settings.setMultiple({ display_theme_color: color })
+                      flashSaved()
+                    }}
+                    className={`w-9 h-9 rounded-full border-2 transition-all ${displayThemeColor === color ? 'border-gray-800 scale-110 ring-2 ring-offset-1 ring-gray-400' : 'border-gray-300'}`}
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
+              </div>
+              <div className="flex gap-2 items-center">
+                <Input
+                  className="max-w-[140px]"
+                  placeholder="#hex"
+                  value={customHex}
+                  onChange={(e) => setCustomHex(e.target.value)}
+                />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={!/^#[0-9a-fA-F]{6}$/.test(customHex)}
+                  onClick={async () => {
+                    setDisplayThemeColor(customHex)
+                    await window.api.settings.setMultiple({ display_theme_color: customHex })
+                    setCustomHex('')
+                    flashSaved()
+                  }}
+                >
+                  Apply
+                </Button>
+                {displayThemeColor && (
+                  <div className="flex items-center gap-1 text-xs text-gray-500">
+                    <div className="w-4 h-4 rounded" style={{ backgroundColor: displayThemeColor }} />
+                    {displayThemeColor}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* YouTube Music URL */}
+            <div className="pt-4 border-t">
+              <h4 className="text-sm font-medium text-gray-700 mb-2">Background Music (YouTube)</h4>
+              <p className="text-xs text-gray-400 mb-2">Paste a YouTube video or playlist URL. Audio plays in the background on the display.</p>
+              <div className="flex gap-2">
+                <Input
+                  className="flex-1"
+                  placeholder="https://www.youtube.com/watch?v=... or playlist URL"
+                  value={displayYoutubeUrl}
+                  onChange={(e) => setDisplayYoutubeUrl(e.target.value)}
+                />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={async () => {
+                    await window.api.settings.setMultiple({ display_youtube_url: displayYoutubeUrl })
+                    flashSaved()
+                  }}
+                >
+                  Save
+                </Button>
+                {displayYoutubeUrl && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={async () => {
+                      setDisplayYoutubeUrl('')
+                      await window.api.settings.setMultiple({ display_youtube_url: '' })
+                      flashSaved()
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Slideshow Images */}
+            <div className="pt-4 border-t">
+              <h4 className="text-sm font-medium text-gray-700 mb-2">
+                <Image className="h-4 w-4 inline mr-1" />
+                Slideshow Images
+              </h4>
+              <p className="text-xs text-gray-400 mb-2">Upload images to show during idle mode. Max 10 images. They alternate with the branding screen.</p>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={displayImages.length >= 10}
+                onClick={async () => {
+                  const paths = await window.api.tablet.uploadDisplayImages()
+                  if (paths) setDisplayImages(paths)
+                }}
+              >
+                <Upload className="h-4 w-4" />
+                Upload Images {displayImages.length > 0 && `(${displayImages.length}/10)`}
+              </Button>
+              {displayImages.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {displayImages.map((imgPath, idx) => (
+                    <div key={idx} className="relative group">
+                      <div className="w-20 h-20 rounded-lg border border-gray-200 overflow-hidden bg-gray-100">
+                        <img
+                          src={'file:///' + imgPath.replace(/\\/g, '/')}
+                          alt=""
+                          className="w-full h-full object-cover"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                        />
+                      </div>
+                      <button
+                        onClick={async () => {
+                          const updated = await window.api.tablet.removeDisplayImage(imgPath)
+                          setDisplayImages(updated || [])
+                        }}
+                        className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </Card>

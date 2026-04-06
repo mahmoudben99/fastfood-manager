@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Plus, Pencil, Trash2, Tag, Package, ToggleLeft, ToggleRight, Percent, DollarSign } from 'lucide-react'
+import { Plus, Pencil, Trash2, Tag, Package, ToggleLeft, ToggleRight, Percent, DollarSign, Users } from 'lucide-react'
+import { LoyaltyDashboard } from './LoyaltyDashboard'
 import { useAppStore } from '../../store/appStore'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
@@ -11,7 +12,7 @@ import { formatCurrency } from '../../utils/formatCurrency'
 export function PromotionsPage() {
   const { t } = useTranslation()
   const { foodLanguage } = useAppStore()
-  const [tab, setTab] = useState<'promos' | 'packs'>('promos')
+  const [tab, setTab] = useState<'promos' | 'packs' | 'loyalty'>('promos')
 
   // Promos state
   const [promos, setPromos] = useState<any[]>([])
@@ -224,6 +225,15 @@ export function PromotionsPage() {
           <Package className="h-4 w-4" />
           Packs ({packs.length})
         </button>
+        <button
+          onClick={() => setTab('loyalty')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            tab === 'loyalty' ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          <Users className="h-4 w-4" />
+          Loyalty
+        </button>
       </div>
 
       {/* ===== PROMOS TAB ===== */}
@@ -355,6 +365,9 @@ export function PromotionsPage() {
           )}
         </div>
       )}
+
+      {/* ===== LOYALTY TAB ===== */}
+      {tab === 'loyalty' && <LoyaltyDashboard />}
 
       {/* ===== PROMO FORM MODAL ===== */}
       <Modal

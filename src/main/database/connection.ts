@@ -42,6 +42,15 @@ export function getLogoPath(): string {
   return logoDir
 }
 
+export function getDisplayImagesPath(): string {
+  const imagesDir = getImagesPath()
+  const displayDir = join(imagesDir, 'display')
+  if (!existsSync(displayDir)) {
+    mkdirSync(displayDir, { recursive: true })
+  }
+  return displayDir
+}
+
 export function initDatabase(): void {
   const dbPath = getDbPath()
   db = new Database(dbPath)

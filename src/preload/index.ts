@@ -226,6 +226,14 @@ const api = {
     checkStatus: () => ipcRenderer.invoke('menu-upload:checkStatus'),
     downloadExcel: (excelPath: string) => ipcRenderer.invoke('menu-upload:downloadExcel', excelPath)
   },
+  customers: {
+    getAll: (sortBy?: string) => ipcRenderer.invoke('customers:getAll', sortBy),
+    search: (query: string) => ipcRenderer.invoke('customers:search', query),
+    getById: (id: number) => ipcRenderer.invoke('customers:getById', id),
+    getOrders: (customerId: number) => ipcRenderer.invoke('customers:getOrders', customerId),
+    getFavorites: (customerId: number) => ipcRenderer.invoke('customers:getFavorites', customerId),
+    update: (id: number, data: any) => ipcRenderer.invoke('customers:update', id, data)
+  },
   promotions: {
     getAll: () => ipcRenderer.invoke('promotions:getAll'),
     getActive: () => ipcRenderer.invoke('promotions:getActive'),
@@ -265,7 +273,10 @@ const api = {
       ipcRenderer.on('tablet:new-order', handler)
       return () => { ipcRenderer.removeListener('tablet:new-order', handler) }
     },
-    pushDisplayUpdate: (data: any) => ipcRenderer.invoke('tablet:pushDisplayUpdate', data)
+    pushDisplayUpdate: (data: any) => ipcRenderer.invoke('tablet:pushDisplayUpdate', data),
+    uploadDisplayImages: () => ipcRenderer.invoke('display:uploadImages'),
+    getDisplayImages: () => ipcRenderer.invoke('display:getImages'),
+    removeDisplayImage: (path: string) => ipcRenderer.invoke('display:removeImage', path)
   }
 }
 
