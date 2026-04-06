@@ -15,6 +15,7 @@ import { ExcelImportExport } from './pages/excel/ExcelImportExport'
 import { BackupRestore } from './pages/backup/BackupRestore'
 import { SettingsPage } from './pages/settings/SettingsPage'
 import { PromotionsPage } from './pages/promotions/PromotionsPage'
+import { AmbianceScreen } from './pages/ambiance/AmbianceScreen'
 import { ReceiptEditor } from './pages/settings/ReceiptEditor'
 import { UpdateToast } from './components/ui/UpdateToast'
 
@@ -161,6 +162,7 @@ export default function App() {
           <Route path="excel" element={<ExcelImportExport />} />
           <Route path="backup" element={<BackupRestore />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="ambiance" element={<AmbianceScreen />} />
           <Route path="promotions" element={<PromotionsPage />} />
           <Route path="receipt-editor" element={<ReceiptEditor />} />
         </Route>

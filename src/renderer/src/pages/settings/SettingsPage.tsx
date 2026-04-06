@@ -8,6 +8,8 @@ import { Input } from '../../components/ui/Input'
 import { Select } from '../../components/ui/Select'
 import { Card } from '../../components/ui/Card'
 import { VirtualKeyboard } from '../../components/VirtualKeyboard'
+import { ExcelImportExport } from '../excel/ExcelImportExport'
+import { BackupRestore } from '../backup/BackupRestore'
 
 const currencies = [
   { value: 'DZD', label: 'DZD - Algerian Dinar', symbol: 'DA' },
@@ -38,7 +40,7 @@ export function SettingsPage() {
   const navigate = useNavigate()
   const { setLanguage, setSetupComplete, setActivated, loadSettings, inputMode, activationType, trialStatus, trialExpiresAt } = useAppStore()
   const isTouch = inputMode === 'touchscreen'
-  const [tab, setTab] = useState<'general' | 'schedule' | 'printer' | 'telegram' | 'tablet' | 'display' | 'security'>('general')
+  const [tab, setTab] = useState<'general' | 'schedule' | 'printer' | 'ownerLink' | 'remoteOrder' | 'security' | 'data'>('general')
   const [saved, setSaved] = useState(false)
 
   // General
@@ -115,48 +117,22 @@ export function SettingsPage() {
   // Virtual keyboard
   const [keyboardTarget, setKeyboardTarget] = useState<{ field: string; type: 'numeric' | 'text' } | null>(null)
 
-  // Tablet server state
-  const [tabletRunning, setTabletRunning] = useState(false)
-  const [tabletUrl, setTabletUrl] = useState('')
-  const [tabletQr, setTabletQr] = useState('')
-  const [tabletAutoStart, setTabletAutoStart] = useState(true)
+  // Tablet server / PIN state
   const [tabletPinEnabled, setTabletPinEnabled] = useState(false)
   const [tabletPinModal, setTabletPinModal] = useState(false)
   const [newPin, setNewPin] = useState('')
   const [confirmPin, setConfirmPin] = useState('')
   const [pinError, setPinError] = useState('')
-  const [tabletLoading, setTabletLoading] = useState(false)
-  const [urlCopied, setUrlCopied] = useState(false)
 
   // Owner dashboard state
-  const [ownerDashUrl, setOwnerDashUrl] = useState('')
   const [ownerDashQr, setOwnerDashQr] = useState('')
-  const [ownerUrlCopied, setOwnerUrlCopied] = useState(false)
 
   // Cloud short codes
   const [shortCodes, setShortCodes] = useState<{ tv: string; owner: string; order: string }>({ tv: '', owner: '', order: '' })
-  const [shortCodesLoading, setShortCodesLoading] = useState(false)
   const [copiedCode, setCopiedCode] = useState<string | null>(null)
-  const [newProfileName, setNewProfileName] = useState('')
-  const [newProfileCode, setNewProfileCode] = useState('')
-  const [creatingProfile, setCreatingProfile] = useState(false)
 
-  // Display customization
-  const [displayYoutubeUrl, setDisplayYoutubeUrl] = useState('')
-  const [displayThemeColor, setDisplayThemeColor] = useState('#f97316')
-  const [displayImages, setDisplayImages] = useState<string[]>([])
-  const [customHex, setCustomHex] = useState('')
-  const [gradientPreset, setGradientPreset] = useState(0)
-  const [fontFamily, setFontFamily] = useState('Playfair Display')
-  const [textColor, setTextColor] = useState('#ffffff')
-  const [accentColor, setAccentColor] = useState('#f97316')
-  const [displayTextScale, setDisplayTextScale] = useState<'small' | 'medium' | 'large'>('medium')
-  const [displayShowMenu, setDisplayShowMenu] = useState(false)
-  const [displayShowName, setDisplayShowName] = useState(true)
-  const [displayLogoScale, setDisplayLogoScale] = useState(1)
-  const [panelToggles, setPanelToggles] = useState({
-    welcome: true, social: true, promos: true, slideshow: true, orders: true, menu: true
-  })
+  // Remote order QR
+  const [remoteOrderQr, setRemoteOrderQr] = useState('')
 
   const getKeyboardValue = (): string => {
     if (!keyboardTarget) return ''
@@ -279,52 +255,24 @@ export function SettingsPage() {
     const mid = await window.api.activation.getMachineId()
     setLicMachineId(mid)
 
-    // Load tablet server status
-    const tabletStatus = await window.api.tablet.status()
-    setTabletRunning(tabletStatus.running)
-    setTabletUrl(tabletStatus.url || '')
-    setTabletQr(tabletStatus.qrDataUrl || '')
-    setTabletAutoStart(settings.tablet_server_auto_start !== '0')
+    // Load tablet PIN setting
     setTabletPinEnabled(settings.tablet_pin_enabled === '1')
 
     // Load owner dashboard QR
     try {
       const ownerData = await window.api.tablet.getOwnerDashboard()
-      setOwnerDashUrl(ownerData.url)
       setOwnerDashQr(ownerData.qrDataUrl)
     } catch { /* ignore */ }
 
-    // Load cloud short codes
+    // Load cloud short codes + generate QR for remote ordering
     try {
       const codes = await window.api.cloud.getShortCodes()
       setShortCodes(codes)
-    } catch { /* ignore */ }
-
-    // Display customization
-    setDisplayYoutubeUrl(settings.display_youtube_url || '')
-    setDisplayThemeColor(settings.display_theme_color || '#f97316')
-    setGradientPreset(parseInt(settings.display_gradient_preset || '0'))
-    setFontFamily(settings.display_font_family || 'Playfair Display')
-    setTextColor(settings.display_text_color || '#ffffff')
-    setAccentColor(settings.display_accent_color || '#f97316')
-    setDisplayTextScale((settings.display_text_scale as 'small' | 'medium' | 'large') || 'medium')
-    setDisplayShowMenu(settings.display_show_menu === 'true')
-    setDisplayShowName(settings.display_show_name !== 'false')
-    setDisplayLogoScale(parseFloat(settings.display_logo_scale || '1'))
-    if (!settings.display_youtube_url) {
-      setDisplayYoutubeUrl('https://www.youtube.com/watch?v=53nwh1aHCU8&list=RD53nwh1aHCU8&start_radio=1')
-    }
-    setPanelToggles({
-      welcome: settings.display_panel_welcome !== 'false',
-      social: settings.display_panel_social !== 'false',
-      promos: settings.display_panel_promos !== 'false',
-      slideshow: settings.display_panel_slideshow !== 'false',
-      orders: settings.display_panel_orders !== 'false',
-      menu: settings.display_panel_menu !== 'false'
-    })
-    try {
-      const imgs = await window.api.tablet.getDisplayImages()
-      setDisplayImages(imgs || [])
+      if (codes.order) {
+        const QRCode = (await import('qrcode')).default
+        const qrDataUrl = await QRCode.toDataURL(`https://fastfood-manager.vercel.app/r/${codes.order}`, { width: 256, margin: 2 })
+        setRemoteOrderQr(qrDataUrl)
+      }
     } catch { /* ignore */ }
   }
 
@@ -580,29 +528,6 @@ export function SettingsPage() {
     }
   }
 
-  const handleTabletToggle = async () => {
-    setTabletLoading(true)
-    if (tabletRunning) {
-      await window.api.tablet.stop()
-      setTabletRunning(false)
-      setTabletUrl('')
-      setTabletQr('')
-    } else {
-      const result = await window.api.tablet.start()
-      if (result.ok) {
-        setTabletRunning(true)
-        setTabletUrl(result.url)
-        setTabletQr(result.qrDataUrl)
-      }
-    }
-    setTabletLoading(false)
-  }
-
-  const handleTabletAutoStart = async (enabled: boolean) => {
-    setTabletAutoStart(enabled)
-    await window.api.tablet.setAutoStart(enabled)
-  }
-
   const handleTabletPinEnabled = async (enabled: boolean) => {
     setTabletPinEnabled(enabled)
     await window.api.tablet.setPinEnabled(enabled)
@@ -622,20 +547,14 @@ export function SettingsPage() {
     }
   }
 
-  const handleCopyUrl = () => {
-    navigator.clipboard.writeText(tabletUrl)
-    setUrlCopied(true)
-    setTimeout(() => setUrlCopied(false), 2000)
-  }
-
   const tabs = [
     { key: 'general' as const, label: t('settings.general') },
     { key: 'schedule' as const, label: t('settings.schedule') },
     { key: 'printer' as const, label: t('settings.printer') },
-    { key: 'telegram' as const, label: 'Owner Dashboard' },
-    { key: 'tablet' as const, label: t('settings.remoteOrders') },
-    { key: 'display' as const, label: 'Ambiance Screen' },
-    { key: 'security' as const, label: t('settings.security') }
+    { key: 'ownerLink' as const, label: 'Owner Link' },
+    { key: 'remoteOrder' as const, label: 'Remote Order' },
+    { key: 'security' as const, label: t('settings.security') },
+    { key: 'data' as const, label: 'Data' }
   ]
 
   return (
@@ -1018,7 +937,7 @@ export function SettingsPage() {
                 <h3 className="font-semibold">{t('settings.printer')}</h3>
               </div>
               <div className="flex gap-2">
-                <Button variant="secondary" size="sm" onClick={() => navigate('/admin/receipt-editor')}>
+                <Button variant="secondary" size="sm" onClick={async () => { await savePrinter(); navigate('/admin/receipt-editor') }}>
                   <Palette className="h-4 w-4" />
                   Receipt Editor
                 </Button>
@@ -1178,46 +1097,50 @@ export function SettingsPage() {
         </Card>
       )}
 
-      {tab === 'telegram' && (
+      {tab === 'ownerLink' && (
         <Card>
           <div className="space-y-6">
             <div>
-              <h3 className="text-lg font-semibold mb-1">Owner Dashboard</h3>
-              <p className="text-sm text-gray-500">Access your restaurant remotely from any device with these short links.</p>
+              <h3 className="text-lg font-semibold mb-1">Owner Link</h3>
+              <p className="text-sm text-gray-500">Monitor your restaurant remotely from any device.</p>
               <p className="text-xs text-orange-600 mt-1 font-medium">The owner logs in with the admin password (set in Security tab).</p>
             </div>
 
-            {/* Short code links */}
-            {(shortCodes.tv || shortCodes.owner || shortCodes.order) ? (
+            {shortCodes.owner ? (
               <div className="space-y-4">
-                {[
-                  { label: 'TV Display', code: shortCodes.tv, path: '', desc: 'Show menu & promos on a TV screen' },
-                  { label: 'Owner Dashboard', code: shortCodes.owner, path: 'o/', desc: 'Monitor orders, revenue & analytics' },
-                  { label: 'Remote Ordering', code: shortCodes.order, path: 'r/', desc: 'Let customers order from their phone' }
-                ].map(item => item.code && (
-                  <div key={item.label} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                    <div className="flex items-center justify-between mb-1">
-                      <h4 className="font-medium text-sm">{item.label}</h4>
-                      <span className="text-xs text-gray-400">{item.desc}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-mono text-gray-800 flex-1 bg-white rounded px-3 py-2 border border-gray-200">
-                        fastfood-manager.vercel.app/{item.path}{item.code}
-                      </span>
-                      <button
-                        onClick={() => {
-                          navigator.clipboard.writeText(`https://fastfood-manager.vercel.app/${item.path}${item.code}`)
-                          setCopiedCode(item.label)
-                          setTimeout(() => setCopiedCode(null), 2000)
-                        }}
-                        className="flex-shrink-0 text-orange-500 hover:text-orange-600 p-2"
-                        title="Copy link"
-                      >
-                        {copiedCode === item.label ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                      </button>
+                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <div className="flex items-center justify-between mb-1">
+                    <h4 className="font-medium text-sm">Owner Dashboard</h4>
+                    <span className="text-xs text-gray-400">Monitor orders, revenue &amp; analytics</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-mono text-gray-800 flex-1 bg-white rounded px-3 py-2 border border-gray-200">
+                      fastfood-manager.vercel.app/o/{shortCodes.owner}
+                    </span>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(`https://fastfood-manager.vercel.app/o/${shortCodes.owner}`)
+                        setCopiedCode('owner')
+                        setTimeout(() => setCopiedCode(null), 2000)
+                      }}
+                      className="flex-shrink-0 text-orange-500 hover:text-orange-600 p-2"
+                      title="Copy link"
+                    >
+                      {copiedCode === 'owner' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* QR code */}
+                {ownerDashQr && (
+                  <div className="flex flex-col sm:flex-row gap-6 items-start">
+                    <img src={ownerDashQr} alt="Owner Dashboard QR" className="w-48 h-48 rounded-lg border border-gray-200" />
+                    <div className="flex-1">
+                      <p className="text-sm text-gray-500 mb-2">Scan this QR code to open the owner dashboard on your phone.</p>
+                      <p className="text-xs text-gray-400 mt-2">Works from any device with internet access.</p>
                     </div>
                   </div>
-                ))}
+                )}
               </div>
             ) : (
               <div className="flex items-center gap-2 p-3 bg-orange-50 rounded-lg">
@@ -1225,80 +1148,6 @@ export function SettingsPage() {
                 <p className="text-sm text-orange-700">Short codes could not be loaded. Check your internet connection.</p>
               </div>
             )}
-
-            {/* Legacy QR code section */}
-            {ownerDashQr && (
-              <div className="border-t pt-4">
-                <h4 className="font-medium text-sm mb-2">Direct Dashboard QR (LAN)</h4>
-                <div className="flex flex-col sm:flex-row gap-6 items-start">
-                  <img src={ownerDashQr} alt="Owner Dashboard QR" className="w-48 h-48 rounded-lg border border-gray-200" />
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-500 mb-2">Dashboard URL:</p>
-                    <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
-                      <span className="text-sm font-mono text-gray-800 flex-1 break-all">{ownerDashUrl}</span>
-                      <button
-                        onClick={() => {
-                          navigator.clipboard.writeText(ownerDashUrl)
-                          setOwnerUrlCopied(true)
-                          setTimeout(() => setOwnerUrlCopied(false), 2000)
-                        }}
-                        className="flex-shrink-0 text-orange-500 hover:text-orange-600"
-                        title="Copy link"
-                      >
-                        {ownerUrlCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                      </button>
-                    </div>
-                    <p className="text-xs text-gray-400 mt-2">This link works from any device with internet access.</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Create new display profile */}
-            <div className="border-t pt-4">
-              <h4 className="font-medium text-sm mb-2">Create New Display Profile</h4>
-              <p className="text-xs text-gray-500 mb-3">Create a separate TV display with its own settings and short code.</p>
-              <div className="flex items-center gap-2">
-                <Input
-                  className="w-64"
-                  placeholder="Profile name (e.g. Terrace TV)"
-                  value={newProfileName}
-                  onChange={e => setNewProfileName(e.target.value)}
-                />
-                <Button
-                  disabled={!newProfileName.trim() || creatingProfile}
-                  onClick={async () => {
-                    setCreatingProfile(true)
-                    try {
-                      const result = await window.api.cloud.createDisplayProfile(newProfileName.trim())
-                      setNewProfileCode(result.code)
-                      setNewProfileName('')
-                    } catch { /* ignore */ }
-                    setCreatingProfile(false)
-                  }}
-                >
-                  <Plus className="h-4 w-4" /> {creatingProfile ? 'Creating...' : 'Create'}
-                </Button>
-              </div>
-              {newProfileCode && (
-                <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                  <p className="text-sm text-green-800">
-                    Profile created! TV Display link:{' '}
-                    <span className="font-mono font-medium">fastfood-manager.vercel.app/{newProfileCode}</span>
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(`https://fastfood-manager.vercel.app/${newProfileCode}`)
-                        setCopiedCode('newProfile')
-                        setTimeout(() => setCopiedCode(null), 2000)
-                      }}
-                      className="ml-2 text-green-600 hover:text-green-700"
-                    >
-                      {copiedCode === 'newProfile' ? <Check className="h-4 w-4 inline" /> : <Copy className="h-4 w-4 inline" />}
-                    </button>
-                  </p>
-                </div>
-              )}
-            </div>
           </div>
         </Card>
       )}
@@ -1313,517 +1162,6 @@ export function SettingsPage() {
           onClose={() => setKeyboardTarget(null)}
         />
       )}
-
-      {tab === 'display' && (() => {
-        const gradientPresets = [
-          { name: 'Midnight', colors: ['#0f0c29', '#302b63', '#24243e'] },
-          { name: 'Ocean', colors: ['#000428', '#004e92', '#000428'] },
-          { name: 'Sunset', colors: ['#1a0a00', '#b33000', '#ff6a00'] },
-          { name: 'Forest', colors: ['#0a1a0a', '#1b4332', '#2d6a4f'] },
-          { name: 'Royal Purple', colors: ['#1a0033', '#4a0080', '#7b2ff7'] },
-          { name: 'Cherry', colors: ['#1a0000', '#6b0020', '#c0003a'] },
-          { name: 'Coffee', colors: ['#1a0f00', '#3e2723', '#6d4c41'] },
-          { name: 'Arctic', colors: ['#0a1628', '#1a3a5c', '#2e6b8a'] },
-          { name: 'Ember', colors: ['#1a0500', '#8b2500', '#d44500'] },
-          { name: 'Teal Night', colors: ['#001a1a', '#004d4d', '#008080'] },
-          { name: 'Gold', colors: ['#1a1400', '#4a3800', '#8b6914'] },
-          { name: 'Rose', colors: ['#1a0010', '#4a0028', '#8b1460'] },
-          { name: 'Storm', colors: ['#0d0d0d', '#2c2c2c', '#4a4a4a'] },
-          { name: 'Warm Night', colors: ['#1a0a00', '#3d1c00', '#6b3a1f'] },
-          { name: 'Pure Dark', colors: ['#000000', '#0a0a0a', '#111111'] },
-          { name: 'Sunrise', colors: ['#fff1eb', '#ace0f9', '#ffd6a5'] },
-          { name: 'Cotton Candy', colors: ['#fce4ec', '#e8eaf6', '#f3e5f5'] },
-          { name: 'Fresh Mint', colors: ['#e8f5e9', '#b2dfdb', '#c8e6c9'] },
-          { name: 'Peach Cream', colors: ['#fff3e0', '#ffe0b2', '#ffccbc'] },
-          { name: 'Sky Blue', colors: ['#e3f2fd', '#bbdefb', '#b3e5fc'] }
-        ]
-        const fontOptions = ['Playfair Display', 'Inter', 'DM Serif Display', 'Cormorant Garamond', 'Montserrat', 'Raleway']
-        const textColorOptions = [
-          { color: '#ffffff', label: 'White' },
-          { color: '#f0f0f0', label: 'Off-white' },
-          { color: '#fff8e7', label: 'Warm white' },
-          { color: '#d4d4d4', label: 'Light gray' },
-          { color: '#ffd700', label: 'Gold' },
-          { color: '#fffdd0', label: 'Cream' },
-          { color: '#e0f7fa', label: 'Ice blue' },
-          { color: '#fce4ec', label: 'Light pink' },
-          { color: '#1a1a1a', label: 'Dark' },
-          { color: '#2d2d2d', label: 'Charcoal' },
-          { color: '#4a3728', label: 'Brown' }
-        ]
-        const accentColorOptions = [
-          { color: '#f97316', label: 'Orange' },
-          { color: '#3b82f6', label: 'Blue' },
-          { color: '#22c55e', label: 'Green' },
-          { color: '#ef4444', label: 'Red' },
-          { color: '#a855f7', label: 'Purple' },
-          { color: '#ec4899', label: 'Pink' },
-          { color: '#eab308', label: 'Gold' },
-          { color: '#14b8a6', label: 'Teal' },
-          { color: '#06b6d4', label: 'Cyan' },
-          { color: '#ffffff', label: 'White' }
-        ]
-        const currentGradient = gradientPresets[gradientPreset] || gradientPresets[0]
-        const googleFontsUrl = 'https://fonts.googleapis.com/css2?family=' + fontOptions.map(f => f.replace(/ /g, '+')).join('&family=') + '&display=swap'
-
-        return (
-        <>
-          <link href={googleFontsUrl} rel="stylesheet" />
-          <style>{`
-            @keyframes ambiance-gradient {
-              0%, 100% { background-position: 0% 50%; }
-              50% { background-position: 100% 50%; }
-            }
-          `}</style>
-          <div className="flex gap-6">
-            {/* LEFT COLUMN - Settings (55%) */}
-            <div className="w-[55%] space-y-5">
-              <Card>
-                <div className="space-y-5">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-semibold text-lg">Ambiance Screen</h3>
-                  </div>
-                  <p className="text-sm text-gray-500">
-                    A beautiful branded TV display for your restaurant wall.
-                  </p>
-
-                  {/* Server Status */}
-                  {tabletRunning ? (
-                    <div className="space-y-3">
-                      <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                        <p className="text-sm font-medium text-green-800 mb-1">Display URL</p>
-                        <p className="text-base font-mono text-green-700 break-all">
-                          {tabletUrl.replace(/\/$/, '')}/display
-                        </p>
-                        <p className="text-xs text-green-600 mt-1">Open this URL in any browser on the same network</p>
-                      </div>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => {
-                          const url = tabletUrl.replace(/\/$/, '') + '/display'
-                          navigator.clipboard.writeText(url)
-                        }}
-                      >
-                        <Copy className="h-4 w-4" />
-                        Copy URL
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                      <p className="text-sm text-yellow-800">
-                        Start the Remote Orders server first to enable the customer display.
-                      </p>
-                      <Button variant="secondary" size="sm" className="mt-2" onClick={() => setTab('tablet')}>
-                        Go to Remote Orders
-                      </Button>
-                    </div>
-                  )}
-
-                  {/* Gradient Background */}
-                  <div className="pt-4 border-t">
-                    <h4 className="text-sm font-medium text-gray-700 mb-3">Background</h4>
-                    <div className="grid grid-cols-5 gap-2">
-                      {gradientPresets.map((preset, idx) => (
-                        <button
-                          key={idx}
-                          title={preset.name}
-                          onClick={async () => {
-                            setGradientPreset(idx)
-                            await window.api.settings.set('display_gradient_preset', String(idx))
-                            flashSaved()
-                          }}
-                          className={`h-10 rounded-lg transition-all ${gradientPreset === idx ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-100 scale-105' : 'hover:scale-105'}`}
-                          style={{
-                            background: `linear-gradient(135deg, ${preset.colors[0]}, ${preset.colors[1]}, ${preset.colors[2]})`,
-                            animation: 'ambiance-gradient 4s ease infinite',
-                            backgroundSize: '200% 200%'
-                          }}
-                        />
-                      ))}
-                    </div>
-                    <p className="text-xs text-gray-400 mt-2">
-                      Selected: {currentGradient.name}
-                    </p>
-                  </div>
-
-                  {/* Font */}
-                  <div className="pt-4 border-t">
-                    <h4 className="text-sm font-medium text-gray-700 mb-3">Font</h4>
-                    <div className="grid grid-cols-3 gap-2">
-                      {fontOptions.map((font) => (
-                        <button
-                          key={font}
-                          onClick={async () => {
-                            setFontFamily(font)
-                            await window.api.settings.set('display_font_family', font)
-                            flashSaved()
-                          }}
-                          className={`px-3 py-2 text-sm rounded-lg border-2 transition-all truncate ${fontFamily === font ? 'border-orange-500 bg-orange-50 text-orange-700 ring-1 ring-orange-300' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'}`}
-                          style={{ fontFamily: font }}
-                        >
-                          {font}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Text Color */}
-                  <div className="pt-4 border-t">
-                    <h4 className="text-sm font-medium text-gray-700 mb-3">Text Color</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {textColorOptions.map(({ color, label }) => (
-                        <button
-                          key={color}
-                          title={label}
-                          onClick={async () => {
-                            setTextColor(color)
-                            await window.api.settings.set('display_text_color', color)
-                            flashSaved()
-                          }}
-                          className={`w-9 h-9 rounded-full border-2 transition-all ${textColor === color ? 'scale-110 ring-2 ring-offset-1 ring-gray-400 border-gray-600' : 'border-gray-300 hover:scale-105'}`}
-                          style={{ backgroundColor: color }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Accent Color */}
-                  <div className="pt-4 border-t">
-                    <h4 className="text-sm font-medium text-gray-700 mb-3">Accent Color</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {accentColorOptions.map(({ color, label }) => (
-                        <button
-                          key={color}
-                          title={label}
-                          onClick={async () => {
-                            setAccentColor(color)
-                            await window.api.settings.set('display_accent_color', color)
-                            flashSaved()
-                          }}
-                          className={`w-9 h-9 rounded-full border-2 transition-all ${accentColor === color ? 'scale-110 ring-2 ring-offset-1 ring-gray-400 border-gray-800' : 'border-gray-300 hover:scale-105'}`}
-                          style={{ backgroundColor: color }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Text Size */}
-                  <div className="pt-4 border-t">
-                    <h4 className="text-sm font-medium text-gray-700 mb-3">Text Size</h4>
-                    <div className="flex gap-2">
-                      {([
-                        { value: 'small' as const, label: 'Small', scale: '0.8x' },
-                        { value: 'medium' as const, label: 'Medium', scale: '1.0x' },
-                        { value: 'large' as const, label: 'Large', scale: '1.3x' }
-                      ]).map((opt) => (
-                        <button
-                          key={opt.value}
-                          onClick={async () => {
-                            setDisplayTextScale(opt.value)
-                            await window.api.settings.set('display_text_scale', opt.value)
-                            flashSaved()
-                          }}
-                          className={`flex-1 py-2 px-3 text-sm rounded-lg border-2 transition-all font-medium ${
-                            displayTextScale === opt.value
-                              ? 'border-orange-500 bg-orange-50 text-orange-700 ring-1 ring-orange-300'
-                              : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-                          }`}
-                        >
-                          {opt.label} <span className="text-xs text-gray-400">({opt.scale})</span>
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-xs text-gray-400 mt-1">Controls the text size on the ambiance display</p>
-                  </div>
-
-                  {/* Show Menu Items */}
-                  <div className="pt-4 border-t">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="text-sm font-medium text-gray-700">Show Menu Items</h4>
-                        <p className="text-xs text-gray-400 mt-0.5">Display a menu panel with item names and prices on the ambiance screen</p>
-                      </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={displayShowMenu}
-                          onChange={async (e) => {
-                            setDisplayShowMenu(e.target.checked)
-                            await window.api.settings.set('display_show_menu', e.target.checked ? 'true' : 'false')
-                            flashSaved()
-                          }}
-                          className="sr-only peer"
-                        />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-orange-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500" />
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Show Restaurant Name */}
-                  <div className="pt-4 border-t">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="text-sm font-medium text-gray-700">Show Restaurant Name</h4>
-                        <p className="text-xs text-gray-400 mt-0.5">Display the restaurant name on the welcome screen (logo still shows)</p>
-                      </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={displayShowName}
-                          onChange={async (e) => {
-                            setDisplayShowName(e.target.checked)
-                            await window.api.settings.set('display_show_name', e.target.checked ? 'true' : 'false')
-                            flashSaved()
-                          }}
-                          className="sr-only peer"
-                        />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-orange-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500" />
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Logo Size */}
-                  <div className="pt-4 border-t">
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">Logo Size</h4>
-                    <div className="flex gap-2">
-                      {[{ label: '1x', value: 1 }, { label: '2x', value: 2 }, { label: '3x', value: 3 }].map(opt => (
-                        <button
-                          key={opt.value}
-                          onClick={async () => {
-                            setDisplayLogoScale(opt.value)
-                            await window.api.settings.set('display_logo_scale', String(opt.value))
-                            flashSaved()
-                          }}
-                          className={`px-4 py-2 rounded-lg text-sm font-medium ${displayLogoScale === opt.value ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600'}`}
-                        >{opt.label}</button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Panel Toggles */}
-                  <div className="pt-4 border-t">
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">Active Panels</h4>
-                    <p className="text-xs text-gray-400 mb-3">Choose which panels show on the TV. Disabled panels are skipped.</p>
-                    <div className="space-y-2">
-                      {[
-                        { key: 'welcome', label: 'Welcome (Logo + Name)' },
-                        { key: 'social', label: 'Social Media & Contact' },
-                        { key: 'promos', label: 'Promotions & Packs' },
-                        { key: 'slideshow', label: 'Image Slideshow' },
-                        { key: 'orders', label: 'Orders Being Prepared' },
-                        { key: 'menu', label: 'Menu Items' }
-                      ].map(panel => (
-                        <label key={panel.key} className="flex items-center gap-3 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={(panelToggles as any)[panel.key]}
-                            onChange={async (e) => {
-                              const updated = { ...panelToggles, [panel.key]: e.target.checked }
-                              setPanelToggles(updated)
-                              await window.api.settings.set(`display_panel_${panel.key}`, e.target.checked ? 'true' : 'false')
-                              flashSaved()
-                            }}
-                            className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
-                          />
-                          <span className="text-sm text-gray-700">{panel.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Welcome Message Mode */}
-                  <div className="pt-4 border-t">
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">Welcome Message</h4>
-                    <div className="flex gap-2 mb-2">
-                      <button
-                        onClick={async () => {
-                          await window.api.settings.set('display_welcome_mode', 'animated')
-                          flashSaved()
-                        }}
-                        className="px-3 py-1.5 text-sm rounded-lg bg-orange-100 text-orange-700 font-medium"
-                      >
-                        Animated (3 languages)
-                      </button>
-                      <button
-                        onClick={async () => {
-                          await window.api.settings.set('display_welcome_mode', 'static')
-                          flashSaved()
-                        }}
-                        className="px-3 py-1.5 text-sm rounded-lg bg-gray-100 text-gray-600 font-medium"
-                      >
-                        Custom Text
-                      </button>
-                    </div>
-                    <Input
-                      placeholder="Custom welcome text..."
-                      onChange={async (e) => {
-                        await window.api.settings.set('display_welcome_text', e.target.value)
-                      }}
-                      className="mt-1"
-                    />
-                    <p className="text-xs text-gray-400 mt-1">If &quot;Animated&quot; is selected, welcome cycles through English, French, and Arabic automatically</p>
-                  </div>
-
-                  {/* YouTube Music URL */}
-                  <div className="pt-4 border-t">
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">Background Music (YouTube)</h4>
-                    <p className="text-xs text-gray-400 mb-2">Paste a YouTube video or playlist URL. Audio plays in the background on the display.</p>
-                    <div className="flex gap-2">
-                      <Input
-                        className="flex-1"
-                        placeholder="https://www.youtube.com/watch?v=... or playlist URL"
-                        value={displayYoutubeUrl}
-                        onChange={(e) => setDisplayYoutubeUrl(e.target.value)}
-                      />
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={async () => {
-                          await window.api.settings.setMultiple({ display_youtube_url: displayYoutubeUrl })
-                          flashSaved()
-                        }}
-                      >
-                        Save
-                      </Button>
-                      {displayYoutubeUrl && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={async () => {
-                            setDisplayYoutubeUrl('')
-                            await window.api.settings.setMultiple({ display_youtube_url: '' })
-                            flashSaved()
-                          }}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Slideshow Images */}
-                  <div className="pt-4 border-t">
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">
-                      <Image className="h-4 w-4 inline mr-1" />
-                      Slideshow Images
-                    </h4>
-                    <p className="text-xs text-gray-400 mb-2">Upload food photos, restaurant images, etc. Max 10 images.</p>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      disabled={displayImages.length >= 10}
-                      onClick={async () => {
-                        const paths = await window.api.tablet.uploadDisplayImages()
-                        if (paths) setDisplayImages(paths)
-                      }}
-                    >
-                      <Upload className="h-4 w-4" />
-                      Upload Images {displayImages.length > 0 && `(${displayImages.length}/10)`}
-                    </Button>
-                    {displayImages.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-3">
-                        {displayImages.map((imgPath, idx) => (
-                          <div key={idx} className="relative group">
-                            <div className="w-20 h-20 rounded-lg border border-gray-200 overflow-hidden bg-gray-100">
-                              <img
-                                src={'file:///' + imgPath.replace(/\\/g, '/')}
-                                alt=""
-                                className="w-full h-full object-cover"
-                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-                              />
-                            </div>
-                            <button
-                              onClick={async () => {
-                                const updated = await window.api.tablet.removeDisplayImage(imgPath)
-                                setDisplayImages(updated || [])
-                              }}
-                              className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </Card>
-            </div>
-
-            {/* RIGHT COLUMN - Live Preview (45%) */}
-            <div className="w-[45%]">
-              <div className="sticky top-4">
-                <h4 className="text-sm font-medium text-gray-500 mb-2 uppercase tracking-wide">Live Preview</h4>
-                <div
-                  className="rounded-xl overflow-hidden shadow-2xl border border-gray-700"
-                  style={{
-                    aspectRatio: '16/9',
-                    background: `linear-gradient(135deg, ${currentGradient.colors[0]}, ${currentGradient.colors[1]}, ${currentGradient.colors[2]})`,
-                    backgroundSize: '200% 200%',
-                    animation: 'ambiance-gradient 6s ease infinite',
-                    position: 'relative'
-                  }}
-                >
-                  <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center" style={{ transform: `scale(${displayTextScale === 'small' ? 0.8 : displayTextScale === 'large' ? 1.3 : 1.0})`, transformOrigin: 'center center' }}>
-                    {/* Restaurant name */}
-                    <div
-                      className="text-2xl font-bold mb-2 drop-shadow-lg"
-                      style={{ fontFamily, color: textColor }}
-                    >
-                      {name || 'Restaurant Name'}
-                    </div>
-                    {/* Welcome text */}
-                    <div
-                      className="text-base font-medium drop-shadow-md"
-                      style={{ fontFamily, color: accentColor }}
-                    >
-                      Welcome
-                    </div>
-                    {/* Menu indicator */}
-                    {displayShowMenu && (
-                      <div className="mt-3 text-xs px-3 py-1 rounded-full border" style={{ color: textColor, borderColor: textColor + '33', backgroundColor: textColor + '0a' }}>
-                        Menu Panel Active
-                      </div>
-                    )}
-                    {/* Thumbnail strip */}
-                    {displayImages.length > 0 && (
-                      <div className="flex gap-1 mt-4">
-                        {displayImages.slice(0, 4).map((imgPath, idx) => (
-                          <div key={idx} className="w-10 h-10 rounded overflow-hidden opacity-70">
-                            <img
-                              src={'file:///' + imgPath.replace(/\\/g, '/')}
-                              alt=""
-                              className="w-full h-full object-cover"
-                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-                            />
-                          </div>
-                        ))}
-                        {displayImages.length > 4 && (
-                          <div className="w-10 h-10 rounded bg-black/30 flex items-center justify-center text-xs" style={{ color: textColor }}>
-                            +{displayImages.length - 4}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  {/* Subtle shimmer overlay */}
-                  <div
-                    className="absolute inset-0 pointer-events-none"
-                    style={{
-                      background: 'linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.03) 50%, transparent 60%)',
-                      backgroundSize: '200% 200%',
-                      animation: 'ambiance-gradient 3s ease infinite'
-                    }}
-                  />
-                </div>
-                <p className="text-xs text-gray-400 mt-2 text-center">Preview updates as you change settings</p>
-              </div>
-            </div>
-          </div>
-        </>
-        )
-      })()}
 
       {tab === 'security' && (
         <Card>
@@ -1889,85 +1227,82 @@ export function SettingsPage() {
         </Card>
       )}
 
-      {tab === 'tablet' && (
+      {tab === 'remoteOrder' && (
         <Card>
-          {/* Server toggle */}
-          <div className="mb-6 pb-6 border-b border-gray-200">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h3 className="font-semibold text-gray-900">{t('settings.tabletServerTitle')}</h3>
-                <p className="text-xs text-gray-500 mt-0.5">{t('settings.tabletServerDesc')}</p>
-              </div>
-              <div className={`flex items-center gap-2 text-sm font-medium ${tabletRunning ? 'text-green-600' : 'text-gray-400'}`}>
-                <div className={`w-2.5 h-2.5 rounded-full ${tabletRunning ? 'bg-green-500' : 'bg-gray-300'}`} />
-                {tabletRunning ? t('settings.tabletActive') : t('settings.tabletStopped')}
-              </div>
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-semibold mb-1">Remote Ordering</h3>
+              <p className="text-sm text-gray-500">Let customers order from their phone by scanning a QR code.</p>
             </div>
-            <Button onClick={handleTabletToggle} loading={tabletLoading} variant={tabletRunning ? 'danger' : 'primary'}>
-              {tabletRunning ? `⏹ ${t('settings.tabletStop')}` : `▶ ${t('settings.tabletStart')}`}
-            </Button>
-          </div>
 
-          {/* QR code + URL */}
-          {tabletRunning && tabletQr && (
-            <div className="mb-6 pb-6 border-b border-gray-200">
-              <h3 className="font-semibold mb-3">{t('settings.tabletAccess')}</h3>
-              <div className="flex flex-col sm:flex-row gap-6 items-start">
-                <img src={tabletQr} alt="QR Code" className="w-48 h-48 rounded-lg border border-gray-200" />
-                <div className="flex-1">
-                  <p className="text-sm text-gray-500 mb-2">{t('settings.tabletScanQr')}</p>
-                  <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
-                    <span className="text-sm font-mono text-gray-800 flex-1 break-all">{tabletUrl}</span>
+            {/* Cloud ordering link */}
+            {shortCodes.order ? (
+              <div className="space-y-4">
+                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <h4 className="font-medium text-sm mb-2">Ordering Link</h4>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-mono text-gray-800 flex-1 bg-white rounded px-3 py-2 border border-gray-200">
+                      fastfood-manager.vercel.app/r/{shortCodes.order}
+                    </span>
                     <button
-                      onClick={handleCopyUrl}
-                      className="flex-shrink-0 text-orange-500 hover:text-orange-600"
-                      title={t('settings.tabletCopyLink')}
+                      onClick={() => {
+                        navigator.clipboard.writeText(`https://fastfood-manager.vercel.app/r/${shortCodes.order}`)
+                        setCopiedCode('order')
+                        setTimeout(() => setCopiedCode(null), 2000)
+                      }}
+                      className="flex-shrink-0 text-orange-500 hover:text-orange-600 p-2"
+                      title="Copy link"
                     >
-                      {urlCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      {copiedCode === 'order' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                     </button>
                   </div>
-                  <p className="text-xs text-gray-400 mt-2">{t('settings.tabletSameWifi')}</p>
+                  <p className="text-xs text-gray-400 mt-2">Customers scan this QR code to order from their phone.</p>
                 </div>
-              </div>
-            </div>
-          )}
 
-          {/* Auto-start */}
-          <div className="mb-6 pb-6 border-b border-gray-200">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={tabletAutoStart}
-                onChange={(e) => handleTabletAutoStart(e.target.checked)}
-                className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
-              />
-              <div>
-                <span className="text-sm font-medium text-gray-700">{t('settings.tabletAutoStart')}</span>
-                <p className="text-xs text-gray-400">{t('settings.tabletAutoStartDesc')}</p>
+                {/* QR code */}
+                {remoteOrderQr && (
+                  <div className="flex flex-col sm:flex-row gap-6 items-start">
+                    <img src={remoteOrderQr} alt="Remote Order QR" className="w-48 h-48 rounded-lg border border-gray-200" />
+                    <div className="flex-1">
+                      <p className="text-sm text-gray-500 mb-2">Print or display this QR code at your tables.</p>
+                      <p className="text-xs text-gray-400 mt-2">Works from any device with internet access.</p>
+                    </div>
+                  </div>
+                )}
               </div>
-            </label>
-          </div>
-
-          {/* PIN */}
-          <div>
-            <h3 className="font-semibold mb-3">{t('settings.tabletPinTitle')}</h3>
-            <label className="flex items-center gap-3 cursor-pointer mb-4">
-              <input
-                type="checkbox"
-                checked={tabletPinEnabled}
-                onChange={(e) => handleTabletPinEnabled(e.target.checked)}
-                className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
-              />
-              <div>
-                <span className="text-sm font-medium text-gray-700">{t('settings.tabletPinEnable')}</span>
-                <p className="text-xs text-gray-400">{t('settings.tabletPinEnableDesc')}</p>
+            ) : (
+              <div className="flex items-center gap-2 p-3 bg-orange-50 rounded-lg">
+                <AlertCircle className="h-4 w-4 text-orange-500" />
+                <p className="text-sm text-orange-700">Short codes could not be loaded. Check your internet connection.</p>
               </div>
-            </label>
-            {tabletPinEnabled && (
-              <Button onClick={() => setTabletPinModal(true)} variant="secondary">
-                🔒 {t('settings.tabletPinChange')}
-              </Button>
             )}
+
+            {/* PIN section */}
+            <div className="border-t pt-6">
+              <h3 className="font-semibold mb-3">{t('settings.tabletPinTitle')}</h3>
+              <label className="flex items-center gap-3 cursor-pointer mb-4">
+                <input
+                  type="checkbox"
+                  checked={tabletPinEnabled}
+                  onChange={(e) => handleTabletPinEnabled(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+                />
+                <div>
+                  <span className="text-sm font-medium text-gray-700">{t('settings.tabletPinEnable')}</span>
+                  <p className="text-xs text-gray-400">{t('settings.tabletPinEnableDesc')}</p>
+                </div>
+              </label>
+              {tabletPinEnabled && (
+                <Button onClick={() => setTabletPinModal(true)} variant="secondary">
+                  {t('settings.tabletPinChange')}
+                </Button>
+              )}
+            </div>
+
+            {/* Note about local server */}
+            <div className="border-t pt-4">
+              <p className="text-xs text-gray-400">The tablet server still runs in the background for local network access.</p>
+            </div>
           </div>
 
           {/* PIN modal */}
@@ -2005,6 +1340,14 @@ export function SettingsPage() {
             </div>
           )}
         </Card>
+      )}
+
+      {tab === 'data' && (
+        <div className="space-y-8">
+          <ExcelImportExport />
+          <hr className="border-gray-200" />
+          <BackupRestore />
+        </div>
       )}
     </div>
   )

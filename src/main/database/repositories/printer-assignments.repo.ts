@@ -128,7 +128,21 @@ export const printerAssignmentsRepo = {
       )
 
       for (const config of configs) {
-        if (config.tasks.length === 0) continue
+        if (!config.printerName) continue
+
+        // If no tasks assigned, insert a 'default' row so the printer config persists
+        if (config.tasks.length === 0) {
+          insert.run(
+            config.printerName,
+            'default',
+            null,
+            config.autoPrint ? 1 : 0,
+            config.paperWidth,
+            config.receiptFontSize,
+            config.kitchenFontSize
+          )
+          continue
+        }
 
         for (const task of config.tasks) {
           let assignmentType = task
