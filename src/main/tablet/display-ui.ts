@@ -601,7 +601,7 @@ export function getDisplayHTML(lang: string): string {
           duration: 8000,
           build: function() {
             var html = '<div class="panel" id="panel-social">';
-            html += '<div class="social-heading">${esc(t.connectWithUs)}</div>';
+            html += '<div class="social-heading">' + esc(t.connectWithUs) + '</div>';
             html += '<ul class="social-list">';
             if (state.social) {
               for (var i = 0; i < state.social.length; i++) {
@@ -633,7 +633,7 @@ export function getDisplayHTML(lang: string): string {
         for (var i = 0; i < state.promos.length; i++) {
           var p = state.promos[i];
           var val = p.type === 'percentage' ? ('-' + p.value + '%') : ('-' + fmtPrice(p.value));
-          allPromos.push({ name: p.name, value: val, emoji: '', badge: '${esc(t.deal)}' });
+          allPromos.push({ name: p.name, value: val, emoji: '', badge: esc(t.deal) });
         }
       }
       if (state.packs) {
@@ -648,7 +648,7 @@ export function getDisplayHTML(lang: string): string {
           duration: 10000,
           build: function() {
             var html = '<div class="panel" id="panel-promos">';
-            html += '<div class="promos-heading">${esc(t.specialOffers)}</div>';
+            html += '<div class="promos-heading">' + esc(t.specialOffers) + '</div>';
             html += '<div class="promos-row">';
             for (var i = 0; i < allPromos.length; i++) {
               var pr = allPromos[i];
@@ -705,7 +705,7 @@ export function getDisplayHTML(lang: string): string {
           duration: 6000,
           build: function() {
             var html = '<div class="panel" id="panel-orders">';
-            html += '<div class="orders-heading">${esc(t.nowPreparing)}</div>';
+            html += '<div class="orders-heading">' + esc(t.nowPreparing) + '</div>';
             html += '<div class="orders-row">';
             for (var i = 0; i < state.queue.preparing.length; i++) {
               html += '<div class="order-badge" style="transition-delay:' + (i * 80) + 'ms">' + state.queue.preparing[i] + '</div>';
