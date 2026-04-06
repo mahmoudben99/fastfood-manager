@@ -298,7 +298,7 @@ export function SettingsPage() {
     setDisplayShowName(settings.display_show_name !== 'false')
     setDisplayLogoScale(parseFloat(settings.display_logo_scale || '1'))
     if (!settings.display_youtube_url) {
-      setDisplayYoutubeUrl('https://www.youtube.com/watch?v=LokYdcG00AE&list=RDLokYdcG00AE&start_radio=1')
+      setDisplayYoutubeUrl('https://www.youtube.com/watch?v=53nwh1aHCU8&list=RD53nwh1aHCU8&start_radio=1')
     }
     setPanelToggles({
       welcome: settings.display_panel_welcome !== 'false',

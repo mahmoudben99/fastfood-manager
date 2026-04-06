@@ -321,30 +321,31 @@ export function getDisplayHTML(lang: string): string {
       bottom: 24px; right: 24px;
       z-index: 9999;
       display: flex; gap: 10px;
-      opacity: 0;
+      opacity: 0.5;
       transition: opacity 0.4s ease;
-      pointer-events: none;
     }
-    .controls.visible {
+    .controls:hover, .controls.visible {
       opacity: 1;
-      pointer-events: auto;
     }
     .ctrl-btn {
-      background: rgba(128,128,128,0.15);
+      background: rgba(128,128,128,0.2);
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
-      border: 1px solid rgba(128,128,128,0.2);
+      border: 2px solid rgba(128,128,128,0.3);
       color: var(--text);
-      width: 44px; height: 44px;
-      border-radius: 12px;
+      width: 52px; height: 52px;
+      border-radius: 14px;
       cursor: pointer;
-      font-size: 18px;
+      font-size: 20px;
       display: flex; align-items: center; justify-content: center;
-      transition: background 0.2s, color 0.2s;
+      transition: background 0.2s, color 0.2s, border-color 0.2s, transform 0.15s;
     }
-    .ctrl-btn:hover {
-      background: rgba(128,128,128,0.25);
+    .ctrl-btn:hover, .ctrl-btn:focus {
+      background: rgba(128,128,128,0.35);
+      border-color: var(--accent);
       color: var(--text);
+      outline: none;
+      transform: scale(1.1);
     }
 
     /* ── Music overlay ── */
@@ -467,8 +468,8 @@ export function getDisplayHTML(lang: string): string {
   </div>
 
   <div class="controls" id="controls">
-    <button class="ctrl-btn" id="musicBtn" onclick="toggleMusic()" title="Music">&#x1F50A;</button>
-    <button class="ctrl-btn" id="fsBtn" onclick="toggleFS()" title="Fullscreen">&#x26F6;</button>
+    <button class="ctrl-btn" id="musicBtn" onclick="toggleMusic()" tabindex="1" title="Music">&#x1F50A;</button>
+    <button class="ctrl-btn" id="fsBtn" onclick="toggleFS()" tabindex="2" title="Fullscreen">&#x26F6;</button>
   </div>
 
   <script>
@@ -612,6 +613,16 @@ export function getDisplayHTML(lang: string): string {
 
     document.addEventListener('mousemove', showControls);
     document.addEventListener('touchstart', showControls);
+    // TV remote: any key press shows controls
+    document.addEventListener('keydown', function(e) {
+      showControls();
+      if (e.key === 'f' || e.key === 'F' || e.key === 'F11') { e.preventDefault(); toggleFS(); }
+      if (e.key === 'm' || e.key === 'M') { toggleMusic(); }
+      if (e.key === 'Enter') {
+        var el = document.activeElement;
+        if (el && el.classList.contains('ctrl-btn')) el.click();
+      }
+    });
     controlsTimer = setTimeout(function() {}, 3000);
 
     /* ═══════════════════════════════════
