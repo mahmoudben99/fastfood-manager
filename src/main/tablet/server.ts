@@ -307,7 +307,14 @@ export async function startTabletServer(win: BrowserWindow): Promise<{ port: num
   }
 
   server = http.createServer(handleRequest)
-  server.listen(currentPort, '0.0.0.0')
+
+  await new Promise<void>((resolve, reject) => {
+    server!.once('error', (err: any) => {
+      server = null
+      reject(err)
+    })
+    server!.listen(currentPort, '0.0.0.0', () => resolve())
+  })
 
   const ip = getLocalIP()
   const url = `http://${ip}:${currentPort}`
