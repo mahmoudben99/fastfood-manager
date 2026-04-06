@@ -5,11 +5,11 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 
 const navItems = [
-  { href: '/admin/overview', label: 'Overview', icon: '📊' },
   { href: '/admin/users', label: 'Users', icon: '👥' },
   { href: '/admin/keygen', label: 'Keygen', icon: '🔑' },
   { href: '/admin/reset', label: 'Reset Codes', icon: '🔓' },
-  { href: '/admin/menu-setup', label: 'Menu Setup', icon: '📋' }
+  { href: '/admin/menu-setup', label: 'Menu Setup', icon: '📋' },
+  { href: '/admin/overview', label: 'Overview', icon: '📊' }
 ]
 
 export function Sidebar() {
