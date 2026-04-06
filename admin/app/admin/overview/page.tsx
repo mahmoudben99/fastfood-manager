@@ -39,14 +39,14 @@ export default async function OverviewPage() {
   const { installations, dailyStats, topItems } = await getOverviewData()
 
   // Aggregate totals
-  const totalRevenue = dailyStats.reduce((sum, s) => sum + Number(s.total_revenue), 0)
-  const totalOrders = dailyStats.reduce((sum, s) => sum + s.order_count, 0)
-  const activeRestaurants = new Set(dailyStats.map(s => s.machine_id)).size
+  const totalRevenue = dailyStats.reduce((sum: number, s: any) => sum + Number(s.total_revenue), 0)
+  const totalOrders = dailyStats.reduce((sum: number, s: any) => sum + s.order_count, 0)
+  const activeRestaurants = new Set(dailyStats.map((s: any) => s.machine_id)).size
 
   // Per-restaurant summary (last 30 days)
   const restaurantMap = new Map<string, { name: string; version: string; lastSeen: string; revenue: number; orders: number; avgOrder: number; days: number }>()
 
-  for (const inst of installations) {
+  for (const inst of installations as any[]) {
     restaurantMap.set(inst.machine_id, {
       name: inst.restaurant_name || 'Unknown',
       version: inst.app_version || '?',
@@ -58,7 +58,7 @@ export default async function OverviewPage() {
     })
   }
 
-  for (const stat of dailyStats) {
+  for (const stat of dailyStats as any[]) {
     const r = restaurantMap.get(stat.machine_id)
     if (r) {
       r.revenue += Number(stat.total_revenue)
@@ -77,7 +77,7 @@ export default async function OverviewPage() {
 
   // Aggregate top items across restaurants
   const itemAgg = new Map<string, { name: string; qty: number; revenue: number }>()
-  for (const item of topItems) {
+  for (const item of topItems as any[]) {
     const existing = itemAgg.get(item.menu_item_name) || { name: item.menu_item_name, qty: 0, revenue: 0 }
     existing.qty += item.quantity_sold
     existing.revenue += Number(item.revenue)
@@ -87,7 +87,7 @@ export default async function OverviewPage() {
 
   // Revenue by day (last 30 days aggregated across all restaurants)
   const revenueByDay = new Map<string, { revenue: number; orders: number }>()
-  for (const stat of dailyStats) {
+  for (const stat of dailyStats as any[]) {
     const existing = revenueByDay.get(stat.date) || { revenue: 0, orders: 0 }
     existing.revenue += Number(stat.total_revenue)
     existing.orders += stat.order_count
