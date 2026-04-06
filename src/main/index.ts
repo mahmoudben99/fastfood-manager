@@ -9,7 +9,7 @@ import { settingsRepo } from './database/repositories/settings.repo'
 import { startBackupSystem, stopBackupSystem } from './database/backup'
 import { createSplashWindow, closeSplashWindow } from './splash'
 import { getMachineId, validateActivation, verifyIntegrity } from './activation/activation'
-import { registerInstallation, checkTrialStatus } from './activation/cloud'
+import { registerInstallation, checkTrialStatus, checkCloudActivation } from './activation/cloud'
 import { registerTabletHandlers } from './ipc/tablet.ipc'
 import { startTabletServer } from './tablet/server'
 import { startAnalyticsSync, stopAnalyticsSync } from './sync/analytics-sync'
@@ -208,6 +208,22 @@ async function checkTrialCloud(): Promise<void> {
         expiresAt: result.expiresAt
       })
     } else if (result.status === 'expired' || result.status === 'paused') {
+      // Before locking, check if admin granted a full license
+      const cloudFull = await checkCloudActivation(machineId)
+      if (cloudFull) {
+        log('Trial expired but cloud activation found — upgrading to full license')
+        settingsRepo.set('activation_type', 'full')
+        settingsRepo.set('activation_status', 'activated')
+        settingsRepo.set('activation_code', 'CLOUD-VERIFIED')
+        clearOfflineCountdown()
+        // Stop the trial watcher — no longer needed
+        if (trialCheckInterval) { clearInterval(trialCheckInterval); trialCheckInterval = null }
+        if (fastOfflineInterval) { clearInterval(fastOfflineInterval); fastOfflineInterval = null }
+        mainWindow?.webContents.send('trial:status-update', { status: 'full' })
+        // Reload the app to reflect the new state
+        mainWindow?.webContents.reload()
+        return
+      }
       mainWindow?.webContents.send('trial:locked', result.status)
     }
   } catch {
@@ -314,7 +330,7 @@ function setupAutoUpdater(): void {
   }, 5000)
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   try {
     log('App ready - starting initialization')
 
@@ -430,17 +446,44 @@ app.whenReady().then(() => {
     }
 
     // Verify full license on startup — re-validate serial code AND integrity checksum
+    // Also check cloud activations table (admin-granted licenses don't have serial codes)
     if (activationType === 'full') {
       log('Full license detected — verifying integrity')
       const storedCode = settingsRepo.get('activation_code')
-      const { valid } = validateActivation(storedCode || '')
-      const integrityOk = verifyIntegrity()
-      if (!valid || !integrityOk) {
-        log(`SECURITY: License verification failed (serial=${valid}, integrity=${integrityOk}) — reverting`, true)
-        settingsRepo.set('activation_type', '')
-        settingsRepo.set('activation_status', '')
-        settingsRepo.set('activation_code', '')
-        settingsRepo.set('_integrity', '')
+
+      // Cloud-verified licenses (admin-granted) skip serial/integrity check
+      if (storedCode === 'CLOUD-VERIFIED') {
+        log('Cloud-verified license — re-checking with Supabase')
+        let stillValid = false
+        try { stillValid = await checkCloudActivation(machineId) } catch { stillValid = true /* offline = trust local */ }
+        if (!stillValid) {
+          log('SECURITY: Cloud activation revoked — reverting to unactivated', true)
+          settingsRepo.set('activation_type', '')
+          settingsRepo.set('activation_status', '')
+          settingsRepo.set('activation_code', '')
+        }
+      } else {
+        // Serial-code activated — verify serial + integrity
+        const { valid } = validateActivation(storedCode || '')
+        const integrityOk = verifyIntegrity()
+        if (!valid || !integrityOk) {
+          // Local check failed — maybe admin granted license via cloud?
+          log('Local verification failed, checking cloud activations...')
+          let cloudActivated = false
+          try { cloudActivated = await checkCloudActivation(machineId) } catch { /* offline */ }
+
+          if (cloudActivated) {
+            log('Cloud activation confirmed — admin-granted full license')
+            settingsRepo.set('activation_status', 'activated')
+            settingsRepo.set('activation_code', 'CLOUD-VERIFIED')
+          } else {
+            log(`SECURITY: License verification failed (serial=${valid}, integrity=${integrityOk}, cloud=false) — reverting`, true)
+            settingsRepo.set('activation_type', '')
+            settingsRepo.set('activation_status', '')
+            settingsRepo.set('activation_code', '')
+            settingsRepo.set('_integrity', '')
+          }
+        }
       }
     }
 

@@ -121,6 +121,21 @@ export async function checkTrialStatus(machineId: string): Promise<TrialCheckRes
   }
 }
 
+/** Check if this machine has a full license granted via admin dashboard. */
+export async function checkCloudActivation(machineId: string): Promise<boolean> {
+  try {
+    const supabase = getClient()
+    const { data, error } = await supabase
+      .from('activations')
+      .select('machine_id')
+      .eq('machine_id', machineId)
+      .single()
+    return !error && !!data
+  } catch {
+    return false
+  }
+}
+
 /** Record that this machine has been fully activated (fire-and-forget). */
 export async function recordActivation(machineId: string): Promise<void> {
   try {
