@@ -564,7 +564,7 @@ export function SettingsPage() {
     { key: 'printer' as const, label: t('settings.printer') },
     { key: 'telegram' as const, label: t('settings.telegram') },
     { key: 'tablet' as const, label: t('settings.remoteOrders') },
-    { key: 'display' as const, label: 'Display' },
+    { key: 'display' as const, label: 'Ambiance Screen' },
     { key: 'security' as const, label: t('settings.security') }
   ]
 
@@ -1066,12 +1066,12 @@ export function SettingsPage() {
         <Card>
           <div className="space-y-4 max-w-2xl">
             <div className="flex items-center gap-2 mb-2">
-              <h3 className="font-semibold">Customer Display</h3>
+              <h3 className="font-semibold">Ambiance Screen</h3>
             </div>
 
             <p className="text-sm text-gray-500">
-              Show a customer-facing display on any screen (TV, tablet, monitor).
-              It shows live order items, queue status, promotions, and your restaurant branding.
+              A beautiful branded TV display for your restaurant wall.
+              Loops through your logo, welcome messages, social media, promotions, food photos, and order queue — with background music.
             </p>
 
             {tabletRunning ? (
@@ -1108,14 +1108,47 @@ export function SettingsPage() {
               </div>
             )}
 
+            {/* Welcome Message Mode */}
             <div className="pt-4 border-t">
-              <h4 className="text-sm font-medium text-gray-700 mb-2">What the display shows:</h4>
+              <h4 className="text-sm font-medium text-gray-700 mb-2">Welcome Message</h4>
+              <div className="flex gap-2 mb-2">
+                <button
+                  onClick={async () => {
+                    await window.api.settings.set('display_welcome_mode', 'animated')
+                    flashSaved()
+                  }}
+                  className="px-3 py-1.5 text-sm rounded-lg bg-orange-100 text-orange-700 font-medium"
+                >
+                  Animated (3 languages)
+                </button>
+                <button
+                  onClick={async () => {
+                    await window.api.settings.set('display_welcome_mode', 'static')
+                    flashSaved()
+                  }}
+                  className="px-3 py-1.5 text-sm rounded-lg bg-gray-100 text-gray-600 font-medium"
+                >
+                  Custom Text
+                </button>
+              </div>
+              <Input
+                placeholder="Custom welcome text..."
+                onChange={async (e) => {
+                  await window.api.settings.set('display_welcome_text', e.target.value)
+                }}
+                className="mt-1"
+              />
+              <p className="text-xs text-gray-400 mt-1">If &quot;Animated&quot; is selected, welcome cycles through English, French, and Arabic automatically</p>
+            </div>
+
+            <div className="pt-4 border-t">
+              <h4 className="text-sm font-medium text-gray-700 mb-2">Panels shown:</h4>
               <ul className="text-sm text-gray-500 space-y-1">
-                <li>• Live items as cashier adds them to cart</li>
-                <li>• Order queue — preparing and ready numbers</li>
-                <li>• Active promotions and pack deals</li>
-                <li>• Restaurant name, logo, and social media</li>
-                <li>• Animated idle screen when no orders</li>
+                <li>• Restaurant logo, name &amp; animated welcome</li>
+                <li>• Social media &amp; contact info</li>
+                <li>• Promotions &amp; pack deals</li>
+                <li>• Image slideshow with captions</li>
+                <li>• Orders being prepared</li>
               </ul>
             </div>
 
@@ -1219,7 +1252,7 @@ export function SettingsPage() {
                 <Image className="h-4 w-4 inline mr-1" />
                 Slideshow Images
               </h4>
-              <p className="text-xs text-gray-400 mb-2">Upload images to show during idle mode. Max 10 images. They alternate with the branding screen.</p>
+              <p className="text-xs text-gray-400 mb-2">Upload food photos, restaurant images, etc. Each image can have an optional caption (e.g., &quot;Our Specialties&quot;). Max 10 images.</p>
               <Button
                 variant="secondary"
                 size="sm"

@@ -71,7 +71,14 @@ function getDisplayInfoPayload(): Record<string, unknown> {
     }
   } catch { /* ignore */ }
 
-  return { type: 'info', name, logo, currency, promos, packs, social, youtubeUrl, themeColor, slideshowImages }
+  // Welcome mode
+  const welcomeMode = settingsRepo.get('display_welcome_mode') || 'animated'
+  const welcomeText = settingsRepo.get('display_welcome_text') || ''
+
+  // Phone number
+  const phone = settingsRepo.get('restaurant_phone') || ''
+
+  return { type: 'info', name, logo, currency, promos, packs, social, youtubeUrl, themeColor, slideshowImages, welcomeMode, welcomeText, phone }
 }
 
 function getQueuePayload(): Record<string, unknown> {
