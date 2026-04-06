@@ -84,7 +84,27 @@ function getDisplayInfoPayload(): Record<string, unknown> {
   const textColor = settingsRepo.get('display_text_color') || '#ffffff'
   const accentColor = settingsRepo.get('display_accent_color') || '#f97316'
 
-  return { type: 'info', name, logo, currency, promos, packs, social, youtubeUrl, themeColor, slideshowImages, welcomeMode, welcomeText, phone, gradientPreset, fontFamily, textColor, accentColor }
+  // Text scale
+  const textScale = settingsRepo.get('display_text_scale') || 'medium'
+
+  // Show menu
+  const showMenu = settingsRepo.get('display_show_menu') || 'false'
+
+  // Menu items (only if showMenu is enabled)
+  let menuItems: { name: string; price: number; category_name: string; emoji: string }[] = []
+  if (showMenu === 'true') {
+    try {
+      const allItems = menuRepo.getAll() as any[]
+      menuItems = allItems.map((item: any) => ({
+        name: item.name,
+        price: item.price,
+        category_name: item.category_name || '',
+        emoji: item.emoji || ''
+      }))
+    } catch { /* ignore */ }
+  }
+
+  return { type: 'info', name, logo, currency, promos, packs, social, youtubeUrl, themeColor, slideshowImages, welcomeMode, welcomeText, phone, gradientPreset, fontFamily, textColor, accentColor, textScale, showMenu, menuItems }
 }
 
 function getQueuePayload(): Record<string, unknown> {

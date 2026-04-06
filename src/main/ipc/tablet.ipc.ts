@@ -122,7 +122,7 @@ export function registerTabletHandlers(getWindow: () => BrowserWindow | null): v
 
   ipcMain.handle('owner:getQR', async () => {
     const machineId = getMachineId()
-    const adminDomain = settingsRepo.get('owner_dashboard_domain') || 'https://fastfood-manager-admin.vercel.app'
+    const adminDomain = settingsRepo.get('owner_dashboard_domain') || 'https://fastfood-manager.vercel.app'
     const url = `${adminDomain.replace(/\/$/, '')}/owner/${machineId}`
     const QRCode = (await import('qrcode')).default
     const qrDataUrl = await QRCode.toDataURL(url, { width: 256, margin: 1 })
