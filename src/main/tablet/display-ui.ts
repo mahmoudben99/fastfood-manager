@@ -373,6 +373,17 @@ export function getDisplayHTML(lang: string): string {
 
   <script>
     /* ═══════════════════════════════════
+       TRANSLATIONS
+    ═══════════════════════════════════ */
+    var t = {
+      connectWithUs: ${JSON.stringify(t.connectWithUs)},
+      specialOffers: ${JSON.stringify(t.specialOffers)},
+      nowPreparing: ${JSON.stringify(t.nowPreparing)},
+      deal: ${JSON.stringify(t.deal)},
+      tapForMusic: ${JSON.stringify(t.tapForMusic)}
+    };
+
+    /* ═══════════════════════════════════
        STATE
     ═══════════════════════════════════ */
     var state = {

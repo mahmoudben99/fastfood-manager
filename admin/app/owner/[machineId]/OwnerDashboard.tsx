@@ -262,12 +262,12 @@ function Dashboard({
       if (res.ok) {
         const json: DashboardData = await res.json()
         // Detect new orders for animation
-        const currentIds = new Set(json.orders.map(o => o.id))
+        const currentIds = new Set(json.orders.map((o: any) => o.id))
         if (prevOrderIdsRef.current.size > 0) {
           const fresh = new Set<string>()
-          for (const id of currentIds) {
+          Array.from(currentIds).forEach((id: string) => {
             if (!prevOrderIdsRef.current.has(id)) fresh.add(id)
-          }
+          })
           if (fresh.size > 0) {
             setNewOrderIds(fresh)
             setTimeout(() => setNewOrderIds(new Set()), 1500)
