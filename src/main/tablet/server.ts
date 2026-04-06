@@ -111,7 +111,16 @@ function getDisplayInfoPayload(): Record<string, unknown> {
     } catch { /* ignore */ }
   }
 
-  return { type: 'info', name, logo, currency, promos, packs, social, youtubeUrl, themeColor, slideshowImages, welcomeMode, welcomeText, phone, gradientPreset, fontFamily, textColor, accentColor, textScale, showMenu, menuItems, showName }
+  // Logo scale and panel toggles
+  const logoScale = parseFloat(settingsRepo.get('display_logo_scale') || '1')
+  const panelWelcome = settingsRepo.get('display_panel_welcome') !== 'false'
+  const panelSocial = settingsRepo.get('display_panel_social') !== 'false'
+  const panelPromos = settingsRepo.get('display_panel_promos') !== 'false'
+  const panelSlideshow = settingsRepo.get('display_panel_slideshow') !== 'false'
+  const panelOrders = settingsRepo.get('display_panel_orders') !== 'false'
+  const panelMenu = settingsRepo.get('display_panel_menu') !== 'false'
+
+  return { type: 'info', name, logo, currency, promos, packs, social, youtubeUrl, themeColor, slideshowImages, welcomeMode, welcomeText, phone, gradientPreset, fontFamily, textColor, accentColor, textScale, showMenu, menuItems, showName, logoScale, panelWelcome, panelSocial, panelPromos, panelSlideshow, panelOrders, panelMenu }
 }
 
 function getQueuePayload(): Record<string, unknown> {

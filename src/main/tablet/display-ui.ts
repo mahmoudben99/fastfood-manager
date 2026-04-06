@@ -93,7 +93,7 @@ export function getDisplayHTML(lang: string): string {
 
     /* ── Welcome panel ── */
     .welcome-logo {
-      max-width: 200px; max-height: 200px;
+      max-width: var(--logo-size, 200px); max-height: var(--logo-size, 200px);
       width: auto; height: auto;
       border-radius: 24px;
       filter: drop-shadow(0 8px 32px rgba(0,0,0,0.4));
@@ -415,34 +415,34 @@ export function getDisplayHTML(lang: string): string {
     }
     .menu-category.show { opacity: 1; transform: translateY(0); }
     .menu-cat-name {
-      font-size: 0.7rem;
+      font-size: clamp(1rem, 2vw, 1.4rem);
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.15em;
       color: var(--accent);
-      margin-bottom: 10px;
-      padding-bottom: 8px;
-      border-bottom: 1px solid rgba(var(--accent-rgb),0.2);
+      margin-bottom: 12px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid rgba(var(--accent-rgb),0.3);
     }
     .menu-item-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 3px 0;
+      padding: 6px 0;
     }
     .menu-item-name {
-      font-size: clamp(0.72rem, 1.2vw, 0.9rem);
-      font-weight: 400;
+      font-size: clamp(1rem, 1.8vw, 1.3rem);
+      font-weight: 500;
       color: var(--text);
-      opacity: 0.85;
+      opacity: 0.9;
     }
     .menu-item-emoji {
       margin-right: 8px;
       font-size: 1.1em;
     }
     .menu-item-price {
-      font-size: clamp(0.72rem, 1.2vw, 0.9rem);
-      font-weight: 600;
+      font-size: clamp(1rem, 1.8vw, 1.3rem);
+      font-weight: 700;
       color: var(--accent);
       white-space: nowrap;
       margin-left: 12px;
@@ -505,7 +505,14 @@ export function getDisplayHTML(lang: string): string {
       textScale: 'medium',
       showMenu: false,
       menuItems: [],
-      showName: true
+      showName: true,
+      logoScale: 1,
+      panelWelcome: true,
+      panelSocial: true,
+      panelPromos: true,
+      panelSlideshow: true,
+      panelOrders: true,
+      panelMenu: true
     };
 
     var currentYTUrl = '';
@@ -722,7 +729,8 @@ export function getDisplayHTML(lang: string): string {
     function buildPanels() {
       panelDefs = [];
 
-      // Panel 1: Welcome (always)
+      // Panel 1: Welcome
+      if (state.panelWelcome)
       panelDefs.push({
         id: 'welcome',
         duration: 10000,
@@ -745,7 +753,7 @@ export function getDisplayHTML(lang: string): string {
 
       // Panel 2: Social & Contact
       var hasSocial = (state.social && state.social.length > 0) || state.phone;
-      if (hasSocial) {
+      if (hasSocial && state.panelSocial) {
         panelDefs.push({
           id: 'social',
           duration: 8000,
@@ -792,7 +800,7 @@ export function getDisplayHTML(lang: string): string {
           allPromos.push({ name: pk.name, value: fmtPrice(pk.pack_price || pk.price), emoji: pk.emoji || '', badge: '', items: pk.items || [] });
         }
       }
-      if (allPromos.length > 0) {
+      if (allPromos.length > 0 && state.panelPromos) {
         panelDefs.push({
           id: 'promos',
           duration: 10000,
@@ -829,7 +837,7 @@ export function getDisplayHTML(lang: string): string {
       }
 
       // Panel 4: Slideshow images (one sub-panel per image)
-      if (state.slideshowImages && state.slideshowImages.length > 0) {
+      if (state.slideshowImages && state.slideshowImages.length > 0 && state.panelSlideshow) {
         for (var si = 0; si < state.slideshowImages.length; si++) {
           (function(idx) {
             var imgData = state.slideshowImages[idx];
@@ -856,7 +864,7 @@ export function getDisplayHTML(lang: string): string {
       }
 
       // Panel 5: Orders preparing
-      if (state.queue && state.queue.preparing && state.queue.preparing.length > 0) {
+      if (state.queue && state.queue.preparing && state.queue.preparing.length > 0 && state.panelOrders) {
         panelDefs.push({
           id: 'orders',
           duration: 6000,
@@ -883,7 +891,7 @@ export function getDisplayHTML(lang: string): string {
       }
 
       // Panel 6: Menu items (paginated, max 10 items per page)
-      if (state.showMenu && state.menuItems && state.menuItems.length > 0) {
+      if (state.showMenu && state.panelMenu && state.menuItems && state.menuItems.length > 0) {
         // Group items by category
         var catMap = {};
         var catOrder = [];
@@ -1051,6 +1059,16 @@ export function getDisplayHTML(lang: string): string {
           state.showMenu = data.showMenu === 'true' || data.showMenu === true;
           state.menuItems = data.menuItems || [];
           state.showName = data.showName === 'true' || data.showName === true || data.showName == null;
+          state.logoScale = data.logoScale || 1;
+          state.panelWelcome = data.panelWelcome !== false && data.panelWelcome !== 'false';
+          state.panelSocial = data.panelSocial !== false && data.panelSocial !== 'false';
+          state.panelPromos = data.panelPromos !== false && data.panelPromos !== 'false';
+          state.panelSlideshow = data.panelSlideshow !== false && data.panelSlideshow !== 'false';
+          state.panelOrders = data.panelOrders !== false && data.panelOrders !== 'false';
+          state.panelMenu = data.panelMenu !== false && data.panelMenu !== 'false';
+
+          // Apply logo size
+          document.documentElement.style.setProperty('--logo-size', (200 * state.logoScale) + 'px');
 
           applyColors(state.textColor, state.accentColor);
           applyFont(state.fontFamily);

@@ -145,6 +145,10 @@ export function SettingsPage() {
   const [displayTextScale, setDisplayTextScale] = useState<'small' | 'medium' | 'large'>('medium')
   const [displayShowMenu, setDisplayShowMenu] = useState(false)
   const [displayShowName, setDisplayShowName] = useState(true)
+  const [displayLogoScale, setDisplayLogoScale] = useState(1)
+  const [panelToggles, setPanelToggles] = useState({
+    welcome: true, social: true, promos: true, slideshow: true, orders: true, menu: true
+  })
 
   const getKeyboardValue = (): string => {
     if (!keyboardTarget) return ''
@@ -292,6 +296,18 @@ export function SettingsPage() {
     setDisplayTextScale((settings.display_text_scale as 'small' | 'medium' | 'large') || 'medium')
     setDisplayShowMenu(settings.display_show_menu === 'true')
     setDisplayShowName(settings.display_show_name !== 'false')
+    setDisplayLogoScale(parseFloat(settings.display_logo_scale || '1'))
+    if (!settings.display_youtube_url) {
+      setDisplayYoutubeUrl('https://www.youtube.com/watch?v=LokYdcG00AE&list=RDLokYdcG00AE&start_radio=1')
+    }
+    setPanelToggles({
+      welcome: settings.display_panel_welcome !== 'false',
+      social: settings.display_panel_social !== 'false',
+      promos: settings.display_panel_promos !== 'false',
+      slideshow: settings.display_panel_slideshow !== 'false',
+      orders: settings.display_panel_orders !== 'false',
+      menu: settings.display_panel_menu !== 'false'
+    })
     try {
       const imgs = await window.api.tablet.getDisplayImages()
       setDisplayImages(imgs || [])
@@ -1466,6 +1482,55 @@ export function SettingsPage() {
                         />
                         <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-orange-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500" />
                       </label>
+                    </div>
+                  </div>
+
+                  {/* Logo Size */}
+                  <div className="pt-4 border-t">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Logo Size</h4>
+                    <div className="flex gap-2">
+                      {[{ label: '1x', value: 1 }, { label: '2x', value: 2 }, { label: '3x', value: 3 }].map(opt => (
+                        <button
+                          key={opt.value}
+                          onClick={async () => {
+                            setDisplayLogoScale(opt.value)
+                            await window.api.settings.set('display_logo_scale', String(opt.value))
+                            flashSaved()
+                          }}
+                          className={`px-4 py-2 rounded-lg text-sm font-medium ${displayLogoScale === opt.value ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600'}`}
+                        >{opt.label}</button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Panel Toggles */}
+                  <div className="pt-4 border-t">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Active Panels</h4>
+                    <p className="text-xs text-gray-400 mb-3">Choose which panels show on the TV. Disabled panels are skipped.</p>
+                    <div className="space-y-2">
+                      {[
+                        { key: 'welcome', label: 'Welcome (Logo + Name)' },
+                        { key: 'social', label: 'Social Media & Contact' },
+                        { key: 'promos', label: 'Promotions & Packs' },
+                        { key: 'slideshow', label: 'Image Slideshow' },
+                        { key: 'orders', label: 'Orders Being Prepared' },
+                        { key: 'menu', label: 'Menu Items' }
+                      ].map(panel => (
+                        <label key={panel.key} className="flex items-center gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={(panelToggles as any)[panel.key]}
+                            onChange={async (e) => {
+                              const updated = { ...panelToggles, [panel.key]: e.target.checked }
+                              setPanelToggles(updated)
+                              await window.api.settings.set(`display_panel_${panel.key}`, e.target.checked ? 'true' : 'false')
+                              flashSaved()
+                            }}
+                            className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+                          />
+                          <span className="text-sm text-gray-700">{panel.label}</span>
+                        </label>
+                      ))}
                     </div>
                   </div>
 
