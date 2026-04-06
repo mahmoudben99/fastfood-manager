@@ -126,6 +126,10 @@ export function SettingsPage() {
   const [displayThemeColor, setDisplayThemeColor] = useState('#f97316')
   const [displayImages, setDisplayImages] = useState<string[]>([])
   const [customHex, setCustomHex] = useState('')
+  const [gradientPreset, setGradientPreset] = useState(0)
+  const [fontFamily, setFontFamily] = useState('Playfair Display')
+  const [textColor, setTextColor] = useState('#ffffff')
+  const [accentColor, setAccentColor] = useState('#f97316')
 
   const getKeyboardValue = (): string => {
     if (!keyboardTarget) return ''
@@ -265,6 +269,10 @@ export function SettingsPage() {
     // Display customization
     setDisplayYoutubeUrl(settings.display_youtube_url || '')
     setDisplayThemeColor(settings.display_theme_color || '#f97316')
+    setGradientPreset(parseInt(settings.display_gradient_preset || '0'))
+    setFontFamily(settings.display_font_family || 'Playfair Display')
+    setTextColor(settings.display_text_color || '#ffffff')
+    setAccentColor(settings.display_accent_color || '#f97316')
     try {
       const imgs = await window.api.tablet.getDisplayImages()
       setDisplayImages(imgs || [])
@@ -1074,238 +1082,378 @@ export function SettingsPage() {
         />
       )}
 
-      {tab === 'display' && (
-        <Card>
-          <div className="space-y-4 max-w-2xl">
-            <div className="flex items-center gap-2 mb-2">
-              <h3 className="font-semibold">Ambiance Screen</h3>
-            </div>
+      {tab === 'display' && (() => {
+        const gradientPresets = [
+          { name: 'Midnight', colors: ['#0f0c29', '#302b63', '#24243e'] },
+          { name: 'Ocean', colors: ['#000428', '#004e92', '#000428'] },
+          { name: 'Sunset', colors: ['#1a0a00', '#b33000', '#ff6a00'] },
+          { name: 'Forest', colors: ['#0a1a0a', '#1b4332', '#2d6a4f'] },
+          { name: 'Royal Purple', colors: ['#1a0033', '#4a0080', '#7b2ff7'] },
+          { name: 'Cherry', colors: ['#1a0000', '#6b0020', '#c0003a'] },
+          { name: 'Coffee', colors: ['#1a0f00', '#3e2723', '#6d4c41'] },
+          { name: 'Arctic', colors: ['#0a1628', '#1a3a5c', '#2e6b8a'] },
+          { name: 'Ember', colors: ['#1a0500', '#8b2500', '#d44500'] },
+          { name: 'Teal Night', colors: ['#001a1a', '#004d4d', '#008080'] },
+          { name: 'Gold', colors: ['#1a1400', '#4a3800', '#8b6914'] },
+          { name: 'Rose', colors: ['#1a0010', '#4a0028', '#8b1460'] },
+          { name: 'Storm', colors: ['#0d0d0d', '#2c2c2c', '#4a4a4a'] },
+          { name: 'Warm Night', colors: ['#1a0a00', '#3d1c00', '#6b3a1f'] },
+          { name: 'Pure Dark', colors: ['#000000', '#0a0a0a', '#111111'] }
+        ]
+        const fontOptions = ['Playfair Display', 'Inter', 'DM Serif Display', 'Cormorant Garamond', 'Montserrat', 'Raleway']
+        const textColorOptions = [
+          { color: '#ffffff', label: 'White' },
+          { color: '#f0f0f0', label: 'Off-white' },
+          { color: '#fff8e7', label: 'Warm white' },
+          { color: '#d4d4d4', label: 'Light gray' },
+          { color: '#ffd700', label: 'Gold' },
+          { color: '#fffdd0', label: 'Cream' },
+          { color: '#e0f7fa', label: 'Ice blue' },
+          { color: '#fce4ec', label: 'Light pink' }
+        ]
+        const accentColorOptions = [
+          { color: '#f97316', label: 'Orange' },
+          { color: '#3b82f6', label: 'Blue' },
+          { color: '#22c55e', label: 'Green' },
+          { color: '#ef4444', label: 'Red' },
+          { color: '#a855f7', label: 'Purple' },
+          { color: '#ec4899', label: 'Pink' },
+          { color: '#eab308', label: 'Gold' },
+          { color: '#14b8a6', label: 'Teal' },
+          { color: '#06b6d4', label: 'Cyan' },
+          { color: '#ffffff', label: 'White' }
+        ]
+        const currentGradient = gradientPresets[gradientPreset] || gradientPresets[0]
+        const googleFontsUrl = 'https://fonts.googleapis.com/css2?family=' + fontOptions.map(f => f.replace(/ /g, '+')).join('&family=') + '&display=swap'
 
-            <p className="text-sm text-gray-500">
-              A beautiful branded TV display for your restaurant wall.
-              Loops through your logo, welcome messages, social media, promotions, food photos, and order queue — with background music.
-            </p>
-
-            {tabletRunning ? (
-              <div className="space-y-3">
-                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                  <p className="text-sm font-medium text-green-800 mb-1">Display URL</p>
-                  <p className="text-lg font-mono text-green-700 break-all">
-                    {tabletUrl.replace(/\/$/, '')}/display
-                  </p>
-                  <p className="text-xs text-green-600 mt-2">Open this URL in any browser on the same network</p>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      const url = tabletUrl.replace(/\/$/, '') + '/display'
-                      navigator.clipboard.writeText(url)
-                    }}
-                  >
-                    <Copy className="h-4 w-4" />
-                    Copy URL
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <p className="text-sm text-yellow-800">
-                  Start the Remote Orders server first (in the Remote Orders tab) to enable the customer display.
-                </p>
-                <Button variant="secondary" size="sm" className="mt-2" onClick={() => setTab('tablet')}>
-                  Go to Remote Orders →
-                </Button>
-              </div>
-            )}
-
-            {/* Welcome Message Mode */}
-            <div className="pt-4 border-t">
-              <h4 className="text-sm font-medium text-gray-700 mb-2">Welcome Message</h4>
-              <div className="flex gap-2 mb-2">
-                <button
-                  onClick={async () => {
-                    await window.api.settings.set('display_welcome_mode', 'animated')
-                    flashSaved()
-                  }}
-                  className="px-3 py-1.5 text-sm rounded-lg bg-orange-100 text-orange-700 font-medium"
-                >
-                  Animated (3 languages)
-                </button>
-                <button
-                  onClick={async () => {
-                    await window.api.settings.set('display_welcome_mode', 'static')
-                    flashSaved()
-                  }}
-                  className="px-3 py-1.5 text-sm rounded-lg bg-gray-100 text-gray-600 font-medium"
-                >
-                  Custom Text
-                </button>
-              </div>
-              <Input
-                placeholder="Custom welcome text..."
-                onChange={async (e) => {
-                  await window.api.settings.set('display_welcome_text', e.target.value)
-                }}
-                className="mt-1"
-              />
-              <p className="text-xs text-gray-400 mt-1">If &quot;Animated&quot; is selected, welcome cycles through English, French, and Arabic automatically</p>
-            </div>
-
-            <div className="pt-4 border-t">
-              <h4 className="text-sm font-medium text-gray-700 mb-2">Panels shown:</h4>
-              <ul className="text-sm text-gray-500 space-y-1">
-                <li>• Restaurant logo, name &amp; animated welcome</li>
-                <li>• Social media &amp; contact info</li>
-                <li>• Promotions &amp; pack deals</li>
-                <li>• Image slideshow with captions</li>
-                <li>• Orders being prepared</li>
-              </ul>
-            </div>
-
-            {/* Theme Color */}
-            <div className="pt-4 border-t">
-              <h4 className="text-sm font-medium text-gray-700 mb-2">
-                <Palette className="h-4 w-4 inline mr-1" />
-                Theme Color
-              </h4>
-              <div className="flex flex-wrap gap-2 mb-2">
-                {[
-                  { color: '#f97316', label: 'Orange' },
-                  { color: '#3b82f6', label: 'Blue' },
-                  { color: '#22c55e', label: 'Green' },
-                  { color: '#ef4444', label: 'Red' },
-                  { color: '#a855f7', label: 'Purple' },
-                  { color: '#ec4899', label: 'Pink' }
-                ].map(({ color, label }) => (
-                  <button
-                    key={color}
-                    title={label}
-                    onClick={async () => {
-                      setDisplayThemeColor(color)
-                      await window.api.settings.setMultiple({ display_theme_color: color })
-                      flashSaved()
-                    }}
-                    className={`w-9 h-9 rounded-full border-2 transition-all ${displayThemeColor === color ? 'border-gray-800 scale-110 ring-2 ring-offset-1 ring-gray-400' : 'border-gray-300'}`}
-                    style={{ backgroundColor: color }}
-                  />
-                ))}
-              </div>
-              <div className="flex gap-2 items-center">
-                <Input
-                  className="max-w-[140px]"
-                  placeholder="#hex"
-                  value={customHex}
-                  onChange={(e) => setCustomHex(e.target.value)}
-                />
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={!/^#[0-9a-fA-F]{6}$/.test(customHex)}
-                  onClick={async () => {
-                    setDisplayThemeColor(customHex)
-                    await window.api.settings.setMultiple({ display_theme_color: customHex })
-                    setCustomHex('')
-                    flashSaved()
-                  }}
-                >
-                  Apply
-                </Button>
-                {displayThemeColor && (
-                  <div className="flex items-center gap-1 text-xs text-gray-500">
-                    <div className="w-4 h-4 rounded" style={{ backgroundColor: displayThemeColor }} />
-                    {displayThemeColor}
+        return (
+        <>
+          <link href={googleFontsUrl} rel="stylesheet" />
+          <style>{`
+            @keyframes ambiance-gradient {
+              0%, 100% { background-position: 0% 50%; }
+              50% { background-position: 100% 50%; }
+            }
+          `}</style>
+          <div className="flex gap-6">
+            {/* LEFT COLUMN - Settings (55%) */}
+            <div className="w-[55%] space-y-5">
+              <Card>
+                <div className="space-y-5">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-semibold text-lg">Ambiance Screen</h3>
                   </div>
-                )}
-              </div>
-            </div>
+                  <p className="text-sm text-gray-500">
+                    A beautiful branded TV display for your restaurant wall.
+                  </p>
 
-            {/* YouTube Music URL */}
-            <div className="pt-4 border-t">
-              <h4 className="text-sm font-medium text-gray-700 mb-2">Background Music (YouTube)</h4>
-              <p className="text-xs text-gray-400 mb-2">Paste a YouTube video or playlist URL. Audio plays in the background on the display.</p>
-              <div className="flex gap-2">
-                <Input
-                  className="flex-1"
-                  placeholder="https://www.youtube.com/watch?v=... or playlist URL"
-                  value={displayYoutubeUrl}
-                  onChange={(e) => setDisplayYoutubeUrl(e.target.value)}
-                />
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={async () => {
-                    await window.api.settings.setMultiple({ display_youtube_url: displayYoutubeUrl })
-                    flashSaved()
-                  }}
-                >
-                  Save
-                </Button>
-                {displayYoutubeUrl && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={async () => {
-                      setDisplayYoutubeUrl('')
-                      await window.api.settings.setMultiple({ display_youtube_url: '' })
-                      flashSaved()
-                    }}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            {/* Slideshow Images */}
-            <div className="pt-4 border-t">
-              <h4 className="text-sm font-medium text-gray-700 mb-2">
-                <Image className="h-4 w-4 inline mr-1" />
-                Slideshow Images
-              </h4>
-              <p className="text-xs text-gray-400 mb-2">Upload food photos, restaurant images, etc. Each image can have an optional caption (e.g., &quot;Our Specialties&quot;). Max 10 images.</p>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={displayImages.length >= 10}
-                onClick={async () => {
-                  const paths = await window.api.tablet.uploadDisplayImages()
-                  if (paths) setDisplayImages(paths)
-                }}
-              >
-                <Upload className="h-4 w-4" />
-                Upload Images {displayImages.length > 0 && `(${displayImages.length}/10)`}
-              </Button>
-              {displayImages.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-3">
-                  {displayImages.map((imgPath, idx) => (
-                    <div key={idx} className="relative group">
-                      <div className="w-20 h-20 rounded-lg border border-gray-200 overflow-hidden bg-gray-100">
-                        <img
-                          src={'file:///' + imgPath.replace(/\\/g, '/')}
-                          alt=""
-                          className="w-full h-full object-cover"
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-                        />
+                  {/* Server Status */}
+                  {tabletRunning ? (
+                    <div className="space-y-3">
+                      <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <p className="text-sm font-medium text-green-800 mb-1">Display URL</p>
+                        <p className="text-base font-mono text-green-700 break-all">
+                          {tabletUrl.replace(/\/$/, '')}/display
+                        </p>
+                        <p className="text-xs text-green-600 mt-1">Open this URL in any browser on the same network</p>
                       </div>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          const url = tabletUrl.replace(/\/$/, '') + '/display'
+                          navigator.clipboard.writeText(url)
+                        }}
+                      >
+                        <Copy className="h-4 w-4" />
+                        Copy URL
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <p className="text-sm text-yellow-800">
+                        Start the Remote Orders server first to enable the customer display.
+                      </p>
+                      <Button variant="secondary" size="sm" className="mt-2" onClick={() => setTab('tablet')}>
+                        Go to Remote Orders
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Gradient Background */}
+                  <div className="pt-4 border-t">
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">Background</h4>
+                    <div className="grid grid-cols-5 gap-2">
+                      {gradientPresets.map((preset, idx) => (
+                        <button
+                          key={idx}
+                          title={preset.name}
+                          onClick={async () => {
+                            setGradientPreset(idx)
+                            await window.api.settings.set('display_gradient_preset', String(idx))
+                            flashSaved()
+                          }}
+                          className={`h-10 rounded-lg transition-all ${gradientPreset === idx ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-100 scale-105' : 'hover:scale-105'}`}
+                          style={{
+                            background: `linear-gradient(135deg, ${preset.colors[0]}, ${preset.colors[1]}, ${preset.colors[2]})`,
+                            animation: 'ambiance-gradient 4s ease infinite',
+                            backgroundSize: '200% 200%'
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2">
+                      Selected: {currentGradient.name}
+                    </p>
+                  </div>
+
+                  {/* Font */}
+                  <div className="pt-4 border-t">
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">Font</h4>
+                    <div className="grid grid-cols-3 gap-2">
+                      {fontOptions.map((font) => (
+                        <button
+                          key={font}
+                          onClick={async () => {
+                            setFontFamily(font)
+                            await window.api.settings.set('display_font_family', font)
+                            flashSaved()
+                          }}
+                          className={`px-3 py-2 text-sm rounded-lg border-2 transition-all truncate ${fontFamily === font ? 'border-orange-500 bg-orange-50 text-orange-700 ring-1 ring-orange-300' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'}`}
+                          style={{ fontFamily: font }}
+                        >
+                          {font}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Text Color */}
+                  <div className="pt-4 border-t">
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">Text Color</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {textColorOptions.map(({ color, label }) => (
+                        <button
+                          key={color}
+                          title={label}
+                          onClick={async () => {
+                            setTextColor(color)
+                            await window.api.settings.set('display_text_color', color)
+                            flashSaved()
+                          }}
+                          className={`w-9 h-9 rounded-full border-2 transition-all ${textColor === color ? 'scale-110 ring-2 ring-offset-1 ring-gray-400 border-gray-600' : 'border-gray-300 hover:scale-105'}`}
+                          style={{ backgroundColor: color }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Accent Color */}
+                  <div className="pt-4 border-t">
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">Accent Color</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {accentColorOptions.map(({ color, label }) => (
+                        <button
+                          key={color}
+                          title={label}
+                          onClick={async () => {
+                            setAccentColor(color)
+                            await window.api.settings.set('display_accent_color', color)
+                            flashSaved()
+                          }}
+                          className={`w-9 h-9 rounded-full border-2 transition-all ${accentColor === color ? 'scale-110 ring-2 ring-offset-1 ring-gray-400 border-gray-800' : 'border-gray-300 hover:scale-105'}`}
+                          style={{ backgroundColor: color }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Welcome Message Mode */}
+                  <div className="pt-4 border-t">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Welcome Message</h4>
+                    <div className="flex gap-2 mb-2">
                       <button
                         onClick={async () => {
-                          const updated = await window.api.tablet.removeDisplayImage(imgPath)
-                          setDisplayImages(updated || [])
+                          await window.api.settings.set('display_welcome_mode', 'animated')
+                          flashSaved()
                         }}
-                        className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="px-3 py-1.5 text-sm rounded-lg bg-orange-100 text-orange-700 font-medium"
                       >
-                        <X className="h-3 w-3" />
+                        Animated (3 languages)
+                      </button>
+                      <button
+                        onClick={async () => {
+                          await window.api.settings.set('display_welcome_mode', 'static')
+                          flashSaved()
+                        }}
+                        className="px-3 py-1.5 text-sm rounded-lg bg-gray-100 text-gray-600 font-medium"
+                      >
+                        Custom Text
                       </button>
                     </div>
-                  ))}
+                    <Input
+                      placeholder="Custom welcome text..."
+                      onChange={async (e) => {
+                        await window.api.settings.set('display_welcome_text', e.target.value)
+                      }}
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">If &quot;Animated&quot; is selected, welcome cycles through English, French, and Arabic automatically</p>
+                  </div>
+
+                  {/* YouTube Music URL */}
+                  <div className="pt-4 border-t">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Background Music (YouTube)</h4>
+                    <p className="text-xs text-gray-400 mb-2">Paste a YouTube video or playlist URL. Audio plays in the background on the display.</p>
+                    <div className="flex gap-2">
+                      <Input
+                        className="flex-1"
+                        placeholder="https://www.youtube.com/watch?v=... or playlist URL"
+                        value={displayYoutubeUrl}
+                        onChange={(e) => setDisplayYoutubeUrl(e.target.value)}
+                      />
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={async () => {
+                          await window.api.settings.setMultiple({ display_youtube_url: displayYoutubeUrl })
+                          flashSaved()
+                        }}
+                      >
+                        Save
+                      </Button>
+                      {displayYoutubeUrl && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={async () => {
+                            setDisplayYoutubeUrl('')
+                            await window.api.settings.setMultiple({ display_youtube_url: '' })
+                            flashSaved()
+                          }}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Slideshow Images */}
+                  <div className="pt-4 border-t">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">
+                      <Image className="h-4 w-4 inline mr-1" />
+                      Slideshow Images
+                    </h4>
+                    <p className="text-xs text-gray-400 mb-2">Upload food photos, restaurant images, etc. Max 10 images.</p>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={displayImages.length >= 10}
+                      onClick={async () => {
+                        const paths = await window.api.tablet.uploadDisplayImages()
+                        if (paths) setDisplayImages(paths)
+                      }}
+                    >
+                      <Upload className="h-4 w-4" />
+                      Upload Images {displayImages.length > 0 && `(${displayImages.length}/10)`}
+                    </Button>
+                    {displayImages.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        {displayImages.map((imgPath, idx) => (
+                          <div key={idx} className="relative group">
+                            <div className="w-20 h-20 rounded-lg border border-gray-200 overflow-hidden bg-gray-100">
+                              <img
+                                src={'file:///' + imgPath.replace(/\\/g, '/')}
+                                alt=""
+                                className="w-full h-full object-cover"
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                              />
+                            </div>
+                            <button
+                              onClick={async () => {
+                                const updated = await window.api.tablet.removeDisplayImage(imgPath)
+                                setDisplayImages(updated || [])
+                              }}
+                              className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
+              </Card>
+            </div>
+
+            {/* RIGHT COLUMN - Live Preview (45%) */}
+            <div className="w-[45%]">
+              <div className="sticky top-4">
+                <h4 className="text-sm font-medium text-gray-500 mb-2 uppercase tracking-wide">Live Preview</h4>
+                <div
+                  className="rounded-xl overflow-hidden shadow-2xl border border-gray-700"
+                  style={{
+                    aspectRatio: '16/9',
+                    background: `linear-gradient(135deg, ${currentGradient.colors[0]}, ${currentGradient.colors[1]}, ${currentGradient.colors[2]})`,
+                    backgroundSize: '200% 200%',
+                    animation: 'ambiance-gradient 6s ease infinite',
+                    position: 'relative'
+                  }}
+                >
+                  <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
+                    {/* Restaurant name */}
+                    <div
+                      className="text-2xl font-bold mb-2 drop-shadow-lg"
+                      style={{ fontFamily, color: textColor }}
+                    >
+                      {name || 'Restaurant Name'}
+                    </div>
+                    {/* Welcome text */}
+                    <div
+                      className="text-base font-medium drop-shadow-md"
+                      style={{ fontFamily, color: accentColor }}
+                    >
+                      Welcome
+                    </div>
+                    {/* Thumbnail strip */}
+                    {displayImages.length > 0 && (
+                      <div className="flex gap-1 mt-4">
+                        {displayImages.slice(0, 4).map((imgPath, idx) => (
+                          <div key={idx} className="w-10 h-10 rounded overflow-hidden opacity-70">
+                            <img
+                              src={'file:///' + imgPath.replace(/\\/g, '/')}
+                              alt=""
+                              className="w-full h-full object-cover"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                            />
+                          </div>
+                        ))}
+                        {displayImages.length > 4 && (
+                          <div className="w-10 h-10 rounded bg-black/30 flex items-center justify-center text-xs" style={{ color: textColor }}>
+                            +{displayImages.length - 4}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {/* Subtle shimmer overlay */}
+                  <div
+                    className="absolute inset-0 pointer-events-none"
+                    style={{
+                      background: 'linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.03) 50%, transparent 60%)',
+                      backgroundSize: '200% 200%',
+                      animation: 'ambiance-gradient 3s ease infinite'
+                    }}
+                  />
+                </div>
+                <p className="text-xs text-gray-400 mt-2 text-center">Preview updates as you change settings</p>
+              </div>
             </div>
           </div>
-        </Card>
-      )}
+        </>
+        )
+      })()}
 
       {tab === 'security' && (
         <Card>

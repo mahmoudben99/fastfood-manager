@@ -78,7 +78,13 @@ function getDisplayInfoPayload(): Record<string, unknown> {
   // Phone number
   const phone = settingsRepo.get('restaurant_phone') || ''
 
-  return { type: 'info', name, logo, currency, promos, packs, social, youtubeUrl, themeColor, slideshowImages, welcomeMode, welcomeText, phone }
+  // Display customization
+  const gradientPreset = parseInt(settingsRepo.get('display_gradient_preset') || '0')
+  const fontFamily = settingsRepo.get('display_font_family') || 'Playfair Display'
+  const textColor = settingsRepo.get('display_text_color') || '#ffffff'
+  const accentColor = settingsRepo.get('display_accent_color') || '#f97316'
+
+  return { type: 'info', name, logo, currency, promos, packs, social, youtubeUrl, themeColor, slideshowImages, welcomeMode, welcomeText, phone, gradientPreset, fontFamily, textColor, accentColor }
 }
 
 function getQueuePayload(): Record<string, unknown> {
