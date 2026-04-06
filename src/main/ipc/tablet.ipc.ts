@@ -3,7 +3,8 @@ import {
   startTabletServer,
   stopTabletServer,
   isTabletServerRunning,
-  getTabletServerStatus
+  getTabletServerStatus,
+  pushDisplayUpdate
 } from '../tablet/server'
 import { settingsRepo } from '../database/repositories/settings.repo'
 
@@ -53,5 +54,10 @@ export function registerTabletHandlers(getWindow: () => BrowserWindow | null): v
 
   ipcMain.handle('tablet:isRunning', () => {
     return isTabletServerRunning()
+  })
+
+  ipcMain.handle('tablet:pushDisplayUpdate', (_event, data: any) => {
+    pushDisplayUpdate(data)
+    return { ok: true }
   })
 }

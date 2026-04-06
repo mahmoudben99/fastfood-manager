@@ -238,7 +238,7 @@ export function OrderScreen() {
       if (orderSuccess) { setOrderSuccess(null); return }
       if (cancelConfirm) { setCancelConfirm(null); return }
       if (showHistory) { setShowHistory(false); setSelectedOrder(null); setEditMode(false); setHistorySearch(''); return }
-      if (store.items.length > 0) { store.clearOrder(); return }
+      if (store.items.length > 0) { store.clearOrder(); pushCartToDisplay(); return }
       return
     }
 
@@ -273,6 +273,7 @@ export function OrderScreen() {
     if (e.key === 'Delete' && !isInput) {
       e.preventDefault()
       store.clearOrder()
+      pushCartToDisplay()
       return
     }
 
@@ -529,6 +530,38 @@ export function OrderScreen() {
     return match ? match[1].toUpperCase() : name
   }
 
+  const pushCartToDisplay = useCallback(() => {
+    try {
+      const items = store.items.map(i => ({ name: i.name, qty: i.quantity, price: i.price }))
+      const subtotal = store.getSubtotal()
+      const discount = store.getDiscount()
+      const total = store.getTotal()
+      if (items.length === 0) {
+        window.api.tablet.pushDisplayUpdate({ type: 'idle' })
+      } else {
+        window.api.tablet.pushDisplayUpdate({
+          type: 'cart', items, subtotal, discount, total,
+          orderType: store.orderType, tableNumber: store.tableNumber
+        })
+      }
+    } catch { /* display server may not be running */ }
+  }, [store])
+
+  const pushQueueToDisplay = useCallback(() => {
+    try {
+      window.api.orders.getToday().then((orders: any[]) => {
+        const preparing = orders
+          .filter((o: any) => o.status === 'preparing' || o.status === 'pending')
+          .map((o: any) => o.daily_number)
+        const ready = orders
+          .filter((o: any) => o.status === 'completed')
+          .slice(-10)
+          .map((o: any) => o.daily_number)
+        window.api.tablet.pushDisplayUpdate({ type: 'queue', preparing, ready })
+      })
+    } catch { /* display server may not be running */ }
+  }, [])
+
   const handleAddItem = (item: MenuItemData) => {
     store.addItem({
       menu_item_id: item.id,
@@ -538,7 +571,7 @@ export function OrderScreen() {
       price: item.price,
       image_path: item.image_path,
       category_id: item.category_id
-    })
+    }).then(() => pushCartToDisplay())
   }
 
   // Virtual keyboard helpers
@@ -644,6 +677,11 @@ export function OrderScreen() {
       } catch { setSuccessOrderWorkers([]) }
       store.clearOrder()
       loadOngoingCount()
+      // Push idle + updated queue to customer display
+      try {
+        window.api.tablet.pushDisplayUpdate({ type: 'idle' })
+        pushQueueToDisplay()
+      } catch { /* display not running */ }
     } catch (err) {
       console.error('Failed to place order:', err)
     } finally {
@@ -687,6 +725,7 @@ export function OrderScreen() {
     await window.api.orders.updateStatus(id, 'completed')
     await loadTodayOrders()
     loadOngoingCount()
+    pushQueueToDisplay()
     if (selectedOrder?.id === id) {
       const updated = await window.api.orders.getById(id)
       setSelectedOrder(updated)
@@ -699,6 +738,7 @@ export function OrderScreen() {
     setCancelConfirm(null)
     await loadTodayOrders()
     loadOngoingCount()
+    pushQueueToDisplay()
     if (selectedOrder?.id === cancelConfirm.id) {
       const updated = await window.api.orders.getById(cancelConfirm.id)
       setSelectedOrder(updated)
@@ -709,6 +749,7 @@ export function OrderScreen() {
     await window.api.orders.updateStatus(id, 'preparing')
     await loadTodayOrders()
     loadOngoingCount()
+    pushQueueToDisplay()
     if (selectedOrder?.id === id) {
       const updated = await window.api.orders.getById(id)
       setSelectedOrder(updated)

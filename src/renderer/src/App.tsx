@@ -15,6 +15,7 @@ import { ExcelImportExport } from './pages/excel/ExcelImportExport'
 import { BackupRestore } from './pages/backup/BackupRestore'
 import { SettingsPage } from './pages/settings/SettingsPage'
 import { PromotionsPage } from './pages/promotions/PromotionsPage'
+import { ReceiptEditor } from './pages/settings/ReceiptEditor'
 import { UpdateToast } from './components/ui/UpdateToast'
 
 export default function App() {
@@ -161,6 +162,7 @@ export default function App() {
           <Route path="backup" element={<BackupRestore />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="promotions" element={<PromotionsPage />} />
+          <Route path="receipt-editor" element={<ReceiptEditor />} />
         </Route>
         <Route
           path="*"

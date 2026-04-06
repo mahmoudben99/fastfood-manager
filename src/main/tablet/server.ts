@@ -1,5 +1,6 @@
 import http from 'http'
 import { createHash } from 'crypto'
+import { readFileSync } from 'fs'
 import os from 'os'
 import type { BrowserWindow } from 'electron'
 import QRCode from 'qrcode'
@@ -7,7 +8,9 @@ import { menuRepo } from '../database/repositories/menu.repo'
 import { categoriesRepo } from '../database/repositories/categories.repo'
 import { ordersRepo } from '../database/repositories/orders.repo'
 import { settingsRepo } from '../database/repositories/settings.repo'
+import { promotionsRepo } from '../database/repositories/promotions.repo'
 import { getTabletHTML } from './tablet-ui'
+import { getDisplayHTML } from './display-ui'
 import { printOrder } from '../ipc/printer.ipc'
 import { sendOrderNotification } from '../telegram/bot'
 import { performAutoBackup } from '../ipc/backup.ipc'
@@ -15,6 +18,59 @@ import { performAutoBackup } from '../ipc/backup.ipc'
 let server: http.Server | null = null
 let currentPort = 3333
 let mainWin: BrowserWindow | null = null
+
+// SSE clients connected to /api/display-events
+const displayClients = new Set<http.ServerResponse>()
+
+function getDisplayInfoPayload(): Record<string, unknown> {
+  const name = settingsRepo.get('restaurant_name') || ''
+  const logoPath = settingsRepo.get('logo_path') || ''
+  const currency = settingsRepo.get('currency') || 'DA'
+  let logo = ''
+  if (logoPath) {
+    try {
+      const buf = readFileSync(logoPath)
+      logo = 'data:image/png;base64,' + buf.toString('base64')
+    } catch { /* logo file missing, skip */ }
+  }
+
+  const promos = promotionsRepo.getActivePromotions().map((p: any) => ({
+    name: p.name, type: p.type, value: p.discount_value
+  }))
+  const packs = promotionsRepo.getActivePacks().map((p: any) => ({
+    name: p.name, price: p.pack_price, emoji: p.emoji || ''
+  }))
+
+  // Social media from settings (stored as JSON string)
+  let social: { platform: string; handle: string }[] = []
+  try {
+    const raw = settingsRepo.get('social_media')
+    if (raw) social = JSON.parse(raw)
+  } catch { /* ignore */ }
+
+  return { type: 'info', name, logo, currency, promos, packs, social }
+}
+
+function getQueuePayload(): Record<string, unknown> {
+  const today = new Date().toISOString().slice(0, 10)
+  const orders = ordersRepo.getByDate(today) as any[]
+  const preparing = orders
+    .filter((o: any) => o.status === 'preparing' || o.status === 'pending')
+    .map((o: any) => o.daily_number)
+  const ready = orders
+    .filter((o: any) => o.status === 'completed')
+    .slice(-10) // last 10 completed
+    .map((o: any) => o.daily_number)
+  return { type: 'queue', preparing, ready }
+}
+
+export function pushDisplayUpdate(data: any): void {
+  if (displayClients.size === 0) return
+  const payload = 'data: ' + JSON.stringify(data) + '\n\n'
+  for (const client of displayClients) {
+    try { client.write(payload) } catch { displayClients.delete(client) }
+  }
+}
 
 export function getLocalIP(): string {
   const nets = os.networkInterfaces()
@@ -134,6 +190,47 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
         sendJSON(res, 500, { error: String(e) })
       }
     })
+    return
+  }
+
+  // ── Customer Display ──
+  if (method === 'GET' && url.pathname === '/display') {
+    const lang = settingsRepo.get('language') ?? 'en'
+    const html = getDisplayHTML(lang)
+    res.writeHead(200, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    })
+    res.end(html)
+    return
+  }
+
+  // SSE endpoint for real-time display updates
+  if (method === 'GET' && url.pathname === '/api/display-events') {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*'
+    })
+
+    // Send initial info + queue
+    const info = getDisplayInfoPayload()
+    res.write('data: ' + JSON.stringify(info) + '\n\n')
+    const queue = getQueuePayload()
+    res.write('data: ' + JSON.stringify(queue) + '\n\n')
+
+    displayClients.add(res)
+    req.on('close', () => { displayClients.delete(res) })
+    return
+  }
+
+  // REST endpoint for current queue state
+  if (method === 'GET' && url.pathname === '/api/display-queue') {
+    const queue = getQueuePayload()
+    sendJSON(res, 200, queue)
     return
   }
 

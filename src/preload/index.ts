@@ -242,6 +242,17 @@ const api = {
     delete: (id: number) => ipcRenderer.invoke('packs:delete', id),
     toggle: (id: number) => ipcRenderer.invoke('packs:toggle', id)
   },
+  receipt: {
+    getTemplates: () => ipcRenderer.invoke('receipt:getTemplates'),
+    getActive: () => ipcRenderer.invoke('receipt:getActive'),
+    saveTemplate: (input: any) => ipcRenderer.invoke('receipt:saveTemplate', input),
+    updateTemplate: (id: number, input: any) => ipcRenderer.invoke('receipt:updateTemplate', id, input),
+    deleteTemplate: (id: number) => ipcRenderer.invoke('receipt:deleteTemplate', id),
+    setActive: (id: number) => ipcRenderer.invoke('receipt:setActive', id),
+    getSocialMedia: () => ipcRenderer.invoke('receipt:getSocialMedia'),
+    saveSocialMedia: (items: any[]) => ipcRenderer.invoke('receipt:saveSocialMedia', items),
+    getPresets: () => ipcRenderer.invoke('receipt:getPresets')
+  },
   tablet: {
     start: () => ipcRenderer.invoke('tablet:start'),
     stop: () => ipcRenderer.invoke('tablet:stop'),
@@ -253,7 +264,8 @@ const api = {
       const handler = (_: any, order: any) => cb(order)
       ipcRenderer.on('tablet:new-order', handler)
       return () => { ipcRenderer.removeListener('tablet:new-order', handler) }
-    }
+    },
+    pushDisplayUpdate: (data: any) => ipcRenderer.invoke('tablet:pushDisplayUpdate', data)
   }
 }
 

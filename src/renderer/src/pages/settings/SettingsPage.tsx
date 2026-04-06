@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check, Printer, AlertCircle, RefreshCw, LogOut, Upload, Image, ShieldCheck, ShieldX, Clock, Copy, Plus, X } from 'lucide-react'
+import { Check, Printer, AlertCircle, RefreshCw, LogOut, Upload, Image, ShieldCheck, ShieldX, Clock, Copy, Plus, X, Palette } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '../../store/appStore'
 import { Button } from '../../components/ui/Button'
@@ -873,10 +873,16 @@ export function SettingsPage() {
                 <Printer className="h-5 w-5 text-gray-600" />
                 <h3 className="font-semibold">{t('settings.printer')}</h3>
               </div>
-              <Button variant="secondary" size="sm" onClick={addPrinterConfig}>
-                <Plus className="h-4 w-4" />
-                Add Printer
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="secondary" size="sm" onClick={() => navigate('/admin/receipt-editor')}>
+                  <Palette className="h-4 w-4" />
+                  Receipt Editor
+                </Button>
+                <Button variant="secondary" size="sm" onClick={addPrinterConfig}>
+                  <Plus className="h-4 w-4" />
+                  Add Printer
+                </Button>
+              </div>
             </div>
 
             {printerConfigs.length === 0 && (
