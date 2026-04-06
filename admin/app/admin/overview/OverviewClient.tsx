@@ -76,7 +76,7 @@ export function OverviewClient({ installations, dailyStats, topItems, yesterdayS
     }
 
     // Sort top items
-    for (const r of map.values()) {
+    for (const r of Array.from(map.values())) {
       r.topItems.sort((a, b) => b.qty - a.qty)
       r.dailyData.sort((a, b) => a.date.localeCompare(b.date))
     }
