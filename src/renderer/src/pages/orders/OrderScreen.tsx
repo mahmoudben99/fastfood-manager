@@ -1693,6 +1693,50 @@ export function OrderScreen() {
                     ))}
                   </div>
 
+                  {/* Add item to order */}
+                  <div className="mb-3">
+                    <div className="relative">
+                      <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                      <input
+                        placeholder="Search to add item..."
+                        className="w-full ps-9 pe-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        onChange={(e) => {
+                          const q = e.target.value.toLowerCase()
+                          if (q.length < 2) return
+                          const filtered = menuItems.filter(m =>
+                            m.name.toLowerCase().includes(q) ||
+                            (m.name_fr && m.name_fr.toLowerCase().includes(q)) ||
+                            (m.name_ar && m.name_ar.includes(q))
+                          ).slice(0, 5)
+                          // Show results in a dropdown
+                          const dropdown = document.getElementById('edit-add-dropdown')
+                          if (!dropdown) return
+                          if (filtered.length === 0 || q.length < 2) { dropdown.innerHTML = ''; dropdown.style.display = 'none'; return }
+                          dropdown.style.display = 'block'
+                          dropdown.innerHTML = filtered.map(m =>
+                            `<button data-id="${m.id}" data-name="${getItemName(m)}" data-price="${m.price}" class="w-full text-left px-3 py-2 text-sm hover:bg-orange-50 flex justify-between"><span>${getItemName(m)}</span><span class="text-orange-600 font-medium">${formatCurrency(m.price)}</span></button>`
+                          ).join('')
+                          dropdown.querySelectorAll('button').forEach(btn => {
+                            btn.addEventListener('click', () => {
+                              const id = Number(btn.getAttribute('data-id'))
+                              const name = btn.getAttribute('data-name') || ''
+                              const price = Number(btn.getAttribute('data-price'))
+                              const existing = editItems.findIndex(ei => ei.menu_item_id === id)
+                              if (existing >= 0) {
+                                updateEditQty(existing, editItems[existing].quantity + 1)
+                              } else {
+                                setEditItems([...editItems, { menu_item_id: id, menu_item_name: name, quantity: 1, unit_price: price, notes: null, worker_id: null }])
+                              }
+                              dropdown.style.display = 'none'
+                              ;(e.target as HTMLInputElement).value = ''
+                            })
+                          })
+                        }}
+                      />
+                      <div id="edit-add-dropdown" className="absolute top-full left-0 right-0 bg-white border rounded-lg shadow-lg z-10 overflow-hidden" style={{ display: 'none' }} />
+                    </div>
+                  </div>
+
                   <div className="flex justify-between items-center p-3 bg-orange-50 rounded-lg mb-4">
                     <span className="font-bold text-gray-900">{t('orders.total')}</span>
                     <span className="font-bold text-lg text-orange-600">{formatCurrency(editTotal)}</span>
