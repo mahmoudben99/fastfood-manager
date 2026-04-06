@@ -308,18 +308,47 @@ export function SettingsPage() {
   }
 
   const savePrinter = async () => {
-    await window.api.printer.saveFullConfig({
-      assignments: printerConfigs.map(c => ({
-        printerName: c.printerName,
-        tasks: c.tasks,
-        autoPrint: c.autoPrint,
-        paperWidth: c.paperWidth,
-        receiptFontSize: c.receiptFontSize,
-        kitchenFontSize: c.kitchenFontSize
-      }))
-    })
-
-    flashSaved()
+    try {
+      await window.api.printer.saveFullConfig({
+        assignments: printerConfigs.map(c => ({
+          printerName: c.printerName,
+          tasks: c.tasks,
+          autoPrint: c.autoPrint,
+          paperWidth: c.paperWidth,
+          receiptFontSize: c.receiptFontSize,
+          kitchenFontSize: c.kitchenFontSize
+        }))
+      })
+      // Reload printer configs from database to ensure state matches what was saved
+      const dbAssignments = await window.api.printer.getAssignments()
+      if (dbAssignments && dbAssignments.length > 0) {
+        const configMap = new Map<string, typeof printerConfigs[0]>()
+        for (const a of dbAssignments as any[]) {
+          if (!configMap.has(a.printer_name)) {
+            configMap.set(a.printer_name, {
+              id: crypto.randomUUID(),
+              printerName: a.printer_name,
+              tasks: [],
+              autoPrint: !!a.auto_print,
+              paperWidth: a.paper_width || '80',
+              receiptFontSize: a.receipt_font_size || 'medium',
+              kitchenFontSize: a.kitchen_font_size || 'large'
+            })
+          }
+          const config = configMap.get(a.printer_name)!
+          if (a.assignment_type === 'worker' && a.worker_id) {
+            config.tasks.push('worker_' + a.worker_id)
+          } else if (a.assignment_type !== 'default') {
+            config.tasks.push(a.assignment_type)
+          }
+          if (a.auto_print) config.autoPrint = true
+        }
+        setPrinterConfigs(Array.from(configMap.values()))
+      }
+      flashSaved()
+    } catch (err) {
+      console.error('Failed to save printer config:', err)
+    }
   }
 
   // New printer config helpers

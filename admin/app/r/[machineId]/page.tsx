@@ -20,12 +20,26 @@ export default async function RemoteOrderPage({ params }: { params: { machineId:
     .eq('machine_id', machineId)
     .single()
 
-  if (!installation || !menuData) {
+  if (!installation) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
         <div className="text-center">
           <p className="text-6xl mb-4">🍔</p>
           <h1 className="text-xl font-bold">Restaurant Not Found</h1>
+          <p className="text-gray-400 mt-2">This link is invalid or the restaurant hasn&apos;t set up yet.</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!menuData) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
+        <div className="text-center">
+          <p className="text-6xl mb-4">⏳</p>
+          <h1 className="text-xl font-bold">{installation.restaurant_name || 'Restaurant'}</h1>
+          <p className="text-gray-400 mt-2">Menu is being synced. Please try again in a few minutes.</p>
+          <a href="" className="mt-4 inline-block px-4 py-2 bg-orange-500 text-white rounded-lg text-sm">Retry</a>
         </div>
       </div>
     )
