@@ -56,21 +56,26 @@ export async function syncOrderStatusToCloud(orderId: number, status: string): P
   }
 }
 
-// Sync owner PIN to cloud (hashed)
+// Sync owner PIN to cloud (hashed) — LEGACY, kept for backward compat
 export async function syncOwnerPin(pin: string): Promise<void> {
+  // Now syncs the admin password hash instead of tablet PIN
+  await syncAdminPassword()
+}
+
+// Sync the admin password bcrypt hash to cloud for owner dashboard authentication
+export async function syncAdminPassword(): Promise<void> {
   if (!net.isOnline()) return
   try {
     const machineId = getMachineId()
     const supabase = getClient()
-    const { createHash } = await import('crypto')
-    const pinHash = createHash('sha256')
-      .update(pin + ':ffm-owner')
-      .digest('hex')
+    const { settingsRepo } = await import('../database/repositories/settings.repo')
+    const hash = settingsRepo.get('admin_password_hash')
+    if (!hash) return
 
     await supabase.from('owner_pins').upsert(
       {
         machine_id: machineId,
-        pin_hash: pinHash,
+        pin_hash: hash, // Store the bcrypt hash directly
         updated_at: new Date().toISOString()
       },
       { onConflict: 'machine_id' }

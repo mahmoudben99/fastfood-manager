@@ -38,7 +38,11 @@ function getDisplayInfoPayload(): Record<string, unknown> {
     name: p.name, type: p.type, value: p.discount_value
   }))
   const packs = promotionsRepo.getActivePacks().map((p: any) => ({
-    name: p.name, price: p.pack_price, emoji: p.emoji || ''
+    name: p.name, price: p.pack_price, emoji: p.emoji || '',
+    items: (p.items || []).map((pi: any) => ({
+      name: pi.menu_item_name || '',
+      quantity: pi.quantity || 1
+    }))
   }))
 
   // Social media from settings (stored as JSON string)
@@ -90,6 +94,9 @@ function getDisplayInfoPayload(): Record<string, unknown> {
   // Show menu
   const showMenu = settingsRepo.get('display_show_menu') || 'false'
 
+  // Show restaurant name
+  const showName = settingsRepo.get('display_show_name') || 'true'
+
   // Menu items (only if showMenu is enabled)
   let menuItems: { name: string; price: number; category_name: string; emoji: string }[] = []
   if (showMenu === 'true') {
@@ -104,7 +111,7 @@ function getDisplayInfoPayload(): Record<string, unknown> {
     } catch { /* ignore */ }
   }
 
-  return { type: 'info', name, logo, currency, promos, packs, social, youtubeUrl, themeColor, slideshowImages, welcomeMode, welcomeText, phone, gradientPreset, fontFamily, textColor, accentColor, textScale, showMenu, menuItems }
+  return { type: 'info', name, logo, currency, promos, packs, social, youtubeUrl, themeColor, slideshowImages, welcomeMode, welcomeText, phone, gradientPreset, fontFamily, textColor, accentColor, textScale, showMenu, menuItems, showName }
 }
 
 function getQueuePayload(): Record<string, unknown> {

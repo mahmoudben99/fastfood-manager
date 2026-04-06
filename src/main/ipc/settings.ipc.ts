@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs'
 import { settingsRepo } from '../database/repositories/settings.repo'
 import { getLogoPath, resetAllData } from '../database/connection'
 import { performAutoBackup } from './backup.ipc'
+import { syncAdminPassword } from '../sync/owner-sync'
 
 // Keys that can ONLY be set through proper activation/trial flows, never from renderer
 const PROTECTED_KEYS = new Set([
@@ -26,6 +27,10 @@ export function registerSettingsHandlers(): void {
   ipcMain.handle('settings:set', (_, key: string, value: string) => {
     if (PROTECTED_KEYS.has(key)) return false
     settingsRepo.set(key, value)
+    // Sync admin password hash to cloud whenever it's updated
+    if (key === 'admin_password_hash') {
+      syncAdminPassword().catch(() => {})
+    }
     return true
   })
 

@@ -7,7 +7,6 @@ import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { Select } from '../../components/ui/Select'
 import { Card } from '../../components/ui/Card'
-import { TelegramSettings } from './TelegramSettings'
 import { VirtualKeyboard } from '../../components/VirtualKeyboard'
 
 const currencies = [
@@ -145,6 +144,7 @@ export function SettingsPage() {
   const [accentColor, setAccentColor] = useState('#f97316')
   const [displayTextScale, setDisplayTextScale] = useState<'small' | 'medium' | 'large'>('medium')
   const [displayShowMenu, setDisplayShowMenu] = useState(false)
+  const [displayShowName, setDisplayShowName] = useState(true)
 
   const getKeyboardValue = (): string => {
     if (!keyboardTarget) return ''
@@ -291,6 +291,7 @@ export function SettingsPage() {
     setAccentColor(settings.display_accent_color || '#f97316')
     setDisplayTextScale((settings.display_text_scale as 'small' | 'medium' | 'large') || 'medium')
     setDisplayShowMenu(settings.display_show_menu === 'true')
+    setDisplayShowName(settings.display_show_name !== 'false')
     try {
       const imgs = await window.api.tablet.getDisplayImages()
       setDisplayImages(imgs || [])
@@ -601,7 +602,7 @@ export function SettingsPage() {
     { key: 'general' as const, label: t('settings.general') },
     { key: 'schedule' as const, label: t('settings.schedule') },
     { key: 'printer' as const, label: t('settings.printer') },
-    { key: 'telegram' as const, label: t('settings.telegram') },
+    { key: 'telegram' as const, label: 'Owner Dashboard' },
     { key: 'tablet' as const, label: t('settings.remoteOrders') },
     { key: 'display' as const, label: 'Ambiance Screen' },
     { key: 'security' as const, label: t('settings.security') }
@@ -1147,7 +1148,46 @@ export function SettingsPage() {
         </Card>
       )}
 
-      {tab === 'telegram' && <TelegramSettings />}
+      {tab === 'telegram' && (
+        <Card>
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-semibold mb-1">Owner Dashboard</h3>
+              <p className="text-sm text-gray-500">Restaurant owner scans this QR code to access their live dashboard from any phone.</p>
+              <p className="text-xs text-orange-600 mt-1 font-medium">The owner logs in with the admin password (set in Security tab).</p>
+            </div>
+
+            {ownerDashQr ? (
+              <div className="flex flex-col sm:flex-row gap-6 items-start">
+                <img src={ownerDashQr} alt="Owner Dashboard QR" className="w-48 h-48 rounded-lg border border-gray-200" />
+                <div className="flex-1">
+                  <p className="text-sm text-gray-500 mb-2">Dashboard URL:</p>
+                  <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
+                    <span className="text-sm font-mono text-gray-800 flex-1 break-all">{ownerDashUrl}</span>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(ownerDashUrl)
+                        setOwnerUrlCopied(true)
+                        setTimeout(() => setOwnerUrlCopied(false), 2000)
+                      }}
+                      className="flex-shrink-0 text-orange-500 hover:text-orange-600"
+                      title="Copy link"
+                    >
+                      {ownerUrlCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-2">This link works from any device with internet access — no WiFi restriction.</p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 p-3 bg-orange-50 rounded-lg">
+                <AlertCircle className="h-4 w-4 text-orange-500" />
+                <p className="text-sm text-orange-700">Start the tablet server (in Remote Orders tab) to generate the Owner Dashboard QR code.</p>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
 
       {/* Virtual Keyboard for touchscreen mode */}
       {isTouch && keyboardTarget && (
@@ -1397,6 +1437,29 @@ export function SettingsPage() {
                           onChange={async (e) => {
                             setDisplayShowMenu(e.target.checked)
                             await window.api.settings.set('display_show_menu', e.target.checked ? 'true' : 'false')
+                            flashSaved()
+                          }}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-orange-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500" />
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Show Restaurant Name */}
+                  <div className="pt-4 border-t">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-700">Show Restaurant Name</h4>
+                        <p className="text-xs text-gray-400 mt-0.5">Display the restaurant name on the welcome screen (logo still shows)</p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={displayShowName}
+                          onChange={async (e) => {
+                            setDisplayShowName(e.target.checked)
+                            await window.api.settings.set('display_show_name', e.target.checked ? 'true' : 'false')
                             flashSaved()
                           }}
                           className="sr-only peer"
@@ -1743,35 +1806,6 @@ export function SettingsPage() {
               </Button>
             )}
           </div>
-
-          {/* Owner Dashboard */}
-          {ownerDashQr && (
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <h3 className="font-semibold mb-1">Owner Dashboard</h3>
-              <p className="text-xs text-gray-500 mb-4">Share this QR code with the restaurant owner. They can access their dashboard from any phone, anywhere.</p>
-              <div className="flex flex-col sm:flex-row gap-6 items-start">
-                <img src={ownerDashQr} alt="Owner Dashboard QR" className="w-48 h-48 rounded-lg border border-gray-200" />
-                <div className="flex-1">
-                  <p className="text-sm text-gray-500 mb-2">Dashboard URL:</p>
-                  <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
-                    <span className="text-sm font-mono text-gray-800 flex-1 break-all">{ownerDashUrl}</span>
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(ownerDashUrl)
-                        setOwnerUrlCopied(true)
-                        setTimeout(() => setOwnerUrlCopied(false), 2000)
-                      }}
-                      className="flex-shrink-0 text-orange-500 hover:text-orange-600"
-                      title="Copy link"
-                    >
-                      {ownerUrlCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-400 mt-2">This link works from any device with internet access — no WiFi restriction.</p>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* PIN modal */}
           {tabletPinModal && (

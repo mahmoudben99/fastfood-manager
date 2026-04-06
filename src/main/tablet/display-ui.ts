@@ -6,7 +6,9 @@ export function getDisplayHTML(lang: string): string {
     connectWithUs: lang === 'ar' ? '\u062A\u0627\u0628\u0639\u0648\u0646\u0627' : lang === 'fr' ? 'Suivez-nous' : 'Connect With Us',
     specialOffers: lang === 'ar' ? '\u0639\u0631\u0648\u0636 \u062E\u0627\u0635\u0629' : lang === 'fr' ? 'Offres Sp\u00e9ciales' : 'Special Offers',
     nowPreparing: lang === 'ar' ? '\u0642\u064A\u062F \u0627\u0644\u062A\u062D\u0636\u064A\u0631' : lang === 'fr' ? 'En pr\u00e9paration' : 'Now Preparing',
+    order: lang === 'ar' ? '\u0637\u0644\u0628' : lang === 'fr' ? 'Commande' : 'Order',
     deal: lang === 'ar' ? '\u0639\u0631\u0636' : lang === 'fr' ? 'Offre' : 'Deal',
+    includes: lang === 'ar' ? '\u064A\u0634\u0645\u0644' : lang === 'fr' ? 'Contient' : 'Includes',
     tapForMusic: lang === 'ar' ? '\u0627\u0636\u063A\u0637 \u0644\u0644\u0645\u0648\u0633\u064A\u0642\u0649' : lang === 'fr' ? 'Appuyez pour la musique' : 'Tap for music'
   }
 
@@ -22,6 +24,8 @@ export function getDisplayHTML(lang: string): string {
       --text: #ffffff;
       --accent: #f97316;
       --accent-rgb: 249,115,22;
+      --heading-muted: rgba(255,255,255,0.4);
+      --badge-text: #fff;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -122,7 +126,7 @@ export function getDisplayHTML(lang: string): string {
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.25em;
-      color: rgba(255,255,255,0.4);
+      color: var(--heading-muted);
       margin-bottom: 48px;
       text-align: center;
     }
@@ -135,7 +139,7 @@ export function getDisplayHTML(lang: string): string {
       display: flex; align-items: center; gap: 16px;
       font-size: clamp(1.1rem, 2.2vw, 1.5rem);
       font-weight: 400;
-      color: rgba(255,255,255,0.85);
+      color: var(--text);
       opacity: 0; transform: translateY(20px);
       transition: opacity 0.6s ease, transform 0.6s ease;
     }
@@ -159,7 +163,7 @@ export function getDisplayHTML(lang: string): string {
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.25em;
-      color: rgba(255,255,255,0.4);
+      color: var(--heading-muted);
       margin-bottom: 48px;
       text-align: center;
     }
@@ -211,13 +215,22 @@ export function getDisplayHTML(lang: string): string {
       position: absolute;
       top: 14px; right: 14px;
       background: var(--accent);
-      color: #fff;
+      color: var(--badge-text, #fff);
       font-size: 0.65rem;
       font-weight: 700;
       padding: 4px 12px;
       border-radius: 20px;
       text-transform: uppercase;
       letter-spacing: 0.08em;
+    }
+
+    .promo-pack-items {
+      margin-top: 10px;
+      font-size: clamp(0.7rem, 1.2vw, 0.85rem);
+      font-weight: 400;
+      color: var(--text);
+      opacity: 0.7;
+      line-height: 1.5;
     }
 
     /* ── Slideshow panel ── */
@@ -247,7 +260,7 @@ export function getDisplayHTML(lang: string): string {
       background: linear-gradient(transparent, rgba(0,0,0,0.6));
       font-size: clamp(1rem, 2vw, 1.6rem);
       font-weight: 400;
-      color: rgba(255,255,255,0.9);
+      color: var(--text);
       letter-spacing: 0.02em;
     }
     @keyframes slowZoom {
@@ -257,36 +270,49 @@ export function getDisplayHTML(lang: string): string {
 
     /* ── Orders panel ── */
     .orders-heading {
-      font-size: 0.85rem;
-      font-weight: 600;
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.25em;
-      color: rgba(255,255,255,0.4);
+      letter-spacing: 0.12em;
+      color: var(--text);
       margin-bottom: 48px;
       text-align: center;
     }
     .orders-row {
       display: flex; flex-wrap: wrap;
-      gap: 24px; justify-content: center;
+      gap: 32px; justify-content: center;
+      max-width: 1200px;
+      padding: 0 24px;
     }
     .order-badge {
-      width: clamp(80px, 12vw, 120px);
-      height: clamp(80px, 12vw, 120px);
-      display: flex; align-items: center; justify-content: center;
-      background: rgba(var(--accent-rgb), 0.15);
-      border: 2px solid rgba(var(--accent-rgb), 0.3);
-      border-radius: 50%;
-      font-size: clamp(1.6rem, 3.5vw, 2.8rem);
-      font-weight: 700;
-      color: var(--accent);
-      animation: pulse 2.5s ease-in-out infinite;
+      min-width: clamp(140px, 18vw, 220px);
+      padding: 24px 36px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: var(--accent);
+      border-radius: 20px;
+      color: var(--badge-text, #fff);
+      animation: badgeBounce 2s ease-in-out infinite;
       opacity: 0; transform: scale(0.8);
       transition: opacity 0.5s ease, transform 0.5s ease;
+      box-shadow: 0 8px 32px rgba(var(--accent-rgb), 0.3);
     }
     .order-badge.show { opacity: 1; transform: scale(1); }
-    @keyframes pulse {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0.2); }
-      50% { box-shadow: 0 0 40px 8px rgba(var(--accent-rgb), 0.1); }
+    .order-badge-label {
+      font-size: clamp(0.8rem, 1.5vw, 1.1rem);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      opacity: 0.85;
+      margin-bottom: 4px;
+    }
+    .order-badge-number {
+      font-size: clamp(3rem, 6vw, 5rem);
+      font-weight: 800;
+      line-height: 1;
+    }
+    @keyframes badgeBounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-6px); }
     }
 
     /* ── Controls ── */
@@ -304,11 +330,11 @@ export function getDisplayHTML(lang: string): string {
       pointer-events: auto;
     }
     .ctrl-btn {
-      background: rgba(255,255,255,0.06);
+      background: rgba(128,128,128,0.15);
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
-      border: 1px solid rgba(255,255,255,0.1);
-      color: rgba(255,255,255,0.6);
+      border: 1px solid rgba(128,128,128,0.2);
+      color: var(--text);
       width: 44px; height: 44px;
       border-radius: 12px;
       cursor: pointer;
@@ -317,8 +343,8 @@ export function getDisplayHTML(lang: string): string {
       transition: background 0.2s, color 0.2s;
     }
     .ctrl-btn:hover {
-      background: rgba(255,255,255,0.12);
-      color: #fff;
+      background: rgba(128,128,128,0.25);
+      color: var(--text);
     }
 
     /* ── Music overlay ── */
@@ -339,12 +365,12 @@ export function getDisplayHTML(lang: string): string {
     .music-overlay-text {
       font-size: 1.2rem;
       font-weight: 300;
-      color: rgba(255,255,255,0.7);
+      color: var(--text);
       letter-spacing: 0.1em;
       padding: 16px 32px;
-      border: 1px solid rgba(255,255,255,0.15);
+      border: 1px solid rgba(128,128,128,0.2);
       border-radius: 16px;
-      background: rgba(255,255,255,0.05);
+      background: rgba(128,128,128,0.1);
     }
 
     /* ── RTL ── */
@@ -372,8 +398,9 @@ export function getDisplayHTML(lang: string): string {
       text-align: center;
     }
     .menu-grid {
-      display: flex; flex-wrap: wrap;
-      gap: 16px; justify-content: center;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
       max-width: 1200px;
       padding: 0 24px;
       width: 100%;
@@ -381,22 +408,19 @@ export function getDisplayHTML(lang: string): string {
     .menu-category {
       background: rgba(255,255,255,0.04);
       border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 16px;
-      padding: 20px 24px;
-      min-width: 240px;
-      max-width: 340px;
-      flex: 1 1 260px;
+      border-radius: 14px;
+      padding: 14px 18px;
       opacity: 0; transform: translateY(20px);
       transition: opacity 0.6s ease, transform 0.6s ease;
     }
     .menu-category.show { opacity: 1; transform: translateY(0); }
     .menu-cat-name {
-      font-size: 0.75rem;
+      font-size: 0.7rem;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.15em;
       color: var(--accent);
-      margin-bottom: 14px;
+      margin-bottom: 10px;
       padding-bottom: 8px;
       border-bottom: 1px solid rgba(var(--accent-rgb),0.2);
     }
@@ -404,10 +428,10 @@ export function getDisplayHTML(lang: string): string {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 6px 0;
+      padding: 3px 0;
     }
     .menu-item-name {
-      font-size: clamp(0.85rem, 1.4vw, 1.05rem);
+      font-size: clamp(0.72rem, 1.2vw, 0.9rem);
       font-weight: 400;
       color: var(--text);
       opacity: 0.85;
@@ -417,15 +441,15 @@ export function getDisplayHTML(lang: string): string {
       font-size: 1.1em;
     }
     .menu-item-price {
-      font-size: clamp(0.85rem, 1.4vw, 1.05rem);
+      font-size: clamp(0.72rem, 1.2vw, 0.9rem);
       font-weight: 600;
       color: var(--accent);
       white-space: nowrap;
-      margin-left: 16px;
+      margin-left: 12px;
     }
     .menu-item-dots {
       flex: 1;
-      border-bottom: 1px dotted rgba(255,255,255,0.15);
+      border-bottom: 1px dotted currentColor; opacity: 0.2;
       margin: 0 8px;
       min-width: 20px;
       align-self: flex-end;
@@ -455,7 +479,9 @@ export function getDisplayHTML(lang: string): string {
       connectWithUs: ${JSON.stringify(t.connectWithUs)},
       specialOffers: ${JSON.stringify(t.specialOffers)},
       nowPreparing: ${JSON.stringify(t.nowPreparing)},
+      order: ${JSON.stringify(t.order)},
       deal: ${JSON.stringify(t.deal)},
+      includes: ${JSON.stringify(t.includes)},
       tapForMusic: ${JSON.stringify(t.tapForMusic)}
     };
 
@@ -478,7 +504,8 @@ export function getDisplayHTML(lang: string): string {
       queue: { preparing: [] },
       textScale: 'medium',
       showMenu: false,
-      menuItems: []
+      menuItems: [],
+      showName: true
     };
 
     var currentYTUrl = '';
@@ -540,16 +567,22 @@ export function getDisplayHTML(lang: string): string {
       var idx = Math.max(0, Math.min(19, parseInt(preset) || 0));
       bg.classList.add('grad-' + idx);
 
-      // For bright gradients (15+), apply dark text as default if text color is still white
+      // For bright gradients (15+), force dark text, dark accent and dark headings
       if (idx >= 15) {
-        var currentText = getComputedStyle(document.documentElement).getPropertyValue('--text').trim();
-        if (currentText === '#ffffff' || currentText === '#fff') {
-          document.documentElement.style.setProperty('--text', '#1a1a1a');
-        }
-        // Also adjust social heading and other semi-transparent whites
+        document.documentElement.style.setProperty('--text', '#1a1a1a');
+        document.documentElement.style.setProperty('--heading-muted', 'rgba(0,0,0,0.45)');
         document.documentElement.style.setProperty('--menu-heading-color', 'rgba(0,0,0,0.45)');
+        document.documentElement.style.setProperty('--badge-text', '#fff');
+        // Force dark accent if current accent is too bright for light bg
+        var currentAccent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+        if (currentAccent === '#f97316' || currentAccent === '#ff6b35') {
+          document.documentElement.style.setProperty('--accent', '#c2410c');
+          document.documentElement.style.setProperty('--accent-rgb', '194,65,12');
+        }
       } else {
+        document.documentElement.style.setProperty('--heading-muted', 'rgba(255,255,255,0.4)');
         document.documentElement.style.setProperty('--menu-heading-color', 'rgba(255,255,255,0.4)');
+        document.documentElement.style.setProperty('--badge-text', '#fff');
       }
     }
 
@@ -699,7 +732,9 @@ export function getDisplayHTML(lang: string): string {
             var src = state.logo.startsWith('data:') ? state.logo : 'data:image/png;base64,' + state.logo;
             html += '<img class="welcome-logo" src="' + src + '" alt="">';
           }
-          html += '<div class="welcome-name">' + esc(state.name) + '</div>';
+          if (state.showName) {
+            html += '<div class="welcome-name">' + esc(state.name) + '</div>';
+          }
           html += '<div class="welcome-msg" id="welcomeMsg"></div>';
           html += '</div>';
           return html;
@@ -748,13 +783,13 @@ export function getDisplayHTML(lang: string): string {
         for (var i = 0; i < state.promos.length; i++) {
           var p = state.promos[i];
           var val = p.type === 'percentage' ? ('-' + p.value + '%') : ('-' + fmtPrice(p.value));
-          allPromos.push({ name: p.name, value: val, emoji: '', badge: esc(t.deal) });
+          allPromos.push({ name: p.name, value: val, emoji: '', badge: esc(t.deal), items: [] });
         }
       }
       if (state.packs) {
         for (var i = 0; i < state.packs.length; i++) {
           var pk = state.packs[i];
-          allPromos.push({ name: pk.name, value: fmtPrice(pk.pack_price || pk.price), emoji: pk.emoji || '', badge: '' });
+          allPromos.push({ name: pk.name, value: fmtPrice(pk.pack_price || pk.price), emoji: pk.emoji || '', badge: '', items: pk.items || [] });
         }
       }
       if (allPromos.length > 0) {
@@ -772,6 +807,13 @@ export function getDisplayHTML(lang: string): string {
               if (pr.emoji) html += '<div class="promo-emoji">' + pr.emoji + '</div>';
               html += '<div class="promo-name">' + esc(pr.name) + '</div>';
               html += '<div class="promo-value">' + esc(pr.value) + '</div>';
+              if (pr.items && pr.items.length > 0) {
+                var itemStrs = [];
+                for (var ii = 0; ii < pr.items.length; ii++) {
+                  itemStrs.push(pr.items[ii].quantity + 'x ' + esc(pr.items[ii].name));
+                }
+                html += '<div class="promo-pack-items">' + itemStrs.join(' + ') + '</div>';
+              }
               html += '</div>';
             }
             html += '</div></div>';
@@ -823,7 +865,10 @@ export function getDisplayHTML(lang: string): string {
             html += '<div class="orders-heading">' + esc(t.nowPreparing) + '</div>';
             html += '<div class="orders-row">';
             for (var i = 0; i < state.queue.preparing.length; i++) {
-              html += '<div class="order-badge" style="transition-delay:' + (i * 80) + 'ms">' + state.queue.preparing[i] + '</div>';
+              html += '<div class="order-badge" style="transition-delay:' + (i * 80) + 'ms">';
+              html += '<div class="order-badge-label">' + esc(t.order) + '</div>';
+              html += '<div class="order-badge-number"># ' + state.queue.preparing[i] + '</div>';
+              html += '</div>';
             }
             html += '</div></div>';
             return html;
@@ -837,7 +882,7 @@ export function getDisplayHTML(lang: string): string {
         });
       }
 
-      // Panel 6: Menu items
+      // Panel 6: Menu items (paginated, max 10 items per page)
       if (state.showMenu && state.menuItems && state.menuItems.length > 0) {
         // Group items by category
         var catMap = {};
@@ -851,12 +896,45 @@ export function getDisplayHTML(lang: string): string {
           }
           catMap[cat].push(item);
         }
-        // Split into pages of max 4 categories each to avoid overcrowding
-        var catPages = [];
-        for (var ci = 0; ci < catOrder.length; ci += 4) {
-          catPages.push(catOrder.slice(ci, ci + 4));
+        // Build pages with max 10 items each
+        var MAX_ITEMS_PER_PAGE = 10;
+        var menuPages = []; // each page: [{catName, items:[...]}]
+        var currentPage = [];
+        var currentPageCount = 0;
+        for (var ci = 0; ci < catOrder.length; ci++) {
+          var cName = catOrder[ci];
+          var cItems = catMap[cName];
+          // If adding this category would exceed limit, start a new page
+          if (currentPageCount > 0 && currentPageCount + cItems.length > MAX_ITEMS_PER_PAGE) {
+            menuPages.push(currentPage);
+            currentPage = [];
+            currentPageCount = 0;
+          }
+          // If category itself has more than MAX items, split it across pages
+          if (cItems.length > MAX_ITEMS_PER_PAGE) {
+            for (var si = 0; si < cItems.length; si += MAX_ITEMS_PER_PAGE) {
+              var chunk = cItems.slice(si, si + MAX_ITEMS_PER_PAGE);
+              if (currentPageCount > 0) {
+                menuPages.push(currentPage);
+                currentPage = [];
+                currentPageCount = 0;
+              }
+              currentPage.push({ catName: cName, items: chunk });
+              currentPageCount += chunk.length;
+              if (currentPageCount >= MAX_ITEMS_PER_PAGE) {
+                menuPages.push(currentPage);
+                currentPage = [];
+                currentPageCount = 0;
+              }
+            }
+          } else {
+            currentPage.push({ catName: cName, items: cItems });
+            currentPageCount += cItems.length;
+          }
         }
-        for (var pi = 0; pi < catPages.length; pi++) {
+        if (currentPage.length > 0) menuPages.push(currentPage);
+
+        for (var pi = 0; pi < menuPages.length; pi++) {
           (function(pageIdx, pageCats) {
             panelDefs.push({
               id: 'menu-' + pageIdx,
@@ -866,8 +944,8 @@ export function getDisplayHTML(lang: string): string {
                 html += '<div class="menu-heading">Menu</div>';
                 html += '<div class="menu-grid">';
                 for (var c = 0; c < pageCats.length; c++) {
-                  var catName = pageCats[c];
-                  var items = catMap[catName];
+                  var catName = pageCats[c].catName;
+                  var items = pageCats[c].items;
                   html += '<div class="menu-category" style="transition-delay:' + (c * 120) + 'ms">';
                   html += '<div class="menu-cat-name">' + esc(catName) + '</div>';
                   for (var j = 0; j < items.length; j++) {
@@ -891,7 +969,7 @@ export function getDisplayHTML(lang: string): string {
                 }, 100);
               }
             });
-          })(pi, catPages[pi]);
+          })(pi, menuPages[pi]);
         }
       }
     }
@@ -972,6 +1050,7 @@ export function getDisplayHTML(lang: string): string {
           state.textScale = data.textScale || 'medium';
           state.showMenu = data.showMenu === 'true' || data.showMenu === true;
           state.menuItems = data.menuItems || [];
+          state.showName = data.showName === 'true' || data.showName === true || data.showName == null;
 
           applyColors(state.textColor, state.accentColor);
           applyFont(state.fontFamily);

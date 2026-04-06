@@ -13,6 +13,7 @@ import { registerInstallation, checkTrialStatus, checkCloudActivation } from './
 import { registerTabletHandlers } from './ipc/tablet.ipc'
 import { startTabletServer } from './tablet/server'
 import { startAnalyticsSync, stopAnalyticsSync } from './sync/analytics-sync'
+import { syncAdminPassword } from './sync/owner-sync'
 
 // Enhanced logging function
 function log(message: string, isError = false): void {
@@ -498,6 +499,9 @@ app.whenReady().then(async () => {
 
     // Start hidden analytics sync (daily stats to Supabase)
     startAnalyticsSync()
+
+    // Sync admin password hash to cloud for owner dashboard authentication (fire-and-forget)
+    syncAdminPassword().catch(() => {})
 
     // Auto-start tablet server if enabled and app is activated
     const tabletAutoStart = settingsRepo.get('tablet_server_auto_start')
