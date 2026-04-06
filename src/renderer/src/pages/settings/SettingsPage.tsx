@@ -35,6 +35,7 @@ export function SettingsPage() {
   const [phone, setPhone] = useState('')
   const [phone2, setPhone2] = useState('')
   const [address, setAddress] = useState('')
+  const [socialMedia, setSocialMedia] = useState<{ platform: string; handle: string }[]>([])
   const [currency, setCurrency] = useState('DZD')
   const [currencySymbol, setCurrencySymbol] = useState('DA')
   const [lang, setLang] = useState('en')
@@ -175,6 +176,7 @@ export function SettingsPage() {
     setPhone(settings.restaurant_phone || '')
     setPhone2(settings.restaurant_phone2 || '')
     setAddress(settings.restaurant_address || '')
+    try { const sm = settings.social_media; if (sm) setSocialMedia(JSON.parse(sm)) } catch { /* ignore */ }
     setCurrency(settings.currency || 'DZD')
     setCurrencySymbol(settings.currency_symbol || 'DA')
     setLang(settings.language || 'en')
@@ -285,6 +287,7 @@ export function SettingsPage() {
       restaurant_phone: phone,
       restaurant_phone2: phone2,
       restaurant_address: address,
+      social_media: JSON.stringify(socialMedia),
       currency,
       currency_symbol: currencySymbol,
       language: lang,
@@ -657,6 +660,64 @@ export function SettingsPage() {
               onChange={isTouch ? undefined : (e) => setAddress(e.target.value)}
               placeholder={t('setup.restaurant.addressPlaceholder')}
             />
+            {/* Social Media */}
+            <div className="pt-3 border-t">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium text-gray-700">Social Media</label>
+                <button
+                  onClick={() => setSocialMedia([...socialMedia, { platform: 'instagram', handle: '' }])}
+                  className="flex items-center gap-1 text-xs text-orange-600 hover:text-orange-700 font-medium"
+                >
+                  + Add Platform
+                </button>
+              </div>
+              {socialMedia.length === 0 ? (
+                <p className="text-xs text-gray-400">No social media added. Add your accounts to show on receipts and ambiance screen.</p>
+              ) : (
+                <div className="space-y-2">
+                  {socialMedia.map((sm, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <select
+                        value={sm.platform}
+                        onChange={(e) => {
+                          const updated = [...socialMedia]
+                          updated[i] = { ...updated[i], platform: e.target.value }
+                          setSocialMedia(updated)
+                        }}
+                        className="w-40 border rounded-lg px-2 py-1.5 text-sm"
+                      >
+                        <option value="facebook">📘 Facebook</option>
+                        <option value="instagram">📸 Instagram</option>
+                        <option value="snapchat">👻 Snapchat</option>
+                        <option value="tiktok">🎵 TikTok</option>
+                        <option value="twitter">🐦 X / Twitter</option>
+                        <option value="youtube">🎬 YouTube</option>
+                        <option value="whatsapp">💬 WhatsApp</option>
+                        <option value="threads">🧵 Threads</option>
+                        <option value="telegram">✈️ Telegram</option>
+                      </select>
+                      <input
+                        value={sm.handle}
+                        onChange={(e) => {
+                          const updated = [...socialMedia]
+                          updated[i] = { ...updated[i], handle: e.target.value }
+                          setSocialMedia(updated)
+                        }}
+                        placeholder="@username or link"
+                        className="flex-1 border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      />
+                      <button
+                        onClick={() => setSocialMedia(socialMedia.filter((_, idx) => idx !== i))}
+                        className="p-1.5 hover:bg-red-100 rounded text-gray-400 hover:text-red-500"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <Select
                 label={t('setup.restaurant.currency')}
