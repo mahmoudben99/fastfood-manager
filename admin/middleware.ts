@@ -7,8 +7,8 @@ const SESSION_SECRET = new TextEncoder().encode(process.env.SESSION_SECRET!)
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Allow login page and API login route
-  if (pathname === '/login' || pathname.startsWith('/api/login')) {
+  // Allow login page, API login, and owner dashboard (has its own PIN auth)
+  if (pathname === '/login' || pathname.startsWith('/api/login') || pathname.startsWith('/owner') || pathname.startsWith('/api/owner')) {
     return NextResponse.next()
   }
 
