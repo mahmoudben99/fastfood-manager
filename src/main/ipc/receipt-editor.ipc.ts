@@ -106,4 +106,13 @@ export function registerReceiptEditorHandlers(): void {
   ipcMain.handle('receipt:getPresets', () => {
     return presets
   })
+
+  ipcMain.handle('receipt:generateQR', async (_, url: string) => {
+    try {
+      const QRCode = (await import('qrcode')).default
+      return await QRCode.toDataURL(url, { width: 120, margin: 1 })
+    } catch {
+      return ''
+    }
+  })
 }

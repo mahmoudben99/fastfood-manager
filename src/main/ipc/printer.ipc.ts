@@ -31,7 +31,7 @@ function getLogoHTML(settings: Record<string, string>): string {
   }
 }
 
-function buildFromTemplate(template: any, order: any, settings: Record<string, string>): string | null {
+async function buildFromTemplate(template: any, order: any, settings: Record<string, string>): Promise<string | null> {
   try {
     const blocks = JSON.parse(template.blocks)
     if (!blocks || blocks.length === 0) return null
@@ -62,6 +62,9 @@ function buildFromTemplate(template: any, order: any, settings: Record<string, s
         case 'order_details': {
           const time = new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           body += `<div style="font-size:11px;margin:8px 0;">Order #${order.daily_number} | ${time}</div>`
+          if (cfg.language === 'bilingual') {
+            body += `<div style="font-size:10px;color:#888;text-align:center;margin:2px 0;">\u0637\u0644\u0628 #${order.daily_number} | ${time}</div>`
+          }
           if (order.table_number) body += `<div style="font-size:11px;">Table: ${order.table_number}</div>`
           if (order.order_type) body += `<div style="font-size:11px;">${order.order_type === 'delivery' ? 'Delivery' : order.order_type === 'takeout' ? 'Take Out' : 'At Table'}</div>`
           break
@@ -70,6 +73,9 @@ function buildFromTemplate(template: any, order: any, settings: Record<string, s
           body += '<div style="margin:8px 0;">'
           for (const item of items) {
             body += `<div style="display:flex;justify-content:space-between;font-size:${fontSize};${bold}padding:2px 0;"><span>${item.quantity}x ${item.menu_item_name}</span><span>${Number(item.total_price).toLocaleString()} ${settings.currency_symbol || 'DA'}</span></div>`
+            if (cfg.language === 'bilingual' && item.menu_item_name_ar) {
+              body += `<div style="font-size:9px;color:#888;direction:rtl;padding:0 0 2px 0;">${item.quantity}x ${item.menu_item_name_ar}</div>`
+            }
             if (item.notes) body += `<div style="font-size:9px;color:#888;padding-left:16px;">* ${item.notes}</div>`
           }
           body += '</div>'
@@ -85,23 +91,56 @@ function buildFromTemplate(template: any, order: any, settings: Record<string, s
           break
         case 'custom_text':
           body += `<div style="text-align:${align};font-size:${fontSize};${bold}margin:6px 0;">${cfg.text || ''}</div>`
+          if (cfg.textAr) body += `<div style="text-align:${align};font-size:${fontSize};${bold}margin:4px 0;direction:rtl;">${cfg.textAr}</div>`
+          if (cfg.textFr) body += `<div style="text-align:${align};font-size:${fontSize};${bold}margin:4px 0;">${cfg.textFr}</div>`
           break
         case 'social_media': {
           try {
             const social = JSON.parse(settings.social_media || '[]')
             if (social.length > 0) {
+              const platformEmoji: Record<string, string> = {
+                facebook: '📘', instagram: '📸', snapchat: '👻', tiktok: '🎵',
+                twitter: '🐦', x: '🐦', youtube: '🎬', whatsapp: '💬',
+                threads: '🧵', telegram: '✈️', phone: '📞'
+              }
               body += '<div style="text-align:center;font-size:10px;margin:6px 0;">'
               for (const s of social) {
-                body += `<div>${s.platform}: ${s.handle}</div>`
+                const emoji = platformEmoji[s.platform] || '🔗'
+                body += `<div>${emoji} ${s.handle}</div>`
               }
               body += '</div>'
             }
           } catch { /* skip */ }
           break
         }
-        case 'qr_code':
-          body += '<div style="text-align:center;margin:8px 0;font-size:10px;">[QR Code]</div>'
+        case 'qr_code': {
+          const qrUrl = cfg.qrUrl || ''
+          const qrAlign = cfg.alignment || 'center'
+          const qrPx = cfg.fontSize === 'large' ? 120 : cfg.fontSize === 'small' ? 60 : 80
+          if (qrUrl) {
+            try {
+              const QRCode = (await import('qrcode')).default
+              const qrDataUrl = await QRCode.toDataURL(qrUrl, { width: qrPx * 2, margin: 1 })
+              body += `<div style="text-align:${qrAlign};margin:8px 0;"><img src="${qrDataUrl}" style="width:${qrPx}px;height:${qrPx}px;display:inline-block;" /></div>`
+            } catch {
+              body += `<div style="text-align:${qrAlign};margin:8px 0;font-size:10px;">[QR: ${qrUrl}]</div>`
+            }
+          }
           break
+        }
+        case 'edge_decoration': {
+          const decoType = cfg.decorationType || 'food-emoji'
+          const decoMap: Record<string, string> = {
+            'food-emoji': '🍔 🍟 🍕 🌮 🥤 🍗 🍔 🍟 🍕 🌮',
+            'stars': '⭐ ✨ ⭐ ✨ ⭐ ✨ ⭐ ✨ ⭐ ✨',
+            'dots': '● ○ ● ○ ● ○ ● ○ ● ○',
+            'fire': '🔥 🔥 🔥 🔥 🔥 🔥 🔥 🔥 🔥 🔥',
+            'hearts': '❤️ 🧡 💛 💚 💙 💜 ❤️ 🧡 💛 💚'
+          }
+          const deco = decoMap[decoType] || decoMap['food-emoji']
+          body += `<div style="text-align:center;font-size:10px;margin:6px 0;letter-spacing:2px;">${deco}</div>`
+          break
+        }
       }
     }
 
@@ -111,18 +150,19 @@ function buildFromTemplate(template: any, order: any, settings: Record<string, s
   }
 }
 
-function getReceiptHTML(order: any, settings: Record<string, string>, type: 'receipt' | 'kitchen'): string {
+async function getReceiptHTML(order: any, settings: Record<string, string>, type: 'receipt' | 'kitchen'): Promise<string> {
   // Check for active custom template (only for receipts, not kitchen tickets)
   if (type === 'receipt') {
     try {
       const template = receiptTemplatesRepo.getActiveTemplate()
-      console.log('[Printer] Active template:', template ? `id=${template.id} name=${template.name} blocks_len=${template.blocks?.length}` : 'NONE')
-      if (template) {
-        const customHTML = buildFromTemplate(template, order, settings)
-        console.log('[Printer] Custom HTML generated:', customHTML ? 'YES (' + customHTML.length + ' chars)' : 'NULL')
+      if (template && template.blocks) {
+        const customHTML = await buildFromTemplate(template, order, settings)
         if (customHTML) return customHTML
       }
-    } catch { /* fall through to default */ }
+    } catch (err) {
+      // Template failed — fall through to default
+      console.error('[Printer] Template error:', err)
+    }
   }
 
   const paperWidth = parseInt(settings.printer_width || '80')
@@ -246,11 +286,11 @@ export function registerPrinterHandlers(): void {
     return printOrder(orderId, 'kitchen')
   })
 
-  ipcMain.handle('printer:previewReceipt', (_, orderId: number) => {
+  ipcMain.handle('printer:previewReceipt', async (_, orderId: number) => {
     const settings = settingsRepo.getAll()
     const order = ordersRepo.getById(orderId)
     if (!order) return null
-    return getReceiptHTML(order, settings, 'receipt')
+    return await getReceiptHTML(order, settings, 'receipt')
   })
 
   ipcMain.handle('printer:printKitchenForWorker', async (_, orderId: number, workerId: number) => {
@@ -395,7 +435,7 @@ export async function printOrder(orderId: number, type: 'receipt' | 'kitchen'): 
   if (type === 'receipt') {
     const printerName = printerAssignmentsRepo.getReceiptPrinter() || settings.printer_name
     if (!printerName) return { success: false, error: 'No printer configured' }
-    const html = getReceiptHTML(order, settings, type)
+    const html = await getReceiptHTML(order, settings, type)
     return doPrint(html, printerName)
   }
 
@@ -406,7 +446,7 @@ export async function printOrder(orderId: number, type: 'receipt' | 'kitchen'): 
     // Print single kitchen ticket to kitchen printer
     const printerName = printerAssignmentsRepo.getKitchenAllPrinter() || settings.kitchen_printer_name || settings.printer_name
     if (!printerName) return { success: false, error: 'No printer configured' }
-    const html = getReceiptHTML(order, settings, type)
+    const html = await getReceiptHTML(order, settings, type)
     return doPrint(html, printerName)
   }
 
@@ -439,7 +479,7 @@ export async function printOrder(orderId: number, type: 'receipt' | 'kitchen'): 
     const finalPrinter = printerName || settings.kitchen_printer_name || settings.printer_name
     if (!finalPrinter) continue
 
-    const html = getReceiptHTML(workerOrder, settings, type)
+    const html = await getReceiptHTML(workerOrder, settings, type)
     const result = await doPrint(html, finalPrinter)
     if (!result.success) allSuccess = false
   }
@@ -469,7 +509,7 @@ export async function printOrderForWorker(orderId: number, workerId: number): Pr
   const printerName = printerAssignmentsRepo.getPrinterForWorker(workerId) || settings.kitchen_printer_name || settings.printer_name
   if (!printerName) return { success: false, error: 'No printer configured' }
 
-  const html = getReceiptHTML(workerOrder, settings, 'kitchen')
+  const html = await getReceiptHTML(workerOrder, settings, 'kitchen')
   return doPrint(html, printerName)
 }
 

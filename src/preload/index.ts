@@ -259,7 +259,8 @@ const api = {
     setActive: (id: number) => ipcRenderer.invoke('receipt:setActive', id),
     getSocialMedia: () => ipcRenderer.invoke('receipt:getSocialMedia'),
     saveSocialMedia: (items: any[]) => ipcRenderer.invoke('receipt:saveSocialMedia', items),
-    getPresets: () => ipcRenderer.invoke('receipt:getPresets')
+    getPresets: () => ipcRenderer.invoke('receipt:getPresets'),
+    generateQR: (url: string) => ipcRenderer.invoke('receipt:generateQR', url)
   },
   tablet: {
     start: () => ipcRenderer.invoke('tablet:start'),
@@ -281,7 +282,7 @@ const api = {
   },
   cloud: {
     getShortCodes: () => ipcRenderer.invoke('cloud:getShortCodes'),
-    syncDisplay: () => ipcRenderer.invoke('cloud:syncDisplay'),
+    syncDisplay: (profileName?: string) => ipcRenderer.invoke('cloud:syncDisplay', profileName),
     syncMenu: () => ipcRenderer.invoke('cloud:syncMenu'),
     createDisplayProfile: (name: string) => ipcRenderer.invoke('cloud:createDisplayProfile', name)
   }

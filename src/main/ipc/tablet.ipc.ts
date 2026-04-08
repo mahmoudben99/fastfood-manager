@@ -135,8 +135,8 @@ export function registerTabletHandlers(getWindow: () => BrowserWindow | null): v
     return await getShortCodes()
   })
 
-  ipcMain.handle('cloud:syncDisplay', async () => {
-    await syncDisplaySettings()
+  ipcMain.handle('cloud:syncDisplay', async (_, profileName?: string) => {
+    await syncDisplaySettings(profileName || 'default')
     return { ok: true }
   })
 

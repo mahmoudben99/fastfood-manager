@@ -19,7 +19,7 @@ export const receiptTemplatesRepo = {
         'INSERT INTO receipt_templates (name, blocks, is_active) VALUES (?, ?, ?)'
       )
       .run(input.name, input.blocks, input.is_active ?? 0)
-    return { id: result.lastInsertRowid }
+    return { id: Number(result.lastInsertRowid) }
   },
 
   updateTemplate(

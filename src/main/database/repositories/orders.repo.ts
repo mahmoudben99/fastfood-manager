@@ -201,7 +201,7 @@ export const ordersRepo = {
   getOrderItems(orderId: number): OrderItem[] {
     return getDb()
       .prepare(
-        `SELECT oi.*, mi.name as menu_item_name, w.name as worker_name
+        `SELECT oi.*, mi.name as menu_item_name, mi.name_ar as menu_item_name_ar, mi.name_fr as menu_item_name_fr, w.name as worker_name
          FROM order_items oi
          LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
          LEFT JOIN workers w ON oi.worker_id = w.id

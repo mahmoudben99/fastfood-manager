@@ -56,6 +56,19 @@ const BLOCK_TYPES = [
   { value: 'edge_decoration', label: 'Edge Decoration', icon: Sparkles }
 ]
 
+// QR code preview component
+function QRPreview({ url, size = '80px' }: { url: string; size?: string }) {
+  const [qrSrc, setQrSrc] = useState('')
+  useEffect(() => {
+    if (!url) return
+    window.api.receipt.generateQR(url).then((dataUrl: string) => {
+      if (dataUrl) setQrSrc(dataUrl)
+    }).catch(() => {})
+  }, [url])
+  if (!qrSrc) return <span style={{ fontSize: '10px', color: '#888' }}>Enter URL above</span>
+  return <img src={qrSrc} alt="QR" style={{ width: size, height: size, display: 'inline-block' }} />
+}
+
 const PLATFORMS = ['facebook', 'instagram', 'snapchat', 'tiktok', 'twitter', 'youtube', 'whatsapp']
 
 const PLATFORM_ICONS: Record<string, string> = {
@@ -90,6 +103,7 @@ export function ReceiptEditor() {
   const [restaurantName, setRestaurantName] = useState('My Restaurant')
   const [logoPath, setLogoPath] = useState('')
   const [restaurantPhone, setRestaurantPhone] = useState('')
+  const [restaurantAddress, setRestaurantAddress] = useState('')
 
   const loadData = useCallback(async () => {
     const [tmpl, active, pres, social, settings] = await Promise.all([
@@ -105,6 +119,7 @@ export function ReceiptEditor() {
     setRestaurantName(settings.restaurant_name || 'My Restaurant')
     setLogoPath(settings.logo_path || '')
     setRestaurantPhone(settings.restaurant_phone || '')
+    setRestaurantAddress(settings.restaurant_address || '')
 
     if (active) {
       setCurrentTemplateId(active.id)
@@ -213,41 +228,45 @@ export function ReceiptEditor() {
     const { type, id, config } = block
     return (
       <div className="p-3 bg-gray-50 border-t space-y-2">
-        {/* Common options */}
-        <div className="flex gap-2 flex-wrap">
-          <label className="flex items-center gap-1 text-xs text-gray-600">
-            Size:
-            <select
-              className="border rounded px-1 py-0.5 text-xs"
-              value={config.fontSize || 'medium'}
-              onChange={e => updateBlockConfig(id, 'fontSize', e.target.value)}
-            >
-              <option value="small">Small</option>
-              <option value="medium">Medium</option>
-              <option value="large">Large</option>
-            </select>
-          </label>
-          <label className="flex items-center gap-1 text-xs text-gray-600">
-            Align:
-            <select
-              className="border rounded px-1 py-0.5 text-xs"
-              value={config.alignment || 'left'}
-              onChange={e => updateBlockConfig(id, 'alignment', e.target.value)}
-            >
-              <option value="left">Left</option>
-              <option value="center">Center</option>
-              <option value="right">Right</option>
-            </select>
-          </label>
-          <label className="flex items-center gap-1 text-xs text-gray-600">
-            <input
-              type="checkbox"
-              checked={config.bold || false}
-              onChange={e => updateBlockConfig(id, 'bold', e.target.checked)}
-            />
-            Bold
-          </label>
-        </div>
+        {/* Common options — hide for types that don't need them */}
+        {!['divider', 'edge_decoration', 'logo'].includes(type) && (
+          <div className="flex gap-2 flex-wrap">
+            <label className="flex items-center gap-1 text-xs text-gray-600">
+              Size:
+              <select
+                className="border rounded px-1 py-0.5 text-xs"
+                value={config.fontSize || 'medium'}
+                onChange={e => updateBlockConfig(id, 'fontSize', e.target.value)}
+              >
+                <option value="small">Small</option>
+                <option value="medium">Medium</option>
+                <option value="large">Large</option>
+              </select>
+            </label>
+            <label className="flex items-center gap-1 text-xs text-gray-600">
+              Align:
+              <select
+                className="border rounded px-1 py-0.5 text-xs"
+                value={config.alignment || 'left'}
+                onChange={e => updateBlockConfig(id, 'alignment', e.target.value)}
+              >
+                <option value="left">Left</option>
+                <option value="center">Center</option>
+                <option value="right">Right</option>
+              </select>
+            </label>
+            {type !== 'qr_code' && (
+              <label className="flex items-center gap-1 text-xs text-gray-600">
+                <input
+                  type="checkbox"
+                  checked={config.bold || false}
+                  onChange={e => updateBlockConfig(id, 'bold', e.target.checked)}
+                />
+                Bold
+              </label>
+            )}
+          </div>
+        )}
 
         {/* Type-specific options */}
         {type === 'custom_text' && (
@@ -306,25 +325,11 @@ export function ReceiptEditor() {
 
         {type === 'qr_code' && (
           <div className="space-y-1">
-            <label className="flex items-center gap-1 text-xs text-gray-600">
-              Content:
-              <select
-                className="border rounded px-1 py-0.5 text-xs"
-                value={config.qrContent || 'phone'}
-                onChange={e => updateBlockConfig(id, 'qrContent', e.target.value)}
-              >
-                <option value="phone">Phone Number</option>
-                <option value="url">URL</option>
-                <option value="custom">Custom</option>
-              </select>
-            </label>
-            {config.qrContent === 'custom' && (
-              <Input
-                placeholder="Custom QR value"
-                value={config.customValue || ''}
-                onChange={e => updateBlockConfig(id, 'customValue', e.target.value)}
-              />
-            )}
+            <Input
+              placeholder="Enter URL for QR code (e.g. https://instagram.com/myrestaurant)"
+              value={config.qrUrl || ''}
+              onChange={e => updateBlockConfig(id, 'qrUrl', e.target.value)}
+            />
           </div>
         )}
 
@@ -382,108 +387,114 @@ export function ReceiptEditor() {
                 </div>
               )
 
-            case 'restaurant_name':
+            case 'restaurant_name': {
+              const nameAlign = block.config.alignment || 'center'
+              const nameBold = block.config.bold ? 'font-weight:bold;' : ''
+              const nameSize = block.config.fontSize === 'large' ? '18px' : block.config.fontSize === 'small' ? '10px' : '12px'
               return (
-                <div key={block.id} className={`py-1 ${cls}`}>
+                <div key={block.id} style={{ textAlign: nameAlign as any, fontSize: nameSize, ...(nameBold ? { fontWeight: 'bold' } : {}) }} className="py-1">
                   {restaurantName}
+                  {restaurantAddress && <div style={{ textAlign: 'center', fontSize: '10px', color: '#666' }}>{restaurantAddress}</div>}
+                  {restaurantPhone && <div style={{ textAlign: 'center', fontSize: '10px', color: '#666' }}>{restaurantPhone}</div>}
                 </div>
               )
+            }
 
             case 'order_details':
               return (
-                <div key={block.id} className={`py-1 ${cls}`}>
-                  <div>Order #1 | Table 3 | 10:30 AM</div>
-                  {block.config.language === 'bilingual' && (
-                    <div dir="rtl" className="text-gray-500">
-                      {'طلب #1 | طاولة 3 | 10:30 ص'}
-                    </div>
-                  )}
+                <div key={block.id} className="py-1" style={{ fontSize: '11px' }}>
+                  <div>Order #1 | 10:30 AM</div>
+                  {block.config.language === 'bilingual' && <div dir="rtl" style={{ color: '#888' }}>{'طلب #1 | 10:30 ص'}</div>}
+                  <div>Table: 3</div>
+                  <div>At Table</div>
                 </div>
               )
 
-            case 'items_table':
+            case 'items_table': {
+              const itemSize = block.config.fontSize === 'large' ? '14px' : block.config.fontSize === 'small' ? '10px' : '12px'
+              const isBilingual = block.config.language === 'bilingual'
               return (
-                <div key={block.id} className={`py-1 ${fontSize(block.config.fontSize)}`}>
-                  <div className="flex justify-between"><span>2x Burger</span><span>500.00</span></div>
-                  <div className="flex justify-between"><span>1x Fries</span><span>200.00</span></div>
-                  <div className="flex justify-between"><span>2x Soda</span><span>300.00</span></div>
-                  {block.config.language === 'bilingual' && (
-                    <div className="mt-1 text-gray-400 text-[10px]" dir="rtl">
-                      <div className="flex justify-between"><span>2x {'برغر'}</span><span>500.00</span></div>
-                    </div>
-                  )}
+                <div key={block.id} className="py-1" style={{ fontSize: itemSize }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}><span>2x Burger</span><span>500 DA</span></div>
+                  {isBilingual && <div dir="rtl" style={{ fontSize: '10px', color: '#888', padding: '0 0 2px 0' }}>{'2x برغر'}</div>}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}><span>1x Fries</span><span>200 DA</span></div>
+                  {isBilingual && <div dir="rtl" style={{ fontSize: '10px', color: '#888', padding: '0 0 2px 0' }}>{'1x بطاطس'}</div>}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}><span>2x Soda</span><span>300 DA</span></div>
+                  {isBilingual && <div dir="rtl" style={{ fontSize: '10px', color: '#888', padding: '0 0 2px 0' }}>{'2x مشروب'}</div>}
                 </div>
               )
+            }
 
-            case 'total':
+            case 'total': {
+              const totalSize = block.config.fontSize === 'large' ? '18px' : block.config.fontSize === 'small' ? '10px' : '12px'
               return (
-                <div key={block.id} className={`py-1 flex justify-between ${cls}`}>
+                <div key={block.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: totalSize, fontWeight: block.config.bold ? 'bold' : 'normal', borderTop: '1px dashed currentColor', paddingTop: '6px', margin: '8px 0' }}>
                   <span>Total</span>
                   <span>1,000.00 DA</span>
                 </div>
               )
+            }
 
-            case 'qr_code':
+            case 'qr_code': {
+              const qrUrl = block.config.qrUrl || ''
+              const qrAlign = block.config.alignment || 'center'
+              const qrSize = block.config.fontSize === 'large' ? '120px' : block.config.fontSize === 'small' ? '60px' : '80px'
               return (
-                <div key={block.id} className="text-center py-2">
-                  <div className="inline-block border-2 border-gray-800 p-2"
-                    style={{ width: 64, height: 64 }}>
-                    <div className="w-full h-full bg-gray-200 flex items-center justify-center text-[8px] text-gray-500">
-                      QR
-                    </div>
-                  </div>
+                <div key={block.id} style={{ textAlign: qrAlign as any, margin: '8px 0' }}>
+                  {qrUrl ? (
+                    <QRPreview url={qrUrl} size={qrSize} />
+                  ) : (
+                    <span style={{ fontSize: '10px', color: '#888' }}>Enter a URL to generate QR code</span>
+                  )}
                 </div>
               )
+            }
 
-            case 'social_media':
+            case 'social_media': {
+              const platformEmoji: Record<string, string> = {
+                facebook: '\uD83D\uDCD8', instagram: '\uD83D\uDCF8', snapchat: '\uD83D\uDC7B', tiktok: '\uD83C\uDFB5',
+                twitter: '\uD83D\uDC26', x: '\uD83D\uDC26', youtube: '\uD83C\uDFAC', whatsapp: '\uD83D\uDCAC',
+                threads: '\uD83E\uDDF5', telegram: '\u2708\uFE0F', phone: '\uD83D\uDCDE'
+              }
               return (
-                <div key={block.id} className="py-1 text-center text-[10px] space-y-0.5">
+                <div key={block.id} style={{ textAlign: 'center', fontSize: '10px', margin: '6px 0' }}>
                   {socialMedia.length === 0 ? (
-                    <span className="text-gray-400">[Social Media]</span>
+                    <span style={{ color: '#888' }}>[Social Media]</span>
                   ) : socialMedia.map((s, i) => (
-                    <div key={i} className="text-gray-600">
-                      {PLATFORM_ICONS[s.platform] || s.platform}: {s.handle}
-                    </div>
+                    <div key={i}>{platformEmoji[s.platform] || '\uD83D\uDD17'} {s.handle}</div>
                   ))}
                 </div>
               )
+            }
 
-            case 'custom_text':
+            case 'custom_text': {
+              const ctAlign = block.config.alignment || 'center'
+              const ctSize = block.config.fontSize === 'large' ? '14px' : block.config.fontSize === 'small' ? '10px' : '12px'
               return (
-                <div key={block.id} className={`py-1 ${cls}`}>
+                <div key={block.id} style={{ textAlign: ctAlign as any, fontSize: ctSize, fontWeight: block.config.bold ? 'bold' : 'normal', margin: '6px 0' }}>
                   {block.config.text || '[Custom Text]'}
-                  {block.config.textAr && (
-                    <div dir="rtl" className="text-gray-600">{block.config.textAr}</div>
-                  )}
-                  {block.config.textFr && (
-                    <div className="text-gray-600">{block.config.textFr}</div>
-                  )}
+                  {block.config.textAr && <div dir="rtl" style={{ margin: '4px 0' }}>{block.config.textAr}</div>}
+                  {block.config.textFr && <div style={{ margin: '4px 0' }}>{block.config.textFr}</div>}
                 </div>
               )
+            }
 
             case 'divider':
               return (
-                <div key={block.id} className="py-1 text-center text-xs text-gray-400 overflow-hidden">
-                  {(!block.config.decorationType || block.config.decorationType === 'none')
-                    ? '--------------------------------'
-                    : block.config.decorationType === 'dots'
-                      ? '................................'
-                      : block.config.decorationType === 'stars'
-                        ? '* * * * * * * * * * * * * * * *'
-                        : '\uD83C\uDF54 \uD83C\uDF5F \uD83C\uDF55 \uD83C\uDF54 \uD83C\uDF5F \uD83C\uDF55 \uD83C\uDF54 \uD83C\uDF5F'}
-                </div>
+                <div key={block.id} style={{ borderTop: '1px dashed currentColor', margin: '8px 0' }} />
               )
 
             case 'edge_decoration': {
-              const deco = block.config.decorationType === 'stars' ? '\u2B50'
-                : block.config.decorationType === 'dots' ? '\u25CF'
-                : block.config.decorationType === 'fire' ? '\uD83D\uDD25'
-                : block.config.decorationType === 'hearts' ? '\u2764\uFE0F'
-                : '\uD83C\uDF54'
-              const line = Array(12).fill(deco).join(' ')
+              const decoMap: Record<string, string> = {
+                'food-emoji': '\uD83C\uDF54 \uD83C\uDF39 \uD83C\uDF54 \uD83C\uDF5F \uD83C\uDF55 \uD83C\uDF2E \uD83E\uDD64 \uD83C\uDF57 \uD83C\uDF54 \uD83C\uDF39',
+                'stars': '\u2B50 \u2728 \u2B50 \u2728 \u2B50 \u2728 \u2B50 \u2728 \u2B50 \u2728',
+                'dots': '\u25CF \u25CB \u25CF \u25CB \u25CF \u25CB \u25CF \u25CB \u25CF \u25CB',
+                'fire': '\uD83D\uDD25 \uD83D\uDD25 \uD83D\uDD25 \uD83D\uDD25 \uD83D\uDD25 \uD83D\uDD25 \uD83D\uDD25 \uD83D\uDD25 \uD83D\uDD25 \uD83D\uDD25',
+                'hearts': '\u2764\uFE0F \uD83E\uDDE1 \uD83D\uDC9B \uD83D\uDC9A \uD83D\uDC99 \uD83D\uDC9C \u2764\uFE0F \uD83E\uDDE1 \uD83D\uDC9B \uD83D\uDC9A'
+              }
               return (
-                <div key={block.id} className="py-1 text-center text-[10px] overflow-hidden">
-                  {line}
+                <div key={block.id} style={{ textAlign: 'center', fontSize: '10px', margin: '6px 0', letterSpacing: '2px' }}>
+                  {decoMap[block.config.decorationType || 'food-emoji'] || decoMap['food-emoji']}
                 </div>
               )
             }

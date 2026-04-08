@@ -1919,6 +1919,23 @@ export function OrderScreen() {
                                   )}
                                 </div>
                                 <button
+                                  onClick={async (e) => {
+                                    e.stopPropagation()
+                                    const full = await window.api.orders.getById(order.id)
+                                    if (full) {
+                                      store.loadOrderForEdit(full)
+                                      setShowHistory(false)
+                                      setSelectedOrder(null)
+                                    }
+                                  }}
+                                  className={`flex-1 flex items-center justify-center gap-1.5 font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 transition-colors ${
+                                    isTouch ? 'px-3 py-3 text-sm' : 'px-2 py-1.5 text-xs'
+                                  }`}
+                                >
+                                  <Pencil className={isTouch ? 'h-5 w-5' : 'h-3.5 w-3.5'} />
+                                  Edit
+                                </button>
+                                <button
                                   onClick={(e) => { e.stopPropagation(); setCancelConfirm(order) }}
                                   className={`flex-1 flex items-center justify-center gap-1.5 font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 active:bg-red-800 transition-colors ${
                                     isTouch ? 'px-3 py-3 text-sm' : 'px-2 py-1.5 text-xs'

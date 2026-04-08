@@ -253,13 +253,11 @@ export function AmbianceScreen() {
 
     flashSaved()
 
-    // Sync non-default profiles to cloud
-    if (activeProfile !== 'default' && window.api.cloud.syncDisplay) {
+    // Sync to cloud after every change
+    if (window.api.cloud?.syncDisplay) {
       try {
         await window.api.cloud.syncDisplay(activeProfile)
-      } catch {
-        /* ignore */
-      }
+      } catch { /* ignore */ }
     }
   }
 
@@ -434,7 +432,7 @@ export function AmbianceScreen() {
                 <p className="text-sm text-gray-400">No cloud short code available for this profile.</p>
               )}
 
-              {tabletRunning && (
+              {tabletRunning && activeProfile === 'default' && (
                 <div className="bg-green-50 rounded-lg p-3 border border-green-200">
                   <p className="text-xs font-medium text-green-700 mb-1">Local Network URL</p>
                   <div className="flex items-center gap-2">
