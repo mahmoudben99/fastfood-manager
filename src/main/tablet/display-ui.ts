@@ -632,7 +632,7 @@ export function getDisplayHTML(lang: string): string {
       if (!url) return null;
       var listM = url.match(/[?&]list=([a-zA-Z0-9_-]+)/);
       if (listM) return { type: 'list', id: listM[1] };
-      var vidM = url.match(/(?:youtu\.be\/|[?&]v=|embed\/)([a-zA-Z0-9_-]{11})/);
+      var vidM = url.match(new RegExp('(?:youtu\\.be\\/|[?&]v=|embed\\/)([a-zA-Z0-9_-]{11})'));
       if (vidM) return { type: 'video', id: vidM[1] };
       return null;
     }
@@ -995,17 +995,21 @@ export function getDisplayHTML(lang: string): string {
 
     /* ── Panel transition ── */
     function showPanel(idx) {
-      if (panelDefs.length === 0) return;
+      if (panelDefs.length === 0) {
+        console.warn('[Display] No panels to show');
+        return;
+      }
       idx = idx % panelDefs.length;
 
       var stage = document.getElementById('panelStage');
+      if (!stage) { console.error('[Display] panelStage not found'); return; }
       var current = stage.querySelector('.panel.active');
       var def = panelDefs[idx];
 
       // Leave previous
       if (currentPanelIdx >= 0 && currentPanelIdx < panelDefs.length) {
         var prev = panelDefs[currentPanelIdx];
-        if (prev.onLeave) prev.onLeave();
+        if (prev.onLeave) try { prev.onLeave(); } catch(e) { console.error('[Display] onLeave error:', e); }
       }
 
       // Fade out current
@@ -1013,16 +1017,23 @@ export function getDisplayHTML(lang: string): string {
 
       // After fade-out (1s transition), swap content
       setTimeout(function() {
-        stage.innerHTML = def.build();
+        try {
+          var html = def.build();
+          stage.innerHTML = html;
+        } catch(e) {
+          console.error('[Display] Panel build error (' + def.id + '):', e);
+          stage.innerHTML = '<div class="panel active" style="color:red;font-size:24px;">Panel Error: ' + def.id + ' - ' + e.message + '</div>';
+          return;
+        }
         var panel = stage.querySelector('.panel');
-        if (!panel) return;
+        if (!panel) { console.error('[Display] No .panel element in built HTML'); return; }
 
         // Trigger reflow then fade in
         void panel.offsetWidth;
         panel.classList.add('active');
 
         currentPanelIdx = idx;
-        if (def.onEnter) def.onEnter();
+        if (def.onEnter) try { def.onEnter(); } catch(e) { console.error('[Display] onEnter error:', e); }
 
         // Schedule next
         clearTimeout(panelTimeout);
@@ -1034,9 +1045,10 @@ export function getDisplayHTML(lang: string): string {
 
     function startLoop() {
       clearTimeout(panelTimeout);
-      buildPanels();
+      try { buildPanels(); } catch(e) { console.error('[Display] buildPanels error:', e); }
+      console.log('[Display] startLoop: ' + panelDefs.length + ' panels built');
       if (panelDefs.length === 0) {
-        document.getElementById('panelStage').innerHTML = '';
+        document.getElementById('panelStage').innerHTML = '<div class="panel active" style="font-size:20px;color:var(--text);">No panels to display. Enable panels in Ambiance Screen settings.</div>';
         return;
       }
       currentPanelIdx = -1;
@@ -1047,6 +1059,7 @@ export function getDisplayHTML(lang: string): string {
        SSE
     ═══════════════════════════════════ */
     function handleSSE(data) {
+      console.log('[Display] SSE event:', data.type, data.name ? 'name=' + data.name : '');
       switch (data.type) {
         case 'info':
           state.name = data.name || '';

@@ -116,8 +116,10 @@ function getReceiptHTML(order: any, settings: Record<string, string>, type: 'rec
   if (type === 'receipt') {
     try {
       const template = receiptTemplatesRepo.getActiveTemplate()
+      console.log('[Printer] Active template:', template ? `id=${template.id} name=${template.name} blocks_len=${template.blocks?.length}` : 'NONE')
       if (template) {
         const customHTML = buildFromTemplate(template, order, settings)
+        console.log('[Printer] Custom HTML generated:', customHTML ? 'YES (' + customHTML.length + ' chars)' : 'NULL')
         if (customHTML) return customHTML
       }
     } catch { /* fall through to default */ }
