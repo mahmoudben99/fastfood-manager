@@ -1146,11 +1146,11 @@ export function SettingsPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-mono text-gray-800 flex-1 bg-white rounded px-3 py-2 border border-gray-200">
-                      fastfood-manager.vercel.app/o/{shortCodes.owner}
+                      fastfood-manager.vercel.app/{shortCodes.owner}
                     </span>
                     <button
                       onClick={() => {
-                        navigator.clipboard.writeText(`https://fastfood-manager.vercel.app/o/${shortCodes.owner}`)
+                        navigator.clipboard.writeText(`https://fastfood-manager.vercel.app/${shortCodes.owner}`)
                         setCopiedCode('owner')
                         setTimeout(() => setCopiedCode(null), 2000)
                       }}
@@ -1273,11 +1273,11 @@ export function SettingsPage() {
                   <h4 className="font-medium text-sm mb-2">Ordering Link</h4>
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-mono text-gray-800 flex-1 bg-white rounded px-3 py-2 border border-gray-200">
-                      fastfood-manager.vercel.app/r/{shortCodes.order}
+                      fastfood-manager.vercel.app/{shortCodes.order}
                     </span>
                     <button
                       onClick={() => {
-                        navigator.clipboard.writeText(`https://fastfood-manager.vercel.app/r/${shortCodes.order}`)
+                        navigator.clipboard.writeText(`https://fastfood-manager.vercel.app/${shortCodes.order}`)
                         setCopiedCode('order')
                         setTimeout(() => setCopiedCode(null), 2000)
                       }}

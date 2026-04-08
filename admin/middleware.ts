@@ -16,6 +16,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/tv/') ||
     pathname.startsWith('/api/tv-') ||
     pathname.startsWith('/r/') ||
+    pathname.startsWith('/o/') ||
     pathname.startsWith('/api/remote-order') ||
     /^\/\d{4}$/.test(pathname)
   ) {

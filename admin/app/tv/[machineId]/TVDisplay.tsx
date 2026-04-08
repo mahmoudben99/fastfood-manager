@@ -125,8 +125,39 @@ export function TVDisplay({ machineId, profile, initialSettings }: TVDisplayProp
   const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const ytRef = useRef<HTMLIFrameElement | null>(null)
 
-  const s = settings
-  const gradientIdx = Math.max(0, Math.min(19, s.gradientPreset ?? 0))
+  // Normalize settings keys — cloud sync uses display_ prefix, component expects short keys
+  const raw = settings as any
+  const s: any = {
+    ...raw,
+    gradientPreset: raw.gradientPreset ?? raw.display_gradient_preset ?? 0,
+    fontFamily: raw.fontFamily || raw.display_font_family || 'Inter',
+    textColor: raw.textColor || raw.display_text_color || '#ffffff',
+    accentColor: raw.accentColor || raw.display_accent_color || '#f97316',
+    textScale: raw.textScale || raw.display_text_scale || 'medium',
+    logoScale: raw.logoScale ?? raw.display_logo_scale ?? 1,
+    showName: raw.showName ?? raw.display_show_name ?? true,
+    showMenu: raw.showMenu ?? raw.display_show_menu ?? false,
+    welcomeMode: raw.welcomeMode || raw.display_welcome_mode || 'animated',
+    welcomeText: raw.welcomeText || raw.display_welcome_text || '',
+    youtubeUrl: raw.youtubeUrl || raw.display_youtube_url || '',
+    name: raw.name || raw.restaurant_name || '',
+    logo: raw.logo || raw._logo_base64 || '',
+    phone: raw.phone || raw.restaurant_phone || '',
+    currency: raw.currency || raw.currency_symbol || 'DA',
+    panelWelcome: raw.panelWelcome ?? (raw.display_panel_welcome !== 'false'),
+    panelSocial: raw.panelSocial ?? (raw.display_panel_social !== 'false'),
+    panelPromos: raw.panelPromos ?? (raw.display_panel_promos !== 'false'),
+    panelSlideshow: raw.panelSlideshow ?? (raw.display_panel_slideshow !== 'false'),
+    panelOrders: raw.panelOrders ?? (raw.display_panel_orders !== 'false'),
+    panelMenu: raw.panelMenu ?? (raw.display_panel_menu !== 'false'),
+  }
+  // Parse promos/packs from JSON strings if needed
+  if (typeof s._promos === 'string') try { s.promos = JSON.parse(s._promos) } catch {}
+  if (typeof s._packs === 'string') try { s.packs = JSON.parse(s._packs) } catch {}
+  if (typeof s._slideshow_images === 'string') try { s.slideshowImages = JSON.parse(s._slideshow_images) } catch {}
+  if (typeof s.social_media === 'string') try { s.social = JSON.parse(s.social_media) } catch {}
+
+  const gradientIdx = Math.max(0, Math.min(19, Number(s.gradientPreset) || 0))
   const isLightGradient = gradientIdx >= 15
   const textColor = isLightGradient ? '#1a1a1a' : (s.textColor || '#ffffff')
   const accentColor = s.accentColor || '#f97316'
@@ -156,12 +187,12 @@ export function TVDisplay({ machineId, profile, initialSettings }: TVDisplayProp
     }
   }
   if (allPromos.length > 0 && s.panelPromos !== false) panels.push({ id: 'promos', duration: 10000 })
-  const slides = (s.slideshowImages || []).map(img => {
+  const slides = (s.slideshowImages || []).map((img: any) => {
     if (typeof img === 'string') return { src: img.startsWith('data:') || img.startsWith('http') ? img : `data:image/png;base64,${img}`, caption: '' }
     return { src: img.src?.startsWith('data:') || img.src?.startsWith('http') ? img.src : `data:image/png;base64,${img.src}`, caption: img.caption || '' }
   })
   if (slides.length > 0 && s.panelSlideshow !== false) {
-    slides.forEach((_, i) => panels.push({ id: `slide-${i}`, duration: 8000 }))
+    slides.forEach((_: any, i: number) => panels.push({ id: `slide-${i}`, duration: 8000 }))
   }
   if (orders.length > 0 && s.panelOrders !== false) panels.push({ id: 'orders', duration: 6000 })
 
@@ -380,7 +411,7 @@ export function TVDisplay({ machineId, profile, initialSettings }: TVDisplayProp
             Connect With Us
           </div>
           <ul style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, listStyle: 'none', padding: 0 }}>
-            {(s.social || []).map((soc, i) => (
+            {(s.social || []).map((soc: any, i: number) => (
               <li
                 key={i}
                 style={{
@@ -416,7 +447,7 @@ export function TVDisplay({ machineId, profile, initialSettings }: TVDisplayProp
             Special Offers
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, justifyContent: 'center', maxWidth: 1100, padding: '0 24px' }}>
-            {allPromos.map((pr, i) => (
+            {allPromos.map((pr: any, i: number) => (
               <div
                 key={i}
                 style={{
@@ -441,7 +472,7 @@ export function TVDisplay({ machineId, profile, initialSettings }: TVDisplayProp
                 <div style={{ fontSize: 'clamp(1.5rem, 3vw, 2.2rem)', fontWeight: 700, color: effectiveAccent }}>{pr.value}</div>
                 {pr.items.length > 0 && (
                   <div style={{ marginTop: 10, fontSize: 'clamp(0.7rem, 1.2vw, 0.85rem)', fontWeight: 400, color: textColor, opacity: 0.7, lineHeight: 1.5 }}>
-                    {pr.items.map(it => `${it.quantity}x ${it.name}`).join(' + ')}
+                    {pr.items.map((it: any) => `${it.quantity}x ${it.name}`).join(' + ')}
                   </div>
                 )}
               </div>
