@@ -75,10 +75,8 @@ export function OrderScreen() {
   const [todayOrders, setTodayOrders] = useState<OrderData[]>([])
   const [selectedOrder, setSelectedOrder] = useState<OrderData | null>(null)
 
-  // Edit state
-  const [editMode, setEditMode] = useState(false)
-  const [editItems, setEditItems] = useState<{ menu_item_id: number; menu_item_name: string; quantity: number; unit_price: number; notes: string | null; worker_id: number | null }[]>([])
-  const [savingEdit, setSavingEdit] = useState(false)
+  // Edit state (updating order via main cart)
+  const [updatingOrder, setUpdatingOrder] = useState(false)
 
   // Cancel confirmation
   const [cancelConfirm, setCancelConfirm] = useState<OrderData | null>(null)
@@ -237,7 +235,7 @@ export function OrderScreen() {
       if (priceModal) { setPriceModal(null); return }
       if (orderSuccess) { setOrderSuccess(null); return }
       if (cancelConfirm) { setCancelConfirm(null); return }
-      if (showHistory) { setShowHistory(false); setSelectedOrder(null); setEditMode(false); setHistorySearch(''); return }
+      if (showHistory) { setShowHistory(false); setSelectedOrder(null); setHistorySearch(''); return }
       if (store.items.length > 0) { store.clearOrder(); pushCartToDisplay(); return }
       return
     }
@@ -313,7 +311,6 @@ export function OrderScreen() {
     loadTodayOrders()
     setShowHistory(true)
     setSelectedOrder(null)
-    setEditMode(false)
     setHistorySearch('')
     setPrintDropdown(null)
     setTimeout(() => historySearchRef.current?.focus(), 100)
@@ -322,7 +319,6 @@ export function OrderScreen() {
   const viewOrderDetails = async (order: OrderData) => {
     const full = await window.api.orders.getById(order.id)
     setSelectedOrder(full)
-    setEditMode(false)
     // Load workers for this order
     const workers = await window.api.printer.getOrderWorkers(order.id)
     setOrderWorkers(workers)
@@ -641,6 +637,37 @@ export function OrderScreen() {
       return
     }
 
+    // --- UPDATE existing order ---
+    if (store.editingOrderId) {
+      setUpdatingOrder(true)
+      try {
+        await window.api.orders.updateItems(
+          store.editingOrderId,
+          store.items.map((item) => ({
+            menu_item_id: item.menu_item_id,
+            quantity: item.quantity,
+            notes: item.notes || undefined,
+            worker_id: item.worker_id || undefined,
+            unit_price: item.price
+          }))
+        )
+        store.clearOrder()
+        loadOngoingCount()
+        // Reload today's orders so the list is fresh if they open it again
+        loadTodayOrders()
+        try {
+          window.api.tablet.pushDisplayUpdate({ type: 'idle' })
+          pushQueueToDisplay()
+        } catch { /* display not running */ }
+      } catch (err) {
+        console.error('Failed to update order:', err)
+      } finally {
+        setUpdatingOrder(false)
+      }
+      return
+    }
+
+    // --- CREATE new order ---
     setPlacing(true)
     try {
       const currentDiscount = store.getDiscount()
@@ -756,60 +783,24 @@ export function OrderScreen() {
     }
   }
 
-  // --- Edit helpers ---
+  // --- Edit: load order into main cart ---
   const startEdit = () => {
     if (!selectedOrder?.items) return
-    setEditItems(
-      selectedOrder.items.map((item) => ({
-        menu_item_id: item.menu_item_id,
-        menu_item_name: item.menu_item_name,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        notes: item.notes,
-        worker_id: item.worker_id
-      }))
-    )
-    setEditMode(true)
+    // Load order data into the main cart
+    store.loadOrderForEdit(selectedOrder)
+    // Close the history modal
+    setShowHistory(false)
+    setSelectedOrder(null)
+    setHistorySearch('')
+    setKeyboardTarget(null)
+    // Push cart to customer display
+    setTimeout(() => pushCartToDisplay(), 100)
   }
 
-  const updateEditQty = (index: number, qty: number) => {
-    if (qty < 1) {
-      setEditItems(editItems.filter((_, i) => i !== index))
-      return
-    }
-    const updated = [...editItems]
-    updated[index] = { ...updated[index], quantity: qty }
-    setEditItems(updated)
+  const cancelEdit = () => {
+    store.clearOrder()
+    pushCartToDisplay()
   }
-
-  const removeEditItem = (index: number) => {
-    setEditItems(editItems.filter((_, i) => i !== index))
-  }
-
-  const saveEdit = async () => {
-    if (!selectedOrder || editItems.length === 0) return
-    setSavingEdit(true)
-    try {
-      const updated = await window.api.orders.updateItems(
-        selectedOrder.id,
-        editItems.map((item) => ({
-          menu_item_id: item.menu_item_id,
-          quantity: item.quantity,
-          notes: item.notes || undefined,
-          worker_id: item.worker_id || undefined
-        }))
-      )
-      setSelectedOrder(updated)
-      setEditMode(false)
-      await loadTodayOrders()
-    } catch (err) {
-      console.error('Failed to update order:', err)
-    } finally {
-      setSavingEdit(false)
-    }
-  }
-
-  const editTotal = editItems.reduce((sum, item) => sum + item.unit_price * item.quantity, 0)
 
   const subtotal = store.getSubtotal()
   const discount = store.getDiscount()
@@ -1260,12 +1251,27 @@ export function OrderScreen() {
       {/* RIGHT: Cart */}
       <div className={`${isTouch ? 'w-96 lg:w-[28rem]' : 'w-72 md:w-80 lg:w-96'} bg-white border-s flex flex-col shrink-0`}>
         <div className={`${isTouch ? 'px-4 py-3' : 'px-2 sm:px-4 py-2 sm:py-3'} border-b`}>
+          {/* Editing banner */}
+          {store.editingOrderId && (
+            <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 mb-2">
+              <span className="text-sm font-bold text-blue-700">
+                Editing Order #{store.editingOrderId}
+              </span>
+              <button
+                onClick={cancelEdit}
+                className="flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded"
+              >
+                <X className="h-3.5 w-3.5" />
+                Cancel Edit
+              </button>
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <h2 className={`${isTouch ? 'text-lg' : 'text-sm sm:text-base'} font-bold text-gray-900`}>{t('orders.cart')}</h2>
             {store.items.length > 0 && (
-              <Button variant="ghost" size="sm" onClick={store.clearOrder}>
+              <Button variant="ghost" size="sm" onClick={store.editingOrderId ? cancelEdit : store.clearOrder}>
                 <Trash2 className="h-3 sm:h-4 w-3 sm:w-4" />
-                <span className="text-xs sm:text-sm">{t('orders.clearCart')}</span>
+                <span className="text-xs sm:text-sm">{store.editingOrderId ? 'Cancel Edit' : t('orders.clearCart')}</span>
               </Button>
             )}
           </div>
@@ -1428,15 +1434,15 @@ export function OrderScreen() {
 
           <Button
             onClick={handlePlaceOrder}
-            loading={placing}
+            loading={placing || updatingOrder}
             disabled={
               store.items.length === 0 ||
               (store.orderType === 'delivery' && !store.customerPhone.trim())
             }
-            className={`w-full ${isTouch ? 'text-lg py-4' : 'text-sm sm:text-base'}`}
+            className={`w-full ${isTouch ? 'text-lg py-4' : 'text-sm sm:text-base'} ${store.editingOrderId ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
             size="lg"
           >
-            {t('orders.placeOrder')}{!isTouch && ' (F2)'}
+            {store.editingOrderId ? 'Update Order' : t('orders.placeOrder')}{!isTouch && !store.editingOrderId && ' (F2)'}
           </Button>
         </div>
       </div>
@@ -1631,11 +1637,11 @@ export function OrderScreen() {
 
       {/* Order History Modal */}
       {showHistory && (
-        <Modal isOpen onClose={() => { setShowHistory(false); setSelectedOrder(null); setEditMode(false); setHistorySearch(''); setKeyboardTarget(null) }} title={t('orders.today')} size="xl">
+        <Modal isOpen onClose={() => { setShowHistory(false); setSelectedOrder(null); setHistorySearch(''); setKeyboardTarget(null) }} title={t('orders.today')} size="xl">
           {selectedOrder ? (
             <div>
               <button
-                onClick={() => { setSelectedOrder(null); setEditMode(false) }}
+                onClick={() => { setSelectedOrder(null) }}
                 className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-4"
               >
                 <X className="h-4 w-4" />
@@ -1658,101 +1664,7 @@ export function OrderScreen() {
                 </span>
               </div>
 
-              {/* Edit mode */}
-              {editMode ? (
-                <div>
-                  <div className="space-y-2 mb-4">
-                    {editItems.map((item, i) => (
-                      <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div className="flex-1 min-w-0">
-                          <span className="text-sm font-medium text-gray-900">{item.menu_item_name}</span>
-                          <p className="text-xs text-gray-500">{formatCurrency(item.unit_price)} each</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => updateEditQty(i, item.quantity - 1)}
-                            className="w-7 h-7 rounded-lg bg-white border flex items-center justify-center hover:bg-gray-100"
-                          >
-                            <Minus className="h-3 w-3" />
-                          </button>
-                          <span className="text-sm font-medium w-6 text-center">{item.quantity}</span>
-                          <button
-                            onClick={() => updateEditQty(i, item.quantity + 1)}
-                            className="w-7 h-7 rounded-lg bg-white border flex items-center justify-center hover:bg-gray-100"
-                          >
-                            <Plus className="h-3 w-3" />
-                          </button>
-                          <button
-                            onClick={() => removeEditItem(i)}
-                            className="p-1 hover:bg-red-100 rounded text-gray-400 hover:text-red-500 ms-1"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Add item to order */}
-                  <div className="mb-3">
-                    <div className="relative">
-                      <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
-                      <input
-                        placeholder="Search to add item..."
-                        className="w-full ps-9 pe-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                        onChange={(e) => {
-                          const q = e.target.value.toLowerCase()
-                          if (q.length < 2) return
-                          const filtered = menuItems.filter(m =>
-                            m.name.toLowerCase().includes(q) ||
-                            (m.name_fr && m.name_fr.toLowerCase().includes(q)) ||
-                            (m.name_ar && m.name_ar.includes(q))
-                          ).slice(0, 5)
-                          // Show results in a dropdown
-                          const dropdown = document.getElementById('edit-add-dropdown')
-                          if (!dropdown) return
-                          if (filtered.length === 0 || q.length < 2) { dropdown.innerHTML = ''; dropdown.style.display = 'none'; return }
-                          dropdown.style.display = 'block'
-                          dropdown.innerHTML = filtered.map(m =>
-                            `<button data-id="${m.id}" data-name="${getItemName(m)}" data-price="${m.price}" class="w-full text-left px-3 py-2 text-sm hover:bg-orange-50 flex justify-between"><span>${getItemName(m)}</span><span class="text-orange-600 font-medium">${formatCurrency(m.price)}</span></button>`
-                          ).join('')
-                          dropdown.querySelectorAll('button').forEach(btn => {
-                            btn.addEventListener('click', () => {
-                              const id = Number(btn.getAttribute('data-id'))
-                              const name = btn.getAttribute('data-name') || ''
-                              const price = Number(btn.getAttribute('data-price'))
-                              const existing = editItems.findIndex(ei => ei.menu_item_id === id)
-                              if (existing >= 0) {
-                                updateEditQty(existing, editItems[existing].quantity + 1)
-                              } else {
-                                setEditItems([...editItems, { menu_item_id: id, menu_item_name: name, quantity: 1, unit_price: price, notes: null, worker_id: null }])
-                              }
-                              dropdown.style.display = 'none'
-                              ;(e.target as HTMLInputElement).value = ''
-                            })
-                          })
-                        }}
-                      />
-                      <div id="edit-add-dropdown" className="absolute top-full left-0 right-0 bg-white border rounded-lg shadow-lg z-10 overflow-hidden" style={{ display: 'none' }} />
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between items-center p-3 bg-orange-50 rounded-lg mb-4">
-                    <span className="font-bold text-gray-900">{t('orders.total')}</span>
-                    <span className="font-bold text-lg text-orange-600">{formatCurrency(editTotal)}</span>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button variant="secondary" onClick={() => setEditMode(false)} className="flex-1">
-                      {t('common.cancel')}
-                    </Button>
-                    <Button onClick={saveEdit} loading={savingEdit} disabled={editItems.length === 0} className="flex-1">
-                      {t('common.save')}
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div>
+              <div>
                   {/* View mode */}
                   <div className="space-y-2 mb-4">
                     {selectedOrder.items?.map((item, i) => (
@@ -1842,7 +1754,6 @@ export function OrderScreen() {
                     </div>
                   )}
                 </div>
-              )}
             </div>
           ) : (
             <div className="max-h-[80vh] overflow-y-auto space-y-6">
@@ -1897,19 +1808,19 @@ export function OrderScreen() {
                               key={order.id}
                               className={`rounded-lg border-2 transition-all ${
                                 overdue
-                                  ? 'bg-red-50 border-red-400 animate-pulse'
-                                  : 'bg-blue-50 border-blue-200'
+                                  ? 'bg-red-950/30 border-red-400 animate-pulse'
+                                  : 'bg-gray-800/50 border-gray-600'
                               }`}
                             >
                               <button
                                 onClick={() => viewOrderDetails(order)}
                                 className={`w-full flex items-center justify-between p-3 text-start hover:shadow-md transition-all rounded-t-lg ${
-                                  overdue ? 'hover:bg-red-100' : 'hover:bg-blue-100'
+                                  overdue ? 'hover:bg-red-950/50' : 'hover:bg-gray-700/50'
                                 }`}
                               >
                                 <div className="flex items-center gap-3">
                                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm ${
-                                    overdue ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-600'
+                                    overdue ? 'bg-red-900/50 text-red-400' : 'bg-orange-900/30 text-orange-400'
                                   }`}>
                                     #{order.daily_number}
                                   </div>

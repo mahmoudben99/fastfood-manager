@@ -55,8 +55,8 @@ function getDisplayInfoPayload(): Record<string, unknown> {
   // YouTube URL
   const youtubeUrl = settingsRepo.get('display_youtube_url') || ''
 
-  // Theme color
-  const themeColor = settingsRepo.get('display_theme_color') || '#f97316'
+  // Theme color (legacy key) — fall back to accent_color
+  const themeColor = settingsRepo.get('display_accent_color') || settingsRepo.get('display_theme_color') || '#f97316'
 
   // Slideshow images (stored as JSON array of file paths)
   let slideshowImages: string[] = []

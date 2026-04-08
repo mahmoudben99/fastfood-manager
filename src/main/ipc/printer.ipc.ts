@@ -25,7 +25,7 @@ function getLogoHTML(settings: Record<string, string>): string {
     const data = readFileSync(logoPath)
     const ext = logoPath.toLowerCase().endsWith('.png') ? 'png' : 'jpeg'
     const base64 = data.toString('base64')
-    return `<div class="center"><img src="data:image/${ext};base64,${base64}" style="max-width:80%; max-height:120px; margin:0 auto 8px auto;" /></div>`
+    return `<div style="text-align:center;"><img src="data:image/${ext};base64,${base64}" style="display:block;margin:0 auto 8px auto;max-width:70%;max-height:100px;" /></div>`
   } catch {
     return `<div class="center bold big">${settings.restaurant_name || 'Restaurant'}</div>`
   }
@@ -105,7 +105,7 @@ function buildFromTemplate(template: any, order: any, settings: Record<string, s
       }
     }
 
-    return `<!DOCTYPE html><html dir="${isRTL ? 'rtl' : 'ltr'}"><head><meta charset="utf-8"><style>*{margin:0;padding:0;box-sizing:border-box;}body{width:${maxWidth};font-family:monospace;padding:8px;font-size:12px;}</style></head><body>${body}</body></html>`
+    return `<!DOCTYPE html><html dir="${isRTL ? 'rtl' : 'ltr'}"><head><meta charset="utf-8"><style>*{margin:0;padding:0;box-sizing:border-box;}body{width:${maxWidth};font-family:'Courier New',monospace;padding:8px;font-size:12px;text-align:center;}img{display:block;margin:0 auto 8px auto;max-width:70%;max-height:100px;}</style></head><body>${body}</body></html>`
   } catch {
     return null
   }

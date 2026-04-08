@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, Printer, AlertCircle, RefreshCw, LogOut, Upload, Image, ShieldCheck, ShieldX, Clock, Copy, Plus, X, Palette } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAppStore } from '../../store/appStore'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
@@ -40,7 +40,9 @@ export function SettingsPage() {
   const navigate = useNavigate()
   const { setLanguage, setSetupComplete, setActivated, loadSettings, inputMode, activationType, trialStatus, trialExpiresAt } = useAppStore()
   const isTouch = inputMode === 'touchscreen'
-  const [tab, setTab] = useState<'general' | 'schedule' | 'printer' | 'ownerLink' | 'remoteOrder' | 'security' | 'data'>('general')
+  const [searchParams] = useSearchParams()
+  const initialTab = (searchParams.get('tab') as any) || 'general'
+  const [tab, setTab] = useState<'general' | 'schedule' | 'printer' | 'ownerLink' | 'remoteOrder' | 'security' | 'data'>(initialTab)
   const [saved, setSaved] = useState(false)
 
   // General

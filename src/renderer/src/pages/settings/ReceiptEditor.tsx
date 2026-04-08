@@ -502,7 +502,7 @@ export function ReceiptEditor() {
       <div className="flex items-center justify-between p-4 border-b">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate('/admin/settings')}
+            onClick={() => navigate('/admin/settings?tab=printer')}
             className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
             title="Back to Settings"
           >

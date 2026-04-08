@@ -32,6 +32,7 @@ interface OrderState {
   activePromos: ActivePromo[]
   discountAmount: number
   discountDetails: string
+  editingOrderId: number | null
 
   addItem: (item: Omit<CartItem, 'quantity' | 'notes' | 'worker_id'>) => Promise<void>
   removeItem: (index: number) => void
@@ -44,6 +45,8 @@ interface OrderState {
   setCustomerPhone: (phone: string) => void
   setCustomerName: (name: string) => void
   setNotes: (notes: string) => void
+  setEditingOrder: (orderId: number | null) => void
+  loadOrderForEdit: (order: any) => void
   loadActivePromos: () => Promise<void>
   getSubtotal: () => number
   getDiscount: () => number
@@ -61,6 +64,7 @@ export const useOrderStore = create<OrderState>((set, get) => ({
   activePromos: [],
   discountAmount: 0,
   discountDetails: '',
+  editingOrderId: null,
 
   addItem: async (item) => {
     const { items } = get()
@@ -127,6 +131,31 @@ export const useOrderStore = create<OrderState>((set, get) => ({
   setCustomerPhone: (phone) => set({ customerPhone: phone }),
   setCustomerName: (name) => set({ customerName: name }),
   setNotes: (notes) => set({ notes }),
+  setEditingOrder: (orderId) => set({ editingOrderId: orderId }),
+
+  loadOrderForEdit: (order) => {
+    const items: CartItem[] = (order.items || []).map((item: any) => ({
+      menu_item_id: item.menu_item_id,
+      name: item.menu_item_name || item.name || '',
+      name_ar: item.name_ar || null,
+      name_fr: item.name_fr || null,
+      price: item.unit_price ?? item.price ?? 0,
+      quantity: item.quantity,
+      notes: item.notes || '',
+      image_path: item.image_path || null,
+      category_id: item.category_id || 0,
+      worker_id: item.worker_id || null
+    }))
+    set({
+      items,
+      editingOrderId: order.id,
+      orderType: (order.order_type as 'local' | 'takeout' | 'delivery') || 'local',
+      tableNumber: order.table_number || '',
+      customerPhone: order.customer_phone || '',
+      customerName: order.customer_name || '',
+      notes: order.notes || ''
+    })
+  },
 
   loadActivePromos: async () => {
     try {
@@ -184,6 +213,7 @@ export const useOrderStore = create<OrderState>((set, get) => ({
       customerName: '',
       notes: '',
       discountAmount: 0,
-      discountDetails: ''
+      discountDetails: '',
+      editingOrderId: null
     })
 }))
