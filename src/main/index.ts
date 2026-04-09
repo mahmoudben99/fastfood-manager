@@ -15,6 +15,7 @@ import { startTabletServer } from './tablet/server'
 import { startAnalyticsSync, stopAnalyticsSync } from './sync/analytics-sync'
 import { syncAdminPassword } from './sync/owner-sync'
 import { startCloudSync, stopCloudSync } from './sync/cloud-sync'
+import { startRemoteOrderListener, stopRemoteOrderListener } from './sync/remote-order-listener'
 
 // Enhanced logging function
 function log(message: string, isError = false): void {
@@ -504,6 +505,11 @@ app.whenReady().then(async () => {
     // Start cloud sync for display settings and menu data
     startCloudSync()
 
+    // Start Supabase Realtime listener for remote orders
+    if (mainWindow) {
+      startRemoteOrderListener(mainWindow)
+    }
+
     // Sync admin password hash to cloud for owner dashboard authentication (fire-and-forget)
     syncAdminPassword().catch(() => {})
 
@@ -538,6 +544,7 @@ app.on('window-all-closed', () => {
   stopBackupSystem()
   stopAnalyticsSync()
   stopCloudSync()
+  stopRemoteOrderListener()
   closeDatabase()
   app.quit()
 })

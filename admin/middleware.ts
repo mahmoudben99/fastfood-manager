@@ -7,7 +7,7 @@ const SESSION_SECRET = new TextEncoder().encode(process.env.SESSION_SECRET!)
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Allow login page, API login, owner dashboard (has its own PIN auth), TV display, remote ordering, and short codes
+  // Allow login page, API login, owner dashboard (has its own PIN auth), TV display, remote ordering
   if (
     pathname === '/login' ||
     pathname.startsWith('/api/login') ||
@@ -17,8 +17,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/tv-') ||
     pathname.startsWith('/r/') ||
     pathname.startsWith('/o/') ||
-    pathname.startsWith('/api/remote-order') ||
-    /^\/\d{4}$/.test(pathname)
+    pathname.startsWith('/api/remote-order')
   ) {
     return NextResponse.next()
   }

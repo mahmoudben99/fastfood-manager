@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { supabaseBrowser } from '@/lib/supabase-browser'
 
 /* ═══════════════════════════════════
    TYPES
@@ -9,18 +10,17 @@ interface Category { id: number | string; name: string; emoji?: string }
 interface MenuItem { id: number | string; name: string; price: number; emoji?: string; category_id: number | string }
 interface CartItem { item: MenuItem; quantity: number }
 
-interface RemoteOrderProps {
-  machineId: string
-  restaurantName: string
-  categories: Category[]
-  items: MenuItem[]
-}
-
 /* ═══════════════════════════════════
    COMPONENT
 ═══════════════════════════════════ */
-export function RemoteOrder({ machineId, restaurantName, categories, items }: RemoteOrderProps) {
-  const [selectedCategory, setSelectedCategory] = useState<string | number | null>(categories[0]?.id ?? null)
+export function RemoteOrder({ machineId }: { machineId: string }) {
+  const [loading, setLoading] = useState(true)
+  const [retryCount, setRetryCount] = useState(0)
+  const [notFound, setNotFound] = useState(false)
+  const [restaurantName, setRestaurantName] = useState('')
+  const [categories, setCategories] = useState<Category[]>([])
+  const [items, setItems] = useState<MenuItem[]>([])
+  const [selectedCategory, setSelectedCategory] = useState<string | number | null>(null)
   const [cart, setCart] = useState<CartItem[]>([])
   const [showCart, setShowCart] = useState(false)
   const [showOrderForm, setShowOrderForm] = useState(false)
@@ -31,6 +31,67 @@ export function RemoteOrder({ machineId, restaurantName, categories, items }: Re
   const [submitting, setSubmitting] = useState(false)
   const [orderResult, setOrderResult] = useState<{ ok: boolean; orderId?: string } | null>(null)
   const categoryScrollRef = useRef<HTMLDivElement>(null)
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const MAX_RETRIES = 3
+
+  useEffect(() => {
+    fetchData()
+    return () => {
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current)
+    }
+  }, [])
+
+  async function fetchData() {
+    try {
+      // Fetch restaurant info
+      const { data: installation } = await supabaseBrowser
+        .from('installations')
+        .select('restaurant_name, phone')
+        .eq('machine_id', machineId)
+        .single()
+
+      if (!installation) {
+        handleRetry()
+        return
+      }
+
+      setRestaurantName(installation.restaurant_name || 'Restaurant')
+
+      // Fetch menu
+      const { data: menuData } = await supabaseBrowser
+        .from('menu_sync')
+        .select('categories, items')
+        .eq('machine_id', machineId)
+        .single()
+
+      if (!menuData) {
+        handleRetry()
+        return
+      }
+
+      setCategories(menuData.categories || [])
+      setItems(menuData.items || [])
+      if (menuData.categories?.length > 0) {
+        setSelectedCategory(menuData.categories[0].id)
+      }
+      setLoading(false)
+      setRetryCount(0)
+    } catch {
+      handleRetry()
+    }
+  }
+
+  function handleRetry() {
+    const nextRetry = retryCount + 1
+    if (nextRetry >= MAX_RETRIES) {
+      setNotFound(true)
+      setLoading(false)
+      return
+    }
+    setRetryCount(nextRetry)
+    retryTimerRef.current = setTimeout(() => fetchData(), 3000)
+  }
 
   const filteredItems = items.filter(it => String(it.category_id) === String(selectedCategory))
   const cartTotal = cart.reduce((sum, ci) => sum + ci.item.price * ci.quantity, 0)
@@ -92,6 +153,51 @@ export function RemoteOrder({ machineId, restaurantName, categories, items }: Re
     } finally {
       setSubmitting(false)
     }
+  }
+
+  // Loading state
+  if (loading) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        background: '#0a0a0f', color: '#fff', fontFamily: 'system-ui, -apple-system, sans-serif',
+      }}>
+        <div style={{
+          width: 40, height: 40, border: '3px solid rgba(255,255,255,0.1)',
+          borderTopColor: '#f97316', borderRadius: '50%',
+          animation: 'spin 0.8s linear infinite',
+        }} />
+        <p style={{ color: '#aaa', fontSize: 14, marginTop: 16 }}>Loading...</p>
+        <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+      </div>
+    )
+  }
+
+  // Not found (after 3 retries)
+  if (notFound) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', padding: 24,
+        background: '#0a0a0f', color: '#fff', fontFamily: 'system-ui, -apple-system, sans-serif',
+      }}>
+        <div style={{ fontSize: 64, marginBottom: 16 }}>🍔</div>
+        <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>Restaurant Not Found</h1>
+        <p style={{ color: '#aaa', fontSize: 14, marginBottom: 24, textAlign: 'center' }}>
+          This link is invalid or the restaurant hasn&apos;t set up yet.
+        </p>
+        <button
+          onClick={() => { setNotFound(false); setLoading(true); setRetryCount(0); fetchData() }}
+          style={{
+            background: '#f97316', border: 'none', color: '#fff', padding: '12px 24px',
+            borderRadius: 12, fontSize: 15, fontWeight: 600, cursor: 'pointer',
+          }}
+        >
+          Try Again
+        </button>
+      </div>
+    )
   }
 
   // Order confirmation screen

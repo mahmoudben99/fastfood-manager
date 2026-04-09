@@ -118,12 +118,102 @@ export function TVDisplay({ machineId, profile, initialSettings }: TVDisplayProp
   const [controlsVisible, setControlsVisible] = useState(false)
   const [musicEnabled, setMusicEnabled] = useState(true)
   const [showMusicOverlay, setShowMusicOverlay] = useState(false)
+  const [initialLoading, setInitialLoading] = useState(!initialSettings || Object.keys(initialSettings).length === 0)
+  const [loadFailed, setLoadFailed] = useState(false)
 
   const panelTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const welcomeTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const welcomeIdx = useRef(0)
   const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const ytRef = useRef<HTMLIFrameElement | null>(null)
+  const initialRetryCount = useRef(0)
+
+  // Fetch settings on mount if no initial settings provided
+  useEffect(() => {
+    if (!initialLoading) return
+    let cancelled = false
+    const MAX_RETRIES = 3
+
+    async function fetchInitialSettings() {
+      try {
+        const res = await fetch(`/api/tv-settings?machineId=${machineId}&profile=${profile}`)
+        if (res.ok) {
+          const data = await res.json()
+          if (data.settings && !cancelled) {
+            setSettings(data.settings)
+            setInitialLoading(false)
+            return
+          }
+        }
+        // No settings or bad response - retry
+        if (!cancelled) {
+          initialRetryCount.current++
+          if (initialRetryCount.current >= MAX_RETRIES) {
+            setLoadFailed(true)
+            setInitialLoading(false)
+          } else {
+            setTimeout(fetchInitialSettings, 3000)
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          initialRetryCount.current++
+          if (initialRetryCount.current >= MAX_RETRIES) {
+            setLoadFailed(true)
+            setInitialLoading(false)
+          } else {
+            setTimeout(fetchInitialSettings, 3000)
+          }
+        }
+      }
+    }
+
+    fetchInitialSettings()
+    return () => { cancelled = true }
+  }, [initialLoading, machineId, profile])
+
+  // Loading spinner
+  if (initialLoading) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        background: '#0a0a0f', color: '#fff', fontFamily: 'system-ui, -apple-system, sans-serif',
+      }}>
+        <div style={{
+          width: 48, height: 48, border: '3px solid rgba(255,255,255,0.1)',
+          borderTopColor: '#f97316', borderRadius: '50%',
+          animation: 'spin 0.8s linear infinite',
+        }} />
+        <p style={{ color: '#aaa', fontSize: 14, marginTop: 16 }}>Loading display...</p>
+        <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+      </div>
+    )
+  }
+
+  // Display not configured
+  if (loadFailed) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        background: '#0a0a0f', color: '#fff', fontFamily: 'system-ui, -apple-system, sans-serif',
+      }}>
+        <div style={{ fontSize: 64, marginBottom: 16 }}>📺</div>
+        <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>Display not configured yet</h1>
+        <p style={{ color: '#aaa', fontSize: 14, marginBottom: 24 }}>Set up your TV display in the Ambiance settings of FastFood Manager.</p>
+        <button
+          onClick={() => { setLoadFailed(false); setInitialLoading(true); initialRetryCount.current = 0 }}
+          style={{
+            background: '#f97316', border: 'none', color: '#fff', padding: '12px 24px',
+            borderRadius: 12, fontSize: 15, fontWeight: 600, cursor: 'pointer',
+          }}
+        >
+          Retry
+        </button>
+      </div>
+    )
+  }
 
   // Normalize settings keys — cloud sync uses display_ prefix, component expects short keys
   const raw = settings as any

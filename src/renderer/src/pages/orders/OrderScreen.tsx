@@ -150,9 +150,18 @@ export function OrderScreen() {
       loadOngoingCount()
     })
 
+    // Refresh badge and order list when a remote order arrives
+    let unsubRemote: (() => void) | undefined
+    if (window.api.remote) {
+      unsubRemote = window.api.remote.onRemoteOrder(() => {
+        loadOngoingCount()
+      })
+    }
+
     return () => {
       clearInterval(interval)
       unsubTablet()
+      unsubRemote?.()
     }
   }, [])
 

@@ -285,6 +285,13 @@ const api = {
     syncDisplay: (profileName?: string) => ipcRenderer.invoke('cloud:syncDisplay', profileName),
     syncMenu: () => ipcRenderer.invoke('cloud:syncMenu'),
     createDisplayProfile: (name: string) => ipcRenderer.invoke('cloud:createDisplayProfile', name)
+  },
+  remote: {
+    onRemoteOrder: (cb: (order: any) => void) => {
+      const handler = (_: any, order: any) => cb(order)
+      ipcRenderer.on('remote:new-order', handler)
+      return () => { ipcRenderer.removeListener('remote:new-order', handler) }
+    }
   }
 }
 

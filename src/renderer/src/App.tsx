@@ -104,6 +104,16 @@ export default function App() {
     return unsub
   }, [])
 
+  // Listen for remote orders via Supabase Realtime
+  useEffect(() => {
+    if (!window.api.remote) return
+    const unsub = window.api.remote.onRemoteOrder((order) => {
+      setTabletToast(`📱 Commande #${order.daily_number} reçue (en ligne)`)
+      setTimeout(() => setTabletToast(null), 5000)
+    })
+    return unsub
+  }, [])
+
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-gray-50">

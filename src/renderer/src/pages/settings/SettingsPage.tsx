@@ -129,8 +129,8 @@ export function SettingsPage() {
   // Owner dashboard state
   const [ownerDashQr, setOwnerDashQr] = useState('')
 
-  // Cloud short codes
-  const [shortCodes, setShortCodes] = useState<{ tv: string; owner: string; order: string }>({ tv: '', owner: '', order: '' })
+  // Machine ID for direct URLs
+  const [machineId, setMachineId] = useState('')
   const [copiedCode, setCopiedCode] = useState<string | null>(null)
 
   // Remote order QR
@@ -266,13 +266,13 @@ export function SettingsPage() {
       setOwnerDashQr(ownerData.qrDataUrl)
     } catch { /* ignore */ }
 
-    // Load cloud short codes + generate QR for remote ordering
+    // Load machine ID for direct URLs + generate QR for remote ordering
     try {
-      const codes = await window.api.cloud.getShortCodes()
-      setShortCodes(codes)
-      if (codes.order) {
+      const mid = await window.api.activation.getMachineId()
+      setMachineId(mid)
+      if (mid) {
         const QRCode = (await import('qrcode')).default
-        const qrDataUrl = await QRCode.toDataURL(`https://fastfood-manager.vercel.app/r/${codes.order}`, { width: 256, margin: 2 })
+        const qrDataUrl = await QRCode.toDataURL(`https://fastfood-manager.vercel.app/r/${mid}`, { width: 256, margin: 2 })
         setRemoteOrderQr(qrDataUrl)
       }
     } catch { /* ignore */ }
@@ -1137,7 +1137,7 @@ export function SettingsPage() {
               <p className="text-xs text-orange-600 mt-1 font-medium">The owner logs in with the admin password (set in Security tab).</p>
             </div>
 
-            {shortCodes.owner ? (
+            {machineId ? (
               <div className="space-y-4">
                 <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                   <div className="flex items-center justify-between mb-1">
@@ -1146,11 +1146,11 @@ export function SettingsPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-mono text-gray-800 flex-1 bg-white rounded px-3 py-2 border border-gray-200">
-                      fastfood-manager.vercel.app/{shortCodes.owner}
+                      fastfood-manager.vercel.app/owner/{machineId}
                     </span>
                     <button
                       onClick={() => {
-                        navigator.clipboard.writeText(`https://fastfood-manager.vercel.app/${shortCodes.owner}`)
+                        navigator.clipboard.writeText(`https://fastfood-manager.vercel.app/owner/${machineId}`)
                         setCopiedCode('owner')
                         setTimeout(() => setCopiedCode(null), 2000)
                       }}
@@ -1176,7 +1176,7 @@ export function SettingsPage() {
             ) : (
               <div className="flex items-center gap-2 p-3 bg-orange-50 rounded-lg">
                 <AlertCircle className="h-4 w-4 text-orange-500" />
-                <p className="text-sm text-orange-700">Short codes could not be loaded. Check your internet connection.</p>
+                <p className="text-sm text-orange-700">Machine ID could not be loaded. Try restarting the app.</p>
               </div>
             )}
           </div>
@@ -1267,17 +1267,17 @@ export function SettingsPage() {
             </div>
 
             {/* Cloud ordering link */}
-            {shortCodes.order ? (
+            {machineId ? (
               <div className="space-y-4">
                 <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                   <h4 className="font-medium text-sm mb-2">Ordering Link</h4>
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-mono text-gray-800 flex-1 bg-white rounded px-3 py-2 border border-gray-200">
-                      fastfood-manager.vercel.app/{shortCodes.order}
+                      fastfood-manager.vercel.app/r/{machineId}
                     </span>
                     <button
                       onClick={() => {
-                        navigator.clipboard.writeText(`https://fastfood-manager.vercel.app/${shortCodes.order}`)
+                        navigator.clipboard.writeText(`https://fastfood-manager.vercel.app/r/${machineId}`)
                         setCopiedCode('order')
                         setTimeout(() => setCopiedCode(null), 2000)
                       }}
@@ -1304,7 +1304,7 @@ export function SettingsPage() {
             ) : (
               <div className="flex items-center gap-2 p-3 bg-orange-50 rounded-lg">
                 <AlertCircle className="h-4 w-4 text-orange-500" />
-                <p className="text-sm text-orange-700">Short codes could not be loaded. Check your internet connection.</p>
+                <p className="text-sm text-orange-700">Machine ID could not be loaded. Try restarting the app.</p>
               </div>
             )}
 

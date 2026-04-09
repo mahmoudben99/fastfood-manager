@@ -86,7 +86,7 @@ interface ProfileSettings {
   welcomeText: string
   youtubeUrl: string
   images: string[]
-  shortCode: string
+  tvUrl: string
 }
 
 const DEFAULT_PROFILE_SETTINGS: ProfileSettings = {
@@ -103,7 +103,7 @@ const DEFAULT_PROFILE_SETTINGS: ProfileSettings = {
   welcomeText: '',
   youtubeUrl: 'https://www.youtube.com/watch?v=53nwh1aHCU8&list=RD53nwh1aHCU8&start_radio=1',
   images: [],
-  shortCode: ''
+  tvUrl: ''
 }
 
 export function AmbianceScreen() {
@@ -154,11 +154,10 @@ export function AmbianceScreen() {
     }
     setProfiles(profileList)
 
-    // Load short codes
-    let shortCodes: { tv: string } = { tv: '' }
+    // Load machine ID for direct URLs
+    let mid = ''
     try {
-      const codes = await window.api.cloud.getShortCodes()
-      shortCodes = codes
+      mid = await window.api.activation.getMachineId()
     } catch {
       /* ignore */
     }
@@ -206,7 +205,7 @@ export function AmbianceScreen() {
           allSettings[`${p}youtube_url`] ||
           'https://www.youtube.com/watch?v=53nwh1aHCU8&list=RD53nwh1aHCU8&start_radio=1',
         images: profile === 'default' ? images : [],
-        shortCode: profile === 'default' ? shortCodes.tv || '' : (allSettings[`${p}short_code`] || '')
+        tvUrl: mid ? (profile === 'default' ? `fastfood-manager.vercel.app/tv/${mid}` : `fastfood-manager.vercel.app/tv/${mid}?profile=${profile}`) : ''
       }
     }
     setSettings(settingsMap)
@@ -265,10 +264,9 @@ export function AmbianceScreen() {
     if (!newProfileName.trim()) return
     setCreatingProfile(true)
     try {
-      let code = ''
+      // Still create profile in cloud for sync
       try {
-        const result = await window.api.cloud.createDisplayProfile(newProfileName.trim())
-        code = result.code || ''
+        await window.api.cloud.createDisplayProfile(newProfileName.trim())
       } catch {
         /* ignore */
       }
@@ -278,15 +276,14 @@ export function AmbianceScreen() {
       setProfiles(updatedProfiles)
       await window.api.settings.set('display_profiles', JSON.stringify(updatedProfiles))
 
-      // Initialize default settings for this profile
-      const p = `display_${name}_`
-      const newSettings: ProfileSettings = { ...DEFAULT_PROFILE_SETTINGS, shortCode: code }
-      setSettings((prev) => ({ ...prev, [name]: newSettings }))
+      // Build TV URL for this profile
+      let mid = ''
+      try { mid = await window.api.activation.getMachineId() } catch { /* ignore */ }
+      const tvUrl = mid ? `fastfood-manager.vercel.app/tv/${mid}?profile=${name}` : ''
 
-      // Store short code
-      if (code) {
-        await window.api.settings.set(`${p}short_code`, code)
-      }
+      // Initialize default settings for this profile
+      const newSettings: ProfileSettings = { ...DEFAULT_PROFILE_SETTINGS, tvUrl }
+      setSettings((prev) => ({ ...prev, [name]: newSettings }))
 
       setActiveProfile(name)
       setNewProfileName('')
@@ -310,7 +307,7 @@ export function AmbianceScreen() {
       'text_scale', 'logo_scale', 'show_name', 'show_menu',
       'panel_welcome', 'panel_social', 'panel_promos', 'panel_slideshow',
       'panel_orders', 'panel_menu', 'welcome_mode', 'welcome_text',
-      'youtube_url', 'short_code'
+      'youtube_url'
     ]
     for (const key of keysToRemove) {
       await window.api.settings.set(`${p}${key}`, '')
@@ -403,16 +400,16 @@ export function AmbianceScreen() {
           <Card>
             <div className="space-y-3">
               <h3 className="font-semibold text-sm text-gray-700">Display Link</h3>
-              {current.shortCode ? (
+              {current.tvUrl ? (
                 <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-mono text-gray-800 flex-1 bg-white rounded px-3 py-2 border border-gray-200">
-                      fastfood-manager.vercel.app/{current.shortCode}
+                      {current.tvUrl}
                     </span>
                     <button
                       onClick={() =>
                         copyToClipboard(
-                          `https://fastfood-manager.vercel.app/${current.shortCode}`,
+                          `https://${current.tvUrl}`,
                           'cloud'
                         )
                       }
@@ -429,7 +426,7 @@ export function AmbianceScreen() {
                   <p className="text-xs text-gray-400 mt-1">Works from any device with internet</p>
                 </div>
               ) : (
-                <p className="text-sm text-gray-400">No cloud short code available for this profile.</p>
+                <p className="text-sm text-gray-400">TV display URL not available. Restart the app if this persists.</p>
               )}
 
               {tabletRunning && activeProfile === 'default' && (
@@ -894,9 +891,9 @@ export function AmbianceScreen() {
               <p className="text-xs text-gray-500">
                 Profile: <span className="font-medium text-gray-700">{getDisplayLabel(activeProfile)}</span>
               </p>
-              {current.shortCode && (
-                <p className="text-xs text-gray-400 mt-1">
-                  Code: <span className="font-mono">{current.shortCode}</span>
+              {current.tvUrl && (
+                <p className="text-xs text-gray-400 mt-1 truncate" title={current.tvUrl}>
+                  URL: <span className="font-mono">{current.tvUrl}</span>
                 </p>
               )}
             </div>
