@@ -194,48 +194,7 @@ function TVDisplayInner({ machineId, profile, initialSettings }: TVDisplayProps)
     return () => { cancelled = true }
   }, [initialLoading, machineId, profile])
 
-  // Loading spinner
-  if (initialLoading) {
-    return (
-      <div style={{
-        minHeight: '100vh', display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
-        background: '#0a0a0f', color: '#fff', fontFamily: 'system-ui, -apple-system, sans-serif',
-      }}>
-        <div style={{
-          width: 48, height: 48, border: '3px solid rgba(255,255,255,0.1)',
-          borderTopColor: '#f97316', borderRadius: '50%',
-          animation: 'spin 0.8s linear infinite',
-        }} />
-        <p style={{ color: '#aaa', fontSize: 14, marginTop: 16 }}>Loading display...</p>
-        <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-      </div>
-    )
-  }
-
-  // Display not configured
-  if (loadFailed) {
-    return (
-      <div style={{
-        minHeight: '100vh', display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
-        background: '#0a0a0f', color: '#fff', fontFamily: 'system-ui, -apple-system, sans-serif',
-      }}>
-        <div style={{ fontSize: 64, marginBottom: 16 }}>📺</div>
-        <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>Display not configured yet</h1>
-        <p style={{ color: '#aaa', fontSize: 14, marginBottom: 24 }}>Set up your TV display in the Ambiance settings of FastFood Manager.</p>
-        <button
-          onClick={() => { setLoadFailed(false); setInitialLoading(true); initialRetryCount.current = 0 }}
-          style={{
-            background: '#f97316', border: 'none', color: '#fff', padding: '12px 24px',
-            borderRadius: 12, fontSize: 15, fontWeight: 600, cursor: 'pointer',
-          }}
-        >
-          Retry
-        </button>
-      </div>
-    )
-  }
+  // Loading/error states are checked AFTER all hooks, in the main return block below.
 
   // Normalize settings keys — cloud sync uses display_ prefix, component expects short keys
   // Ensure all values are primitives, not objects
@@ -705,6 +664,28 @@ function TVDisplayInner({ machineId, profile, initialSettings }: TVDisplayProps)
     }
 
     return null
+  }
+
+  // Loading state
+  if (initialLoading) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#0a0a0f', color: '#fff', fontFamily: 'system-ui' }}>
+        <div style={{ width: 48, height: 48, border: '3px solid rgba(255,255,255,0.1)', borderTopColor: '#f97316', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <p style={{ color: '#aaa', fontSize: 14, marginTop: 16 }}>Loading display...</p>
+        <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+      </div>
+    )
+  }
+
+  // Error state
+  if (loadFailed) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#0a0a0f', color: '#fff', fontFamily: 'system-ui' }}>
+        <p style={{ fontSize: 18 }}>Display not configured yet</p>
+        <p style={{ fontSize: 13, color: '#888', marginTop: 8 }}>Set up your ambiance screen in the app settings.</p>
+        <button onClick={() => window.location.reload()} style={{ marginTop: 20, background: '#f97316', border: 'none', color: '#fff', padding: '10px 24px', borderRadius: 8, cursor: 'pointer' }}>Retry</button>
+      </div>
+    )
   }
 
   return (
