@@ -88,27 +88,18 @@ export async function GET(req: Request) {
   // Get the EXACT same HTML as the local display
   let displayHTML = getDisplayHTML(lang)
 
-  // Replace the SSE connection with injected data
-  // The display HTML has: function connect() { var es = new EventSource('/api/display-events'); ... }
-  // We replace it with direct data injection
-  const injectScript = `
-<script>
-// Override: inject data instead of SSE (Vercel cloud version)
-var __cloudInfo = ${info};
-var __cloudQueue = ${queue};
-var __mid = ${JSON.stringify(machineId)};
-var __prof = ${JSON.stringify(profile)};
-</script>`
-
-  // Insert our script BEFORE the closing </body> and replace the connect() call
+  // Replace the connect() call with direct data injection
+  // Define variables and call handleSSE inline — no separate script tag needed
   displayHTML = displayHTML.replace(
     'connect();',
     `// Cloud mode: inject data directly instead of SSE
+    var __cloudInfo = ${info};
+    var __cloudQueue = ${queue};
     handleSSE(__cloudInfo);
     handleSSE(__cloudQueue);
     // Poll for updates every 30s
     setInterval(function() {
-      fetch('/api/tv-html?machineId=' + ${JSON.stringify(machineId)} + '&profile=' + ${JSON.stringify(profile)} + '&json=1')
+      fetch('/api/tv-html?machineId=' + encodeURIComponent(${JSON.stringify(machineId)}) + '&profile=' + encodeURIComponent(${JSON.stringify(profile)}) + '&json=1')
         .then(function(r) { return r.json(); })
         .then(function(d) { if (d && d.info) { handleSSE(d.info); if (d.queue) handleSSE(d.queue); } })
         .catch(function() {});
