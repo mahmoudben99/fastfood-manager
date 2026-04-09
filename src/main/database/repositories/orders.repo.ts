@@ -224,6 +224,15 @@ export const ordersRepo = {
       .all(startDate, endDate) as Order[]
   },
 
+  /** Auto-complete all preparing/pending orders from previous days */
+  autoCompletePreviousDays(): number {
+    const today = new Date().toISOString().split('T')[0]
+    const result = getDb()
+      .prepare("UPDATE orders SET status = 'completed', completed_at = datetime('now') WHERE status IN ('preparing', 'pending') AND order_date < ?")
+      .run(today)
+    return result.changes
+  },
+
   updateStatus(id: number, status: string): Order | undefined {
     const completedAt = status === 'completed' ? new Date().toISOString() : null
     getDb()

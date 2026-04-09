@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useRef, useState, useCallback } from 'react'
+import { supabaseBrowser } from '@/lib/supabase-browser'
 
 // Error boundary to catch rendering crashes
 class TVErrorBoundary extends React.Component<{ children: React.ReactNode }, { error: string | null }> {
@@ -380,7 +381,6 @@ function TVDisplayInner({ machineId, profile, initialSettings }: TVDisplayProps)
   useEffect(() => {
     async function fetchMenu() {
       try {
-        const { supabaseBrowser } = await import('@/lib/supabase-browser')
         const { data } = await supabaseBrowser.from('menu_sync').select('items').eq('machine_id', machineId).single()
         if (data?.items && Array.isArray(data.items)) {
           setFetchedMenuItems(data.items)

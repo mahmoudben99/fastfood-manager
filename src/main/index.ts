@@ -13,6 +13,7 @@ import { registerInstallation, checkTrialStatus, checkCloudActivation } from './
 import { registerTabletHandlers } from './ipc/tablet.ipc'
 import { startTabletServer } from './tablet/server'
 import { startAnalyticsSync, stopAnalyticsSync } from './sync/analytics-sync'
+import { ordersRepo } from './database/repositories/orders.repo'
 import { syncAdminPassword } from './sync/owner-sync'
 import { startCloudSync, stopCloudSync } from './sync/cloud-sync'
 import { startRemoteOrderListener, stopRemoteOrderListener } from './sync/remote-order-listener'
@@ -498,6 +499,12 @@ app.whenReady().then(async () => {
       settingsRepo.set('activation_status', '')
       settingsRepo.set('_integrity', '')
     }
+
+    // Auto-complete orders from previous days (in case client forgot)
+    try {
+      const completed = ordersRepo.autoCompletePreviousDays()
+      if (completed > 0) log(`Auto-completed ${completed} orders from previous days`)
+    } catch { /* ignore */ }
 
     // Start hidden analytics sync (daily stats to Supabase)
     startAnalyticsSync()
