@@ -66,13 +66,15 @@ export async function syncDisplaySettings(profileName: string = 'default'): Prom
       }
     } catch { /* skip */ }
 
-    await supabase.from('display_settings').upsert({
+    const { error } = await supabase.from('display_settings').upsert({
       machine_id: machineId,
       profile_name: profileName,
       settings: settings,
       updated_at: new Date().toISOString()
     }, { onConflict: 'machine_id,profile_name' })
-  } catch { /* silent */ }
+    if (error) console.error('[CloudSync] Display settings sync failed:', error.message)
+    else console.log('[CloudSync] Display settings synced for profile:', profileName)
+  } catch (err) { console.error('[CloudSync] Display sync error:', err) }
 }
 
 /** Sync menu data to Supabase for remote ordering + display */
@@ -161,15 +163,17 @@ export async function createDisplayProfile(profileName: string): Promise<string>
 let syncInterval: ReturnType<typeof setInterval> | null = null
 
 export function startCloudSync(): void {
+  console.log('[CloudSync] Starting cloud sync system')
   // Initial sync after 10 seconds
   setTimeout(() => {
-    syncDisplaySettings().catch(() => {})
-    syncMenuToCloud().catch(() => {})
+    console.log('[CloudSync] Running initial sync...')
+    syncDisplaySettings().catch((e) => console.error('[CloudSync] Initial display sync failed:', e))
+    syncMenuToCloud().catch((e) => console.error('[CloudSync] Initial menu sync failed:', e))
   }, 10000)
 
   // Sync every 5 minutes
   syncInterval = setInterval(() => {
-    syncDisplaySettings().catch(() => {})
+    syncDisplaySettings().catch((e) => console.error('[CloudSync] Periodic display sync failed:', e))
     syncMenuToCloud().catch(() => {})
   }, 5 * 60 * 1000)
 }
