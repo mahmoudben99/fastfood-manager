@@ -241,11 +241,19 @@ export function TVDisplay({ machineId, profile, initialSettings }: TVDisplayProp
     panelOrders: raw.panelOrders ?? (raw.display_panel_orders !== 'false'),
     panelMenu: raw.panelMenu ?? (raw.display_panel_menu !== 'false'),
   }
-  // Parse promos/packs from JSON strings if needed
-  if (typeof s._promos === 'string') try { s.promos = JSON.parse(s._promos) } catch {}
-  if (typeof s._packs === 'string') try { s.packs = JSON.parse(s._packs) } catch {}
-  if (typeof s._slideshow_images === 'string') try { s.slideshowImages = JSON.parse(s._slideshow_images) } catch {}
-  if (typeof s.social_media === 'string') try { s.social = JSON.parse(s.social_media) } catch {}
+  // Parse promos/packs from JSON strings if needed (safe parsing)
+  if (!Array.isArray(s.promos)) {
+    try { s.promos = typeof s._promos === 'string' ? JSON.parse(s._promos) : [] } catch { s.promos = [] }
+  }
+  if (!Array.isArray(s.packs)) {
+    try { s.packs = typeof s._packs === 'string' ? JSON.parse(s._packs) : [] } catch { s.packs = [] }
+  }
+  if (!Array.isArray(s.slideshowImages)) {
+    try { s.slideshowImages = typeof s._slideshow_images === 'string' ? JSON.parse(s._slideshow_images) : [] } catch { s.slideshowImages = [] }
+  }
+  if (!Array.isArray(s.social)) {
+    try { s.social = typeof s.social_media === 'string' ? JSON.parse(s.social_media) : [] } catch { s.social = [] }
+  }
 
   const gradientIdx = Math.max(0, Math.min(19, Number(s.gradientPreset) || 0))
   const isLightGradient = gradientIdx >= 15
