@@ -1,6 +1,24 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
+
+// Error boundary to catch rendering crashes
+class TVErrorBoundary extends React.Component<{ children: React.ReactNode }, { error: string | null }> {
+  constructor(props: any) { super(props); this.state = { error: null } }
+  static getDerivedStateFromError(error: Error) { return { error: error.message } }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#0a0a0f', color: '#fff', fontFamily: 'system-ui' }}>
+          <p style={{ fontSize: 18, marginBottom: 12 }}>Display Error</p>
+          <p style={{ fontSize: 13, color: '#888', maxWidth: 400, textAlign: 'center' }}>{this.state.error}</p>
+          <button onClick={() => { this.setState({ error: null }); window.location.reload() }} style={{ marginTop: 20, background: '#f97316', border: 'none', color: '#fff', padding: '10px 24px', borderRadius: 8, cursor: 'pointer' }}>Retry</button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 /* ═══════════════════════════════════
    TYPES
@@ -108,7 +126,11 @@ function fmtPrice(v: number, currency: string) {
 /* ═══════════════════════════════════
    COMPONENT
 ═══════════════════════════════════ */
-export function TVDisplay({ machineId, profile, initialSettings }: TVDisplayProps) {
+export function TVDisplay(props: TVDisplayProps) {
+  return <TVErrorBoundary><TVDisplayInner {...props} /></TVErrorBoundary>
+}
+
+function TVDisplayInner({ machineId, profile, initialSettings }: TVDisplayProps) {
   const [settings, setSettings] = useState<DisplaySettings>(initialSettings)
   const [activePanel, setActivePanel] = useState(0)
   const [visible, setVisible] = useState(true)
