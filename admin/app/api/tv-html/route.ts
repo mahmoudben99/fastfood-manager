@@ -17,7 +17,7 @@ export async function GET(req: Request) {
   if (url.searchParams.get('json') === '1') {
     const [dsR, ordR] = await Promise.all([
       supabase.from('display_settings').select('settings').eq('machine_id', machineId).eq('profile_name', profile).single(),
-      supabase.from('owner_orders').select('order_number').eq('machine_id', machineId).eq('status', 'preparing')
+      supabase.from('owner_orders').select('order_number').eq('machine_id', machineId).eq('status', 'preparing').gte('order_date', new Date().toISOString().split('T')[0])
     ])
     const r = (dsR.data?.settings || {}) as Record<string, any>
     let sc: any[] = []; try { sc = JSON.parse(r.social_media || '[]') } catch {}
@@ -34,7 +34,7 @@ export async function GET(req: Request) {
   const [dsResult, menuResult, ordersResult] = await Promise.all([
     supabase.from('display_settings').select('settings').eq('machine_id', machineId).eq('profile_name', profile).single(),
     supabase.from('menu_sync').select('items').eq('machine_id', machineId).single(),
-    supabase.from('owner_orders').select('order_number').eq('machine_id', machineId).eq('status', 'preparing')
+    supabase.from('owner_orders').select('order_number').eq('machine_id', machineId).eq('status', 'preparing').gte('order_date', new Date().toISOString().split('T')[0])
   ])
 
   const raw = (dsResult.data?.settings || {}) as Record<string, any>

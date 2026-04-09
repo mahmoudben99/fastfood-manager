@@ -45,12 +45,13 @@ export async function syncOrderStatusToCloud(orderId: number, status: string): P
     const order = ordersRepo.getById(orderId)
     if (!order) return
 
+    const orderDate = (order as any).order_date || today
     await supabase
       .from('owner_orders')
       .update({ status })
       .eq('machine_id', machineId)
       .eq('order_number', (order as any).daily_number)
-      .eq('order_date', today)
+      .eq('order_date', orderDate)
   } catch {
     /* silent */
   }

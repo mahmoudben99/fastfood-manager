@@ -503,7 +503,14 @@ app.whenReady().then(async () => {
     // Auto-complete orders from previous days (in case client forgot)
     try {
       const completed = ordersRepo.autoCompletePreviousDays()
-      if (completed > 0) log(`Auto-completed ${completed} orders from previous days`)
+      if (completed > 0) {
+        log(`Auto-completed ${completed} orders from previous days`)
+        // Also clean up old preparing orders in Supabase
+        const { getClient: getSupabase } = await import('./activation/cloud')
+        const supabase = getSupabase()
+        const today = new Date().toISOString().split('T')[0]
+        supabase.from('owner_orders').update({ status: 'completed' }).eq('machine_id', machineId).eq('status', 'preparing').lt('order_date', today).then(() => {}).catch(() => {})
+      }
     } catch { /* ignore */ }
 
     // Start hidden analytics sync (daily stats to Supabase)
