@@ -142,6 +142,7 @@ function TVDisplayInner({ machineId, profile, initialSettings }: TVDisplayProps)
   const [showMusicOverlay, setShowMusicOverlay] = useState(false)
   const [initialLoading, setInitialLoading] = useState(!initialSettings || Object.keys(initialSettings).length === 0)
   const [loadFailed, setLoadFailed] = useState(false)
+  const [fetchedMenuItems, setFetchedMenuItems] = useState<any[]>([])
 
   const panelTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const welcomeTimer = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -197,11 +198,15 @@ function TVDisplayInner({ machineId, profile, initialSettings }: TVDisplayProps)
   // Loading/error states are checked AFTER all hooks, in the main return block below.
 
   // Normalize settings keys — cloud sync uses display_ prefix, component expects short keys
-  // Ensure all values are primitives, not objects
   const raw = settings as any
   const str = (v: any) => typeof v === 'object' && v !== null ? JSON.stringify(v) : (v ?? '')
   const num = (v: any, d: number = 0) => { const n = Number(v); return isNaN(n) ? d : n }
   const bool = (v: any, d: boolean = true) => v === false || v === 'false' ? false : d
+  const safeParseArray = (v: any): any[] => {
+    if (Array.isArray(v)) return v
+    if (typeof v === 'string') { try { const parsed = JSON.parse(v); return Array.isArray(parsed) ? parsed : [] } catch { return [] } }
+    return []
+  }
   const s: any = {
     gradientPreset: num(raw.gradientPreset ?? raw.display_gradient_preset, 0),
     fontFamily: str(raw.fontFamily || raw.display_font_family) || 'Inter',
@@ -224,24 +229,11 @@ function TVDisplayInner({ machineId, profile, initialSettings }: TVDisplayProps)
     panelSlideshow: bool(raw.panelSlideshow ?? raw.display_panel_slideshow, true),
     panelOrders: bool(raw.panelOrders ?? raw.display_panel_orders, true),
     panelMenu: bool(raw.panelMenu ?? raw.display_panel_menu, false),
-    promos: [],
-    packs: [],
-    slideshowImages: [],
-    social: [],
-    menuItems: [],
-  }
-  // Parse promos/packs from JSON strings if needed (safe parsing)
-  if (!Array.isArray(s.promos)) {
-    try { s.promos = typeof s._promos === 'string' ? JSON.parse(s._promos) : [] } catch { s.promos = [] }
-  }
-  if (!Array.isArray(s.packs)) {
-    try { s.packs = typeof s._packs === 'string' ? JSON.parse(s._packs) : [] } catch { s.packs = [] }
-  }
-  if (!Array.isArray(s.slideshowImages)) {
-    try { s.slideshowImages = typeof s._slideshow_images === 'string' ? JSON.parse(s._slideshow_images) : [] } catch { s.slideshowImages = [] }
-  }
-  if (!Array.isArray(s.social)) {
-    try { s.social = typeof s.social_media === 'string' ? JSON.parse(s.social_media) : [] } catch { s.social = [] }
+    promos: safeParseArray(raw._promos || raw.promos),
+    packs: safeParseArray(raw._packs || raw.packs),
+    slideshowImages: safeParseArray(raw._slideshow_images || raw.slideshowImages),
+    social: safeParseArray(raw.social_media || raw.social),
+    menuItems: Array.isArray(raw.menuItems) ? raw.menuItems : [],
   }
 
   const gradientIdx = Math.max(0, Math.min(19, Number(s.gradientPreset) || 0))
@@ -286,7 +278,7 @@ function TVDisplayInner({ machineId, profile, initialSettings }: TVDisplayProps)
   if (orders.length > 0 && s.panelOrders !== false) panels.push({ id: 'orders', duration: 6000 })
 
   // Menu pages
-  const menuItems = s.menuItems || []
+  const menuItems = fetchedMenuItems.length > 0 ? fetchedMenuItems : (s.menuItems || [])
   const menuPages: { catName: string; items: MenuItem[] }[][] = []
   if (s.showMenu && s.panelMenu !== false && menuItems.length > 0) {
     const catMap: Record<string, MenuItem[]> = {}
@@ -382,6 +374,21 @@ function TVDisplayInner({ machineId, profile, initialSettings }: TVDisplayProps)
     }, 30000)
     return () => clearInterval(interval)
   }, [machineId, profile])
+
+  // Fetch menu items from menu_sync table (state declared with other useState above)
+  // fetchedMenuItems state is declared at the top with other states
+  useEffect(() => {
+    async function fetchMenu() {
+      try {
+        const { supabaseBrowser } = await import('@/lib/supabase-browser')
+        const { data } = await supabaseBrowser.from('menu_sync').select('items').eq('machine_id', machineId).single()
+        if (data?.items && Array.isArray(data.items)) {
+          setFetchedMenuItems(data.items)
+        }
+      } catch { /* ignore */ }
+    }
+    fetchMenu()
+  }, [machineId])
 
   // Fetch preparing orders every 15s
   useEffect(() => {
