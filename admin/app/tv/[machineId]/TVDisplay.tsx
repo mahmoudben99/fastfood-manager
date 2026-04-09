@@ -216,30 +216,38 @@ export function TVDisplay({ machineId, profile, initialSettings }: TVDisplayProp
   }
 
   // Normalize settings keys — cloud sync uses display_ prefix, component expects short keys
+  // Ensure all values are primitives, not objects
   const raw = settings as any
+  const str = (v: any) => typeof v === 'object' && v !== null ? JSON.stringify(v) : (v ?? '')
+  const num = (v: any, d: number = 0) => { const n = Number(v); return isNaN(n) ? d : n }
+  const bool = (v: any, d: boolean = true) => v === false || v === 'false' ? false : d
   const s: any = {
-    ...raw,
-    gradientPreset: raw.gradientPreset ?? raw.display_gradient_preset ?? 0,
-    fontFamily: raw.fontFamily || raw.display_font_family || 'Inter',
-    textColor: raw.textColor || raw.display_text_color || '#ffffff',
-    accentColor: raw.accentColor || raw.display_accent_color || '#f97316',
-    textScale: raw.textScale || raw.display_text_scale || 'medium',
-    logoScale: raw.logoScale ?? raw.display_logo_scale ?? 1,
-    showName: raw.showName ?? raw.display_show_name ?? true,
-    showMenu: raw.showMenu ?? raw.display_show_menu ?? false,
-    welcomeMode: raw.welcomeMode || raw.display_welcome_mode || 'animated',
-    welcomeText: raw.welcomeText || raw.display_welcome_text || '',
-    youtubeUrl: raw.youtubeUrl || raw.display_youtube_url || '',
-    name: raw.name || raw.restaurant_name || '',
-    logo: raw.logo || raw._logo_base64 || '',
-    phone: raw.phone || raw.restaurant_phone || '',
-    currency: raw.currency || raw.currency_symbol || 'DA',
-    panelWelcome: raw.panelWelcome ?? (raw.display_panel_welcome !== 'false'),
-    panelSocial: raw.panelSocial ?? (raw.display_panel_social !== 'false'),
-    panelPromos: raw.panelPromos ?? (raw.display_panel_promos !== 'false'),
-    panelSlideshow: raw.panelSlideshow ?? (raw.display_panel_slideshow !== 'false'),
-    panelOrders: raw.panelOrders ?? (raw.display_panel_orders !== 'false'),
-    panelMenu: raw.panelMenu ?? (raw.display_panel_menu !== 'false'),
+    gradientPreset: num(raw.gradientPreset ?? raw.display_gradient_preset, 0),
+    fontFamily: str(raw.fontFamily || raw.display_font_family) || 'Inter',
+    textColor: str(raw.textColor || raw.display_text_color) || '#ffffff',
+    accentColor: str(raw.accentColor || raw.display_accent_color) || '#f97316',
+    textScale: str(raw.textScale || raw.display_text_scale) || 'medium',
+    logoScale: num(raw.logoScale ?? raw.display_logo_scale, 1),
+    showName: bool(raw.showName ?? raw.display_show_name, true),
+    showMenu: bool(raw.showMenu ?? raw.display_show_menu, false),
+    welcomeMode: str(raw.welcomeMode || raw.display_welcome_mode) || 'animated',
+    welcomeText: str(raw.welcomeText || raw.display_welcome_text),
+    youtubeUrl: str(raw.youtubeUrl || raw.display_youtube_url),
+    name: str(raw.name || raw.restaurant_name),
+    logo: str(raw.logo || raw._logo_base64),
+    phone: str(raw.phone || raw.restaurant_phone),
+    currency: str(raw.currency || raw.currency_symbol) || 'DA',
+    panelWelcome: bool(raw.panelWelcome ?? raw.display_panel_welcome, true),
+    panelSocial: bool(raw.panelSocial ?? raw.display_panel_social, true),
+    panelPromos: bool(raw.panelPromos ?? raw.display_panel_promos, true),
+    panelSlideshow: bool(raw.panelSlideshow ?? raw.display_panel_slideshow, true),
+    panelOrders: bool(raw.panelOrders ?? raw.display_panel_orders, true),
+    panelMenu: bool(raw.panelMenu ?? raw.display_panel_menu, false),
+    promos: [],
+    packs: [],
+    slideshowImages: [],
+    social: [],
+    menuItems: [],
   }
   // Parse promos/packs from JSON strings if needed (safe parsing)
   if (!Array.isArray(s.promos)) {
@@ -273,15 +281,17 @@ export function TVDisplay({ machineId, profile, initialSettings }: TVDisplayProp
   const hasSocial = (s.social && s.social.length > 0) || s.phone
   if (hasSocial && s.panelSocial !== false) panels.push({ id: 'social', duration: 8000 })
   const allPromos: { name: string; value: string; emoji: string; badge: string; items: { name: string; quantity: number }[] }[] = []
-  if (s.promos) {
+  if (Array.isArray(s.promos)) {
     for (const p of s.promos) {
+      if (!p || !p.name) continue
       const val = p.type === 'percentage' ? `-${p.value}%` : `-${fmtPrice(p.value, currency)}`
       allPromos.push({ name: p.name, value: val, emoji: '', badge: 'Deal', items: [] })
     }
   }
-  if (s.packs) {
+  if (Array.isArray(s.packs)) {
     for (const pk of s.packs) {
-      allPromos.push({ name: pk.name, value: fmtPrice(pk.pack_price || pk.price || 0, currency), emoji: pk.emoji || '', badge: '', items: pk.items || [] })
+      if (!pk || !pk.name) continue
+      allPromos.push({ name: pk.name, value: fmtPrice(pk.pack_price || pk.price || 0, currency), emoji: pk.emoji || '', badge: '', items: Array.isArray(pk.items) ? pk.items : [] })
     }
   }
   if (allPromos.length > 0 && s.panelPromos !== false) panels.push({ id: 'promos', duration: 10000 })
