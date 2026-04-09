@@ -1,5 +1,6 @@
-import { TVDisplay } from './TVDisplay'
+import { redirect } from 'next/navigation'
 
 export default function TVPage({ params, searchParams }: { params: { machineId: string }; searchParams: { profile?: string } }) {
-  return <TVDisplay machineId={params.machineId} profile={searchParams.profile || 'default'} initialSettings={{}} />
+  const profile = searchParams.profile || 'default'
+  redirect(`/api/tv-html?machineId=${params.machineId}&profile=${profile}`)
 }
