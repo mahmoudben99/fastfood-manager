@@ -31,8 +31,8 @@ export default async function TVPage({
   }
 
   // Build picker entries — pull a few preview fields from settings JSON
-  const profiles = (data || []).map((row) => {
-    const s = (row.settings || {}) as Record<string, any>
+  const profiles = (data || []).map((row: { profile_name: string; settings: Record<string, unknown> | null }) => {
+    const s = (row.settings || {}) as Record<string, string>
     const p = row.profile_name === 'default' ? 'display_' : `display_${row.profile_name}_`
     return {
       name: row.profile_name,
