@@ -5,6 +5,7 @@ import { menuRepo } from '../database/repositories/menu.repo'
 import { categoriesRepo } from '../database/repositories/categories.repo'
 import { promotionsRepo } from '../database/repositories/promotions.repo'
 import { net } from 'electron'
+import { readFileSync } from 'fs'
 
 function generateShortCode(): string {
   // 4-digit numeric code
@@ -35,7 +36,6 @@ export async function syncDisplaySettings(profileName: string = 'default'): Prom
     const logoPath = allSettings.logo_path
     if (logoPath) {
       try {
-        const { readFileSync } = await import('fs')
         const buf = readFileSync(logoPath)
         settings._logo_base64 = 'data:image/png;base64,' + buf.toString('base64')
       } catch { /* skip */ }
@@ -49,12 +49,14 @@ export async function syncDisplaySettings(profileName: string = 'default'): Prom
       settings._packs = JSON.stringify(packs.map((p: any) => ({ name: p.name, price: p.pack_price, emoji: p.emoji || '', items: p.items || [] })))
     } catch { /* skip */ }
 
-    // Get slideshow images as base64
+    // Get slideshow images as base64 — per-profile key (default keeps legacy)
     try {
-      const raw = allSettings.display_slideshow_images
+      const slideshowKey = profileName === 'default'
+        ? 'display_slideshow_images'
+        : `display_${profileName}_slideshow_images`
+      const raw = allSettings[slideshowKey]
       if (raw) {
         const paths: string[] = JSON.parse(raw)
-        const { readFileSync } = await import('fs')
         const images = paths.slice(0, 10).map(p => {
           try {
             const buf = readFileSync(p)

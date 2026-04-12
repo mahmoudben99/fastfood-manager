@@ -1,6 +1,7 @@
 import { getClient } from '../activation/cloud'
 import { getMachineId } from '../activation/activation'
 import { ordersRepo } from '../database/repositories/orders.repo'
+import { syncOrderToCloud } from './owner-sync'
 import { BrowserWindow } from 'electron'
 
 let subscription: any = null
@@ -67,6 +68,9 @@ async function handleRemoteOrder(remoteOrder: any): Promise<void> {
         unit_price: item.price
       }))
     })
+
+    // Sync to owner dashboard (parity with src/main/ipc/orders.ipc.ts:29 local-create path)
+    syncOrderToCloud(order).catch(() => {})
 
     // Notify the renderer
     mainWin?.webContents.send('remote:new-order', order)

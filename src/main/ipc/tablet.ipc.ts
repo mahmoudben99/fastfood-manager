@@ -70,7 +70,15 @@ export function registerTabletHandlers(getWindow: () => BrowserWindow | null): v
     return { ok: true }
   })
 
-  ipcMain.handle('display:uploadImages', async () => {
+  // Per-profile slideshow image storage. Default profile keeps the legacy
+  // `display_slideshow_images` key so existing data isn't orphaned. Named
+  // profiles use `display_<profile>_slideshow_images`.
+  const slideshowKey = (profile?: string): string =>
+    !profile || profile === 'default'
+      ? 'display_slideshow_images'
+      : `display_${profile}_slideshow_images`
+
+  ipcMain.handle('display:uploadImages', async (_event, profile?: string) => {
     const result = await dialog.showOpenDialog({
       properties: ['openFile', 'multiSelections'],
       filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp'] }]
@@ -79,11 +87,12 @@ export function registerTabletHandlers(getWindow: () => BrowserWindow | null): v
 
     const displayDir = getDisplayImagesPath()
     const savedPaths: string[] = []
+    const key = slideshowKey(profile)
 
     // Load existing paths
     let existing: string[] = []
     try {
-      const raw = settingsRepo.get('display_slideshow_images')
+      const raw = settingsRepo.get(key)
       if (raw) existing = JSON.parse(raw)
     } catch { /* ignore */ }
 
@@ -96,25 +105,26 @@ export function registerTabletHandlers(getWindow: () => BrowserWindow | null): v
     }
 
     const allPaths = [...existing, ...savedPaths].slice(0, 10)
-    settingsRepo.set('display_slideshow_images', JSON.stringify(allPaths))
+    settingsRepo.set(key, JSON.stringify(allPaths))
     return allPaths
   })
 
-  ipcMain.handle('display:getImages', () => {
+  ipcMain.handle('display:getImages', (_event, profile?: string) => {
     try {
-      const raw = settingsRepo.get('display_slideshow_images')
+      const raw = settingsRepo.get(slideshowKey(profile))
       if (raw) return JSON.parse(raw)
     } catch { /* ignore */ }
     return []
   })
 
-  ipcMain.handle('display:removeImage', (_event, path: string) => {
+  ipcMain.handle('display:removeImage', (_event, path: string, profile?: string) => {
     try {
-      const raw = settingsRepo.get('display_slideshow_images')
+      const key = slideshowKey(profile)
+      const raw = settingsRepo.get(key)
       if (raw) {
         const paths: string[] = JSON.parse(raw)
         const filtered = paths.filter(p => p !== path)
-        settingsRepo.set('display_slideshow_images', JSON.stringify(filtered))
+        settingsRepo.set(key, JSON.stringify(filtered))
         return filtered
       }
     } catch { /* ignore */ }

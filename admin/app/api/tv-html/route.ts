@@ -13,6 +13,9 @@ export async function GET(req: Request) {
     return new NextResponse('<h1>Missing machineId</h1>', { status: 400, headers: { 'Content-Type': 'text/html' } })
   }
 
+  // Per-profile setting key prefix — matches AmbianceScreen.tsx:131
+  const p = profile === 'default' ? 'display_' : `display_${profile}_`
+
   // JSON mode for polling updates
   if (url.searchParams.get('json') === '1') {
     const [dsR, ordR] = await Promise.all([
@@ -25,7 +28,7 @@ export async function GET(req: Request) {
     let pk: any[] = []; try { pk = JSON.parse(r._packs || '[]') } catch {}
     const prep = (ordR.data || []).map((o: any) => o.order_number)
     return NextResponse.json({
-      info: { type: 'info', name: r.restaurant_name || '', promos: pr, packs: pk, social: sc, queue: { preparing: prep }, accentColor: r.display_accent_color || '#f97316', gradientPreset: parseInt(r.display_gradient_preset || '0'), textColor: r.display_text_color || '#ffffff' },
+      info: { type: 'info', name: r.restaurant_name || '', promos: pr, packs: pk, social: sc, queue: { preparing: prep }, accentColor: r[p + 'accent_color'] || '#f97316', gradientPreset: parseInt(r[p + 'gradient_preset'] || '0'), textColor: r[p + 'text_color'] || '#ffffff' },
       queue: { type: 'queue', preparing: prep }
     })
   }
@@ -45,7 +48,7 @@ export async function GET(req: Request) {
   let packs: any[] = []; try { packs = JSON.parse(raw._packs || '[]') } catch {}
   let slideshowImages: any[] = []; try { slideshowImages = JSON.parse(raw._slideshow_images || '[]') } catch {}
 
-  const showMenu = raw.display_show_menu === 'true' || raw.display_show_menu === true
+  const showMenu = raw[p + 'show_menu'] === 'true' || raw[p + 'show_menu'] === true
   const menuItems = showMenu && menuResult.data?.items ? menuResult.data.items : []
   const preparing = (ordersResult.data || []).map((o: any) => o.order_number)
 
@@ -55,29 +58,29 @@ export async function GET(req: Request) {
     logo: raw._logo_base64 || '',
     currency: raw.currency_symbol || raw.currency || 'DA',
     phone: raw.restaurant_phone || '',
-    promos: promos.map((p: any) => ({ name: p.name, type: p.type, value: p.discount_value || p.value })),
-    packs: packs.map((p: any) => ({ name: p.name, price: p.pack_price || p.price, emoji: p.emoji || '', items: p.items || [] })),
+    promos: promos.map((pr: any) => ({ name: pr.name, type: pr.type, value: pr.discount_value || pr.value })),
+    packs: packs.map((pk: any) => ({ name: pk.name, price: pk.pack_price || pk.price, emoji: pk.emoji || '', items: pk.items || [] })),
     social,
-    youtubeUrl: raw.display_youtube_url || '',
-    themeColor: raw.display_accent_color || '#f97316',
-    accentColor: raw.display_accent_color || '#f97316',
+    youtubeUrl: raw[p + 'youtube_url'] || '',
+    themeColor: raw[p + 'accent_color'] || '#f97316',
+    accentColor: raw[p + 'accent_color'] || '#f97316',
     slideshowImages,
-    welcomeMode: raw.display_welcome_mode || 'animated',
-    welcomeText: raw.display_welcome_text || '',
-    gradientPreset: parseInt(raw.display_gradient_preset || '0'),
-    fontFamily: raw.display_font_family || 'Inter',
-    textColor: raw.display_text_color || '#ffffff',
-    textScale: raw.display_text_scale || 'medium',
+    welcomeMode: raw[p + 'welcome_mode'] || 'animated',
+    welcomeText: raw[p + 'welcome_text'] || '',
+    gradientPreset: parseInt(raw[p + 'gradient_preset'] || '0'),
+    fontFamily: raw[p + 'font_family'] || 'Inter',
+    textColor: raw[p + 'text_color'] || '#ffffff',
+    textScale: raw[p + 'text_scale'] || 'medium',
     showMenu,
     menuItems,
-    showName: raw.display_show_name !== 'false',
-    logoScale: parseFloat(raw.display_logo_scale || '1'),
-    panelWelcome: raw.display_panel_welcome !== 'false',
-    panelSocial: raw.display_panel_social !== 'false',
-    panelPromos: raw.display_panel_promos !== 'false',
-    panelSlideshow: raw.display_panel_slideshow !== 'false',
-    panelOrders: raw.display_panel_orders !== 'false',
-    panelMenu: raw.display_panel_menu !== 'false',
+    showName: raw[p + 'show_name'] !== 'false',
+    logoScale: parseFloat(raw[p + 'logo_scale'] || '1'),
+    panelWelcome: raw[p + 'panel_welcome'] !== 'false',
+    panelSocial: raw[p + 'panel_social'] !== 'false',
+    panelPromos: raw[p + 'panel_promos'] !== 'false',
+    panelSlideshow: raw[p + 'panel_slideshow'] !== 'false',
+    panelOrders: raw[p + 'panel_orders'] !== 'false',
+    panelMenu: raw[p + 'panel_menu'] !== 'false',
     queue: { preparing }
   })
 

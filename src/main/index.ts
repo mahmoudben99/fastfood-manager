@@ -517,6 +517,7 @@ app.whenReady().then(async () => {
     startAnalyticsSync()
 
     // Start cloud sync for display settings and menu data
+    log('Starting cloud sync')
     startCloudSync()
 
     // Start Supabase Realtime listener for remote orders

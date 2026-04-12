@@ -177,7 +177,7 @@ export function AmbianceScreen() {
       const p = profile === 'default' ? 'display_' : `display_${profile}_`
       let images: string[] = []
       try {
-        images = (await window.api.tablet.getDisplayImages()) || []
+        images = (await window.api.tablet.getDisplayImages(profile)) || []
       } catch {
         /* ignore */
       }
@@ -204,8 +204,8 @@ export function AmbianceScreen() {
         youtubeUrl:
           allSettings[`${p}youtube_url`] ||
           'https://www.youtube.com/watch?v=53nwh1aHCU8&list=RD53nwh1aHCU8&start_radio=1',
-        images: profile === 'default' ? images : [],
-        tvUrl: mid ? (profile === 'default' ? `fastfood-manager.vercel.app/tv/${mid}` : `fastfood-manager.vercel.app/tv/${mid}?profile=${profile}`) : ''
+        images,
+        tvUrl: mid ? `fastfood-manager.vercel.app/tv/${mid}` : ''
       }
     }
     setSettings(settingsMap)
@@ -276,10 +276,10 @@ export function AmbianceScreen() {
       setProfiles(updatedProfiles)
       await window.api.settings.set('display_profiles', JSON.stringify(updatedProfiles))
 
-      // Build TV URL for this profile
+      // Build TV URL — single URL per machine; the picker on /tv/<id> chooses profile
       let mid = ''
       try { mid = await window.api.activation.getMachineId() } catch { /* ignore */ }
-      const tvUrl = mid ? `fastfood-manager.vercel.app/tv/${mid}?profile=${name}` : ''
+      const tvUrl = mid ? `fastfood-manager.vercel.app/tv/${mid}` : ''
 
       // Initialize default settings for this profile
       const newSettings: ProfileSettings = { ...DEFAULT_PROFILE_SETTINGS, tvUrl }
@@ -739,12 +739,14 @@ export function AmbianceScreen() {
                 size="sm"
                 disabled={current.images.length >= 10}
                 onClick={async () => {
-                  const paths = await window.api.tablet.uploadDisplayImages()
+                  const paths = await window.api.tablet.uploadDisplayImages(activeProfile)
                   if (paths) {
                     setSettings((prev) => ({
                       ...prev,
                       [activeProfile]: { ...current, images: paths }
                     }))
+                    // Push the new images to cloud immediately
+                    try { await window.api.cloud?.syncDisplay?.(activeProfile) } catch { /* ignore */ }
                   }
                 }}
               >
@@ -767,11 +769,12 @@ export function AmbianceScreen() {
                       </div>
                       <button
                         onClick={async () => {
-                          const updated = await window.api.tablet.removeDisplayImage(imgPath)
+                          const updated = await window.api.tablet.removeDisplayImage(imgPath, activeProfile)
                           setSettings((prev) => ({
                             ...prev,
                             [activeProfile]: { ...current, images: updated || [] }
                           }))
+                          try { await window.api.cloud?.syncDisplay?.(activeProfile) } catch { /* ignore */ }
                         }}
                         className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
                       >

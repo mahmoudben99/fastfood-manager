@@ -275,9 +275,9 @@ const api = {
       return () => { ipcRenderer.removeListener('tablet:new-order', handler) }
     },
     pushDisplayUpdate: (data: any) => ipcRenderer.invoke('tablet:pushDisplayUpdate', data),
-    uploadDisplayImages: () => ipcRenderer.invoke('display:uploadImages'),
-    getDisplayImages: () => ipcRenderer.invoke('display:getImages'),
-    removeDisplayImage: (path: string) => ipcRenderer.invoke('display:removeImage', path),
+    uploadDisplayImages: (profile?: string) => ipcRenderer.invoke('display:uploadImages', profile),
+    getDisplayImages: (profile?: string) => ipcRenderer.invoke('display:getImages', profile),
+    removeDisplayImage: (path: string, profile?: string) => ipcRenderer.invoke('display:removeImage', path, profile),
     getOwnerDashboard: () => ipcRenderer.invoke('owner:getQR')
   },
   cloud: {
