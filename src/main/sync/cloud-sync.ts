@@ -161,6 +161,65 @@ export async function createDisplayProfile(profileName: string): Promise<string>
   return code
 }
 
+/** Delete a display profile row from Supabase (and its short_codes). */
+export async function deleteDisplayProfileFromCloud(profileName: string): Promise<void> {
+  if (!net.isOnline()) return
+  if (profileName === 'default') return // never delete default
+  try {
+    const machineId = getMachineId()
+    const supabase = getClient()
+    await supabase
+      .from('display_settings')
+      .delete()
+      .eq('machine_id', machineId)
+      .eq('profile_name', profileName)
+    await supabase
+      .from('short_codes')
+      .delete()
+      .eq('machine_id', machineId)
+      .eq('profile_name', profileName)
+  } catch (err) {
+    console.error('[CloudSync] deleteDisplayProfileFromCloud error:', err)
+  }
+}
+
+/** Reconcile Supabase profiles against the local display_profiles list. Any
+ * profile row in the cloud that isn't in the local list gets deleted. Runs
+ * on every periodic sync so orphans from prior installs self-heal.
+ */
+export async function reconcileDisplayProfiles(): Promise<void> {
+  if (!net.isOnline()) return
+  try {
+    const machineId = getMachineId()
+    const supabase = getClient()
+
+    const storedRaw = settingsRepo.get('display_profiles')
+    let localList: string[] = ['default']
+    try {
+      if (storedRaw) {
+        const parsed = JSON.parse(storedRaw)
+        if (Array.isArray(parsed)) localList = parsed
+      }
+    } catch { /* ignore */ }
+    if (!localList.includes('default')) localList.unshift('default')
+
+    const { data } = await supabase
+      .from('display_settings')
+      .select('profile_name')
+      .eq('machine_id', machineId)
+
+    const orphans = (data || [])
+      .map((r: any) => r.profile_name as string)
+      .filter((name: string) => !localList.includes(name))
+
+    for (const name of orphans) {
+      await deleteDisplayProfileFromCloud(name)
+    }
+  } catch (err) {
+    console.error('[CloudSync] reconcileDisplayProfiles error:', err)
+  }
+}
+
 /** Start periodic sync (every 5 minutes) */
 let syncInterval: ReturnType<typeof setInterval> | null = null
 
@@ -171,12 +230,14 @@ export function startCloudSync(): void {
     console.log('[CloudSync] Running initial sync...')
     syncDisplaySettings().catch((e) => console.error('[CloudSync] Initial display sync failed:', e))
     syncMenuToCloud().catch((e) => console.error('[CloudSync] Initial menu sync failed:', e))
+    reconcileDisplayProfiles().catch((e) => console.error('[CloudSync] Initial reconcile failed:', e))
   }, 10000)
 
   // Sync every 5 minutes
   syncInterval = setInterval(() => {
     syncDisplaySettings().catch((e) => console.error('[CloudSync] Periodic display sync failed:', e))
     syncMenuToCloud().catch(() => {})
+    reconcileDisplayProfiles().catch(() => {})
   }, 5 * 60 * 1000)
 }
 

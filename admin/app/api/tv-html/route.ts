@@ -48,7 +48,10 @@ export async function GET(req: Request) {
   let packs: any[] = []; try { packs = JSON.parse(raw._packs || '[]') } catch {}
   let slideshowImages: any[] = []; try { slideshowImages = JSON.parse(raw._slideshow_images || '[]') } catch {}
 
-  const showMenu = raw[p + 'show_menu'] === 'true' || raw[p + 'show_menu'] === true
+  // Menu panel: one flag drives both panel visibility and item injection.
+  // Legacy `display_show_menu` was a separate key never wired to the UI.
+  const panelMenuEnabled = raw[p + 'panel_menu'] !== 'false'
+  const showMenu = panelMenuEnabled
   const menuItems = showMenu && menuResult.data?.items ? menuResult.data.items : []
   const preparing = (ordersResult.data || []).map((o: any) => o.order_number)
 

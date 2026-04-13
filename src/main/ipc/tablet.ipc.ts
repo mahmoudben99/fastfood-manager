@@ -13,7 +13,7 @@ import { settingsRepo } from '../database/repositories/settings.repo'
 import { getDisplayImagesPath } from '../database/connection'
 import { syncOwnerPin } from '../sync/owner-sync'
 import { getMachineId } from '../activation/activation'
-import { getShortCodes, syncDisplaySettings, syncMenuToCloud, createDisplayProfile } from '../sync/cloud-sync'
+import { getShortCodes, syncDisplaySettings, syncMenuToCloud, createDisplayProfile, deleteDisplayProfileFromCloud } from '../sync/cloud-sync'
 
 // getWindow is a lazy getter so we always grab the live BrowserWindow reference,
 // not a stale null captured at registration time (createWindow() runs after registerAllHandlers()).
@@ -158,5 +158,10 @@ export function registerTabletHandlers(getWindow: () => BrowserWindow | null): v
   ipcMain.handle('cloud:createDisplayProfile', async (_event, name: string) => {
     const code = await createDisplayProfile(name)
     return { code }
+  })
+
+  ipcMain.handle('cloud:deleteDisplayProfile', async (_event, name: string) => {
+    await deleteDisplayProfileFromCloud(name)
+    return { ok: true }
   })
 }

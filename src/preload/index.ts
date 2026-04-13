@@ -284,7 +284,8 @@ const api = {
     getShortCodes: () => ipcRenderer.invoke('cloud:getShortCodes'),
     syncDisplay: (profileName?: string) => ipcRenderer.invoke('cloud:syncDisplay', profileName),
     syncMenu: () => ipcRenderer.invoke('cloud:syncMenu'),
-    createDisplayProfile: (name: string) => ipcRenderer.invoke('cloud:createDisplayProfile', name)
+    createDisplayProfile: (name: string) => ipcRenderer.invoke('cloud:createDisplayProfile', name),
+    deleteDisplayProfile: (name: string) => ipcRenderer.invoke('cloud:deleteDisplayProfile', name)
   },
   remote: {
     onRemoteOrder: (cb: (order: any) => void) => {

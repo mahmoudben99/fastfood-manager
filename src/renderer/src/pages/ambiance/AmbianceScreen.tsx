@@ -300,6 +300,11 @@ export function AmbianceScreen() {
     setProfiles(updatedProfiles)
     await window.api.settings.set('display_profiles', JSON.stringify(updatedProfiles))
 
+    // Delete the Supabase row so the picker page doesn't show it as an orphan
+    try {
+      await window.api.cloud?.deleteDisplayProfile?.(profileName)
+    } catch { /* ignore */ }
+
     // Remove settings for this profile
     const p = `display_${profileName}_`
     const keysToRemove = [

@@ -91,13 +91,15 @@ function getDisplayInfoPayload(): Record<string, unknown> {
   // Text scale
   const textScale = settingsRepo.get('display_text_scale') || 'medium'
 
-  // Show menu
-  const showMenu = settingsRepo.get('display_show_menu') || 'false'
-
   // Show restaurant name
   const showName = settingsRepo.get('display_show_name') || 'true'
 
-  // Menu items (only if showMenu is enabled)
+  // Menu panel: a single flag drives both panel visibility and data injection.
+  // (Legacy `display_show_menu` was a separate key that the UI never toggled,
+  // so the menu panel never received items even when its panel was enabled.)
+  const showMenu = settingsRepo.get('display_panel_menu') !== 'false' ? 'true' : 'false'
+
+  // Menu items (only if menu panel is enabled)
   let menuItems: { name: string; price: number; category_name: string; emoji: string }[] = []
   if (showMenu === 'true') {
     try {
