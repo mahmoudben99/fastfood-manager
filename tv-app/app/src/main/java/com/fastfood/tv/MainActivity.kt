@@ -197,7 +197,7 @@ class MainActivity : Activity() {
             textSize = 28f
             gravity = Gravity.CENTER
         }
-        val hint = TextView(this).apply {
+        val subtitle = TextView(this).apply {
             text = "Enter the 4-digit code shown on the POS\n(Settings → Ambiance Screen)"
             setTextColor(Color.parseColor("#9aa0aa"))
             textSize = 16f
@@ -206,7 +206,7 @@ class MainActivity : Activity() {
         }
         val input = EditText(this).apply {
             inputType = InputType.TYPE_CLASS_NUMBER
-            hint = "1234"
+            setHint("1234")
             setTextColor(Color.WHITE)
             textSize = 40f
             gravity = Gravity.CENTER
@@ -233,7 +233,7 @@ class MainActivity : Activity() {
         }
         statusView = status
         container.addView(title, lp())
-        container.addView(hint, lp())
+        container.addView(subtitle, lp())
         container.addView(input, lp(widthDp = 320))
         container.addView(connect, lp(widthDp = 320, topDp = 24))
         container.addView(status, lp())
@@ -249,7 +249,7 @@ class MainActivity : Activity() {
     }
 
     private fun setStatus(msg: String) {
-        if (statusView != null) statusView?.text = msg else showPairing(prefs.getString("code", null))
+        if (statusView == null) showPairing(prefs.getString("code", null))
         statusView?.text = msg
     }
 
