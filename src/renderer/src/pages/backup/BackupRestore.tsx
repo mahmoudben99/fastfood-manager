@@ -54,7 +54,7 @@ export function BackupRestore() {
     const allSuccess = results.every((r: any) => r.success)
     setMessage({
       type: allSuccess ? 'success' : 'error',
-      text: allSuccess ? t('backup.success') : `Some backups failed`
+      text: allSuccess ? t('backup.success') : t('backup.someFailed', { defaultValue: 'Some backups failed' })
     })
     setLoading(false)
     loadData()
@@ -66,7 +66,7 @@ export function BackupRestore() {
     const result = await window.api.backup.restore()
     setMessage({
       type: result.success ? 'success' : 'error',
-      text: result.success ? t('backup.restoreSuccess') : result.error || 'Restore failed'
+      text: result.success ? t('backup.restoreSuccess') : result.error || t('backup.restoreFailed', { defaultValue: 'Restore failed' })
     })
     setLoading(false)
   }

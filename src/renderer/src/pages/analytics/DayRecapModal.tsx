@@ -115,7 +115,7 @@ export function DayRecapModal({ isOpen, onClose }: DayRecapModalProps) {
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
           <div>
-            <h2 className="text-xl font-bold">Day Recap</h2>
+            <h2 className="text-xl font-bold">{t('dayRecap.title', { defaultValue: 'Day Recap' })}</h2>
             <p className="text-sm text-gray-400 mt-0.5">{formattedDate}</p>
           </div>
           <div className="flex items-center gap-4">
@@ -138,7 +138,7 @@ export function DayRecapModal({ isOpen, onClose }: DayRecapModalProps) {
           ) : !hasOrders ? (
             <div className="flex flex-col items-center justify-center py-12 text-gray-400">
               <ShoppingCart className="h-12 w-12 mb-3 opacity-40" />
-              <p className="text-lg">No orders yet today</p>
+              <p className="text-lg">{t('dayRecap.noOrders', { defaultValue: 'No orders yet today' })}</p>
             </div>
           ) : (
             <>
@@ -151,7 +151,7 @@ export function DayRecapModal({ isOpen, onClose }: DayRecapModalProps) {
                   <p className="text-2xl font-bold text-orange-400">
                     {formatCurrency(summary!.total_revenue)}
                   </p>
-                  <p className="text-xs text-gray-400 mt-1">Total Revenue</p>
+                  <p className="text-xs text-gray-400 mt-1">{t('dayRecap.totalRevenue', { defaultValue: 'Total Revenue' })}</p>
                 </div>
 
                 <div className="bg-gray-800 rounded-xl p-4 text-center">
@@ -161,7 +161,7 @@ export function DayRecapModal({ isOpen, onClose }: DayRecapModalProps) {
                   <p className="text-2xl font-bold text-blue-400">
                     {summary!.order_count}
                   </p>
-                  <p className="text-xs text-gray-400 mt-1">Orders</p>
+                  <p className="text-xs text-gray-400 mt-1">{t('dayRecap.orders', { defaultValue: 'Orders' })}</p>
                 </div>
 
                 <div className="bg-gray-800 rounded-xl p-4 text-center">
@@ -175,7 +175,7 @@ export function DayRecapModal({ isOpen, onClose }: DayRecapModalProps) {
                   >
                     {formatCurrency(summary!.net_profit)}
                   </p>
-                  <p className="text-xs text-gray-400 mt-1">Net Profit</p>
+                  <p className="text-xs text-gray-400 mt-1">{t('dayRecap.netProfit', { defaultValue: 'Net Profit' })}</p>
                 </div>
               </div>
 
@@ -183,7 +183,7 @@ export function DayRecapModal({ isOpen, onClose }: DayRecapModalProps) {
               {orderTypes.length > 0 && (
                 <div>
                   <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-3">
-                    Order Types
+                    {t('dayRecap.orderTypes', { defaultValue: 'Order Types' })}
                   </h3>
                   <div className="grid grid-cols-3 gap-3">
                     {orderTypes.map((ot) => (
@@ -208,7 +208,7 @@ export function DayRecapModal({ isOpen, onClose }: DayRecapModalProps) {
               {topItems.length > 0 && (
                 <div>
                   <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-3">
-                    Top {topItems.length} Items
+                    {t('dayRecap.topItems', { defaultValue: 'Top {{count}} Items', count: topItems.length })}
                   </h3>
                   <div className="space-y-2">
                     {topItems.map((item, idx) => (
@@ -227,7 +227,7 @@ export function DayRecapModal({ isOpen, onClose }: DayRecapModalProps) {
                         </div>
                         <div className="text-right shrink-0">
                           <p className="text-sm font-semibold text-white">
-                            {item.total_quantity} sold
+                            {t('dayRecap.itemSold', { defaultValue: '{{count}} sold', count: item.total_quantity })}
                           </p>
                           <p className="text-xs text-gray-400">
                             {formatCurrency(item.total_revenue)}

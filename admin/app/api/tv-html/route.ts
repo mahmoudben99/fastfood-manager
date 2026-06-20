@@ -4,58 +4,26 @@ import { getDisplayHTML } from '@/lib/display-ui'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET(req: Request) {
-  const url = new URL(req.url)
-  const machineId = url.searchParams.get('machineId')
-  const profile = url.searchParams.get('profile') || 'default'
+function todayStr(): string {
+  return new Date().toISOString().split('T')[0]
+}
 
-  if (!machineId) {
-    return new NextResponse('<h1>Missing machineId</h1>', { status: 400, headers: { 'Content-Type': 'text/html' } })
-  }
-
-  // Per-profile setting key prefix — matches AmbianceScreen.tsx:131
-  const p = profile === 'default' ? 'display_' : `display_${profile}_`
-
-  // JSON mode for polling updates
-  if (url.searchParams.get('json') === '1') {
-    const [dsR, ordR] = await Promise.all([
-      supabase.from('display_settings').select('settings').eq('machine_id', machineId).eq('profile_name', profile).single(),
-      supabase.from('owner_orders').select('order_number').eq('machine_id', machineId).eq('status', 'preparing').gte('order_date', new Date().toISOString().split('T')[0])
-    ])
-    const r = (dsR.data?.settings || {}) as Record<string, any>
-    let sc: any[] = []; try { sc = JSON.parse(r.social_media || '[]') } catch {}
-    let pr: any[] = []; try { pr = JSON.parse(r._promos || '[]') } catch {}
-    let pk: any[] = []; try { pk = JSON.parse(r._packs || '[]') } catch {}
-    const prep = (ordR.data || []).map((o: any) => o.order_number)
-    return NextResponse.json({
-      info: { type: 'info', name: r.restaurant_name || '', promos: pr, packs: pk, social: sc, queue: { preparing: prep }, accentColor: r[p + 'accent_color'] || '#f97316', gradientPreset: parseInt(r[p + 'gradient_preset'] || '0'), textColor: r[p + 'text_color'] || '#ffffff' },
-      queue: { type: 'queue', preparing: prep }
-    })
-  }
-
-  // Fetch all data in parallel
-  const [dsResult, menuResult, ordersResult] = await Promise.all([
-    supabase.from('display_settings').select('settings').eq('machine_id', machineId).eq('profile_name', profile).single(),
-    supabase.from('menu_sync').select('items').eq('machine_id', machineId).single(),
-    supabase.from('owner_orders').select('order_number').eq('machine_id', machineId).eq('status', 'preparing').gte('order_date', new Date().toISOString().split('T')[0])
-  ])
-
-  const raw = (dsResult.data?.settings || {}) as Record<string, any>
-
-  // Parse settings
+/**
+ * Build the FULL display "info" payload. Used for BOTH the initial HTML injection and the
+ * 30s json poll. Previously the poll returned a stripped object (no logo/menu/panels/fonts),
+ * and the client's handleSSE('info') overwrites state wholesale — so every 30s the logo, menu,
+ * slideshow, fonts and panel toggles reset to defaults (visible flicker). Sharing one builder
+ * keeps the poll payload complete so the overwrite is a no-op when nothing changed.
+ */
+function buildInfo(raw: Record<string, any>, p: string, menuItems: any[], preparing: any[]) {
   let social: any[] = []; try { social = JSON.parse(raw.social_media || '[]') } catch {}
   let promos: any[] = []; try { promos = JSON.parse(raw._promos || '[]') } catch {}
   let packs: any[] = []; try { packs = JSON.parse(raw._packs || '[]') } catch {}
   let slideshowImages: any[] = []; try { slideshowImages = JSON.parse(raw._slideshow_images || '[]') } catch {}
 
-  // Menu panel: one flag drives both panel visibility and item injection.
-  // Legacy `display_show_menu` was a separate key never wired to the UI.
   const panelMenuEnabled = raw[p + 'panel_menu'] !== 'false'
-  const showMenu = panelMenuEnabled
-  const menuItems = showMenu && menuResult.data?.items ? menuResult.data.items : []
-  const preparing = (ordersResult.data || []).map((o: any) => o.order_number)
 
-  const info = JSON.stringify({
+  return {
     type: 'info',
     name: raw.restaurant_name || '',
     logo: raw._logo_base64 || '',
@@ -74,8 +42,8 @@ export async function GET(req: Request) {
     fontFamily: raw[p + 'font_family'] || 'Inter',
     textColor: raw[p + 'text_color'] || '#ffffff',
     textScale: raw[p + 'text_scale'] || 'medium',
-    showMenu,
-    menuItems,
+    showMenu: panelMenuEnabled,
+    menuItems: panelMenuEnabled ? menuItems : [],
     showName: raw[p + 'show_name'] !== 'false',
     logoScale: parseFloat(raw[p + 'logo_scale'] || '1'),
     panelWelcome: raw[p + 'panel_welcome'] !== 'false',
@@ -83,19 +51,50 @@ export async function GET(req: Request) {
     panelPromos: raw[p + 'panel_promos'] !== 'false',
     panelSlideshow: raw[p + 'panel_slideshow'] !== 'false',
     panelOrders: raw[p + 'panel_orders'] !== 'false',
-    panelMenu: raw[p + 'panel_menu'] !== 'false',
+    panelMenu: panelMenuEnabled,
     queue: { preparing }
-  })
+  }
+}
 
+export async function GET(req: Request) {
+  const url = new URL(req.url)
+  const machineId = url.searchParams.get('machineId')
+  const profile = url.searchParams.get('profile') || 'default'
+
+  if (!machineId) {
+    return new NextResponse('<h1>Missing machineId</h1>', { status: 400, headers: { 'Content-Type': 'text/html' } })
+  }
+
+  // Per-profile setting key prefix — matches AmbianceScreen.tsx:131
+  const p = profile === 'default' ? 'display_' : `display_${profile}_`
+
+  // Fetch all data in parallel (same set for both JSON poll and initial HTML)
+  const [dsResult, menuResult, ordersResult] = await Promise.all([
+    supabase.from('display_settings').select('settings').eq('machine_id', machineId).eq('profile_name', profile).single(),
+    supabase.from('menu_sync').select('items').eq('machine_id', machineId).single(),
+    supabase.from('owner_orders').select('order_number').eq('machine_id', machineId).eq('status', 'preparing').gte('order_date', todayStr())
+  ])
+
+  const raw = (dsResult.data?.settings || {}) as Record<string, any>
+  const menuItems = menuResult.data?.items || []
+  const preparing = (ordersResult.data || []).map((o: any) => o.order_number)
+
+  const infoObj = buildInfo(raw, p, menuItems, preparing)
+
+  // JSON mode for polling updates — return the SAME full info object so the poll never
+  // wipes logo/menu/panels back to defaults.
+  if (url.searchParams.get('json') === '1') {
+    return NextResponse.json({ info: infoObj, queue: { type: 'queue', preparing } })
+  }
+
+  const info = JSON.stringify(infoObj)
   const queue = JSON.stringify({ type: 'queue', preparing })
-
   const lang = raw.language || 'en'
 
   // Get the EXACT same HTML as the local display
   let displayHTML = getDisplayHTML(lang)
 
   // Replace the connect() call with direct data injection
-  // Define variables and call handleSSE inline — no separate script tag needed
   displayHTML = displayHTML.replace(
     'connect();',
     `// Cloud mode: inject data directly instead of SSE

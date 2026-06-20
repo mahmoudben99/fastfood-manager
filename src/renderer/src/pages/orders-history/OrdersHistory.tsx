@@ -103,8 +103,13 @@ export function OrdersHistory() {
           menu_item_id: item.menu_item_id,
           quantity: item.quantity,
           notes: item.notes || undefined,
-          worker_id: item.worker_id || undefined
-        }))
+          worker_id: item.worker_id || undefined,
+          // Keep each line's recorded price (don't silently re-price to current menu)
+          unit_price: item.unit_price
+        })),
+        // Preserve the order's existing discount rather than wiping it on an admin edit
+        selectedOrder.discount_amount ?? undefined,
+        selectedOrder.discount_details ?? undefined
       )
       setSelectedOrder(updated)
       setEditMode(false)

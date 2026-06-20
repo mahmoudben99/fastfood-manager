@@ -50,8 +50,43 @@ interface OrderState {
   loadActivePromos: () => Promise<void>
   getSubtotal: () => number
   getDiscount: () => number
+  getDiscountDetails: () => string
   getTotal: () => number
   clearOrder: () => void
+}
+
+/** Compute the promo discount for a cart, returning both the amount and a human-readable breakdown. */
+function computeDiscount(
+  items: CartItem[],
+  activePromos: ActivePromo[]
+): { amount: number; details: string } {
+  if (activePromos.length === 0 || items.length === 0) return { amount: 0, details: '' }
+
+  let totalDiscount = 0
+  const details: string[] = []
+
+  for (const promo of activePromos) {
+    let promoDiscount = 0
+    for (const item of items) {
+      const applies =
+        promo.applies_to === 'all' ||
+        (promo.menu_item_ids && promo.menu_item_ids.includes(item.menu_item_id))
+      if (!applies) continue
+
+      const itemTotal = item.price * item.quantity
+      if (promo.type === 'percentage') {
+        promoDiscount += itemTotal * (promo.discount_value / 100)
+      } else {
+        promoDiscount += Math.min(promo.discount_value * item.quantity, itemTotal)
+      }
+    }
+    if (promoDiscount > 0) {
+      totalDiscount += promoDiscount
+      details.push(`${promo.name}: -${Math.round(promoDiscount)}`)
+    }
+  }
+
+  return { amount: Math.round(totalDiscount * 100) / 100, details: details.join(', ') }
 }
 
 export const useOrderStore = create<OrderState>((set, get) => ({
@@ -67,30 +102,39 @@ export const useOrderStore = create<OrderState>((set, get) => ({
   editingOrderId: null,
 
   addItem: async (item) => {
-    const { items } = get()
-    const existingIndex = items.findIndex(
+    const existingIndex = get().items.findIndex(
       (i) => i.menu_item_id === item.menu_item_id
     )
 
     if (existingIndex >= 0) {
-      const updated = [...items]
-      updated[existingIndex].quantity += 1
-      set({ items: updated })
-    } else {
-      // Automatically assign worker based on category
-      let worker_id: number | null = null
-      try {
-        const workers = await window.api.workers.getByCategoryId(item.category_id)
-        if (workers.length > 0) {
-          worker_id = workers[0].id // Use first assigned worker
-        }
-      } catch (err) {
-        console.warn('Failed to get worker for category:', err)
-      }
-
+      // Clone the line object (not just the array) so memoized children don't observe a mutated old snapshot.
       set({
-        items: [...items, { ...item, quantity: 1, notes: '', worker_id }]
+        items: get().items.map((it, i) =>
+          i === existingIndex ? { ...it, quantity: it.quantity + 1 } : it
+        )
       })
+      return
+    }
+
+    // New item: append synchronously FIRST so a rapid second tap finds it and bumps quantity
+    // (previously both taps awaited getByCategoryId, saw existingIndex<0, and appended duplicate lines).
+    set({ items: [...get().items, { ...item, quantity: 1, notes: '', worker_id: null }] })
+
+    // Then fill in the auto-assigned worker once the async lookup resolves.
+    try {
+      const workers = await window.api.workers.getByCategoryId(item.category_id)
+      if (workers.length > 0) {
+        const workerId = workers[0].id
+        set({
+          items: get().items.map((it) =>
+            it.menu_item_id === item.menu_item_id && it.worker_id === null
+              ? { ...it, worker_id: workerId }
+              : it
+          )
+        })
+      }
+    } catch (err) {
+      console.warn('Failed to get worker for category:', err)
     }
   },
 
@@ -103,27 +147,19 @@ export const useOrderStore = create<OrderState>((set, get) => ({
       set({ items: get().items.filter((_, i) => i !== index) })
       return
     }
-    const updated = [...get().items]
-    updated[index].quantity = quantity
-    set({ items: updated })
+    set({ items: get().items.map((it, i) => (i === index ? { ...it, quantity } : it)) })
   },
 
   updateItemNotes: (index, notes) => {
-    const updated = [...get().items]
-    updated[index].notes = notes
-    set({ items: updated })
+    set({ items: get().items.map((it, i) => (i === index ? { ...it, notes } : it)) })
   },
 
   updateItemPrice: (index, price) => {
-    const updated = [...get().items]
-    updated[index].price = price
-    set({ items: updated })
+    set({ items: get().items.map((it, i) => (i === index ? { ...it, price } : it)) })
   },
 
   setWorkerForItem: (index, workerId) => {
-    const updated = [...get().items]
-    updated[index].worker_id = workerId
-    set({ items: updated })
+    set({ items: get().items.map((it, i) => (i === index ? { ...it, worker_id: workerId } : it)) })
   },
 
   setOrderType: (type) => set({ orderType: type }),
@@ -170,35 +206,9 @@ export const useOrderStore = create<OrderState>((set, get) => ({
     return get().items.reduce((sum, item) => sum + item.price * item.quantity, 0)
   },
 
-  getDiscount: () => {
-    const { items, activePromos } = get()
-    if (activePromos.length === 0 || items.length === 0) return 0
+  getDiscount: () => computeDiscount(get().items, get().activePromos).amount,
 
-    let totalDiscount = 0
-    const details: string[] = []
-
-    for (const promo of activePromos) {
-      let promoDiscount = 0
-      for (const item of items) {
-        const applies = promo.applies_to === 'all' ||
-          (promo.menu_item_ids && promo.menu_item_ids.includes(item.menu_item_id))
-        if (!applies) continue
-
-        const itemTotal = item.price * item.quantity
-        if (promo.type === 'percentage') {
-          promoDiscount += itemTotal * (promo.discount_value / 100)
-        } else {
-          promoDiscount += Math.min(promo.discount_value * item.quantity, itemTotal)
-        }
-      }
-      if (promoDiscount > 0) {
-        totalDiscount += promoDiscount
-        details.push(`${promo.name}: -${Math.round(promoDiscount)}`)
-      }
-    }
-
-    return Math.round(totalDiscount * 100) / 100
-  },
+  getDiscountDetails: () => computeDiscount(get().items, get().activePromos).details,
 
   getTotal: () => {
     return Math.max(0, get().getSubtotal() - get().getDiscount())

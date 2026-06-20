@@ -53,33 +53,58 @@ export function startRemoteOrderListener(win: BrowserWindow): void {
   }, 10000)
 }
 
-async function handleRemoteOrder(remoteOrder: any): Promise<void> {
+/** Mark a remote_orders row with a terminal status so the 10s 'pending' poll stops retrying it. */
+async function markRemoteOrder(id: any, status: 'processed' | 'failed'): Promise<void> {
   try {
-    const orderData = remoteOrder.order_data
-    // Create a real order in the local database
+    const supabase = getClient()
+    // Supabase client is generic-less in this project, so update() types its arg as `never`.
+    await supabase.from('remote_orders').update({ status } as never).eq('id', id)
+  } catch (err) {
+    console.error('[Remote Order] Failed to update status:', err)
+  }
+}
+
+async function handleRemoteOrder(remoteOrder: any): Promise<void> {
+  const orderData = remoteOrder?.order_data
+
+  // Validate the cloud payload BEFORE touching the DB. A malformed row (missing items,
+  // non-array, bad ids) used to throw inside create(), never get marked processed, and be
+  // re-selected by the 10s poll forever. Mark such rows 'failed' so they can't poison the loop.
+  const items = Array.isArray(orderData?.items) ? orderData.items : null
+  const validItems = (items || [])
+    .filter((it: any) => it && Number.isFinite(Number(it.id)) && Number(it.quantity) > 0)
+    .map((it: any) => ({ menu_item_id: Number(it.id), quantity: Number(it.quantity) }))
+
+  if (!orderData || validItems.length === 0) {
+    console.error('[Remote Order] Invalid payload, marking failed:', remoteOrder?.id)
+    await markRemoteOrder(remoteOrder?.id, 'failed')
+    return
+  }
+
+  try {
+    // forceMenuPrice: never trust client-supplied prices from a remote order.
     const order = ordersRepo.create({
       order_type: orderData.orderType || 'takeout',
       table_number: orderData.tableNumber || undefined,
       customer_phone: orderData.customerPhone || undefined,
       customer_name: orderData.customerName || undefined,
-      items: orderData.items.map((item: any) => ({
-        menu_item_id: item.id,
-        quantity: item.quantity,
-        unit_price: item.price
-      }))
+      forceMenuPrice: true,
+      items: validItems
     })
 
-    // Sync to owner dashboard (parity with src/main/ipc/orders.ipc.ts:29 local-create path)
+    // Sync to owner dashboard (parity with src/main/ipc/orders.ipc.ts local-create path)
     syncOrderToCloud(order).catch(() => {})
 
     // Notify the renderer
     mainWin?.webContents.send('remote:new-order', order)
 
     // Mark as processed in Supabase
-    const supabase = getClient()
-    await supabase.from('remote_orders').update({ status: 'processed' }).eq('id', remoteOrder.id)
+    await markRemoteOrder(remoteOrder.id, 'processed')
   } catch (err) {
-    console.error('[Remote Order] Failed to process:', err)
+    // create() throwing here is almost always a permanent data problem (e.g. an unknown
+    // menu_item_id), so mark failed rather than retry the same bad order every 10s.
+    console.error('[Remote Order] Failed to process, marking failed:', err)
+    await markRemoteOrder(remoteOrder.id, 'failed')
   }
 }
 

@@ -42,9 +42,16 @@ export function CategorySetup({ data, updateData }: Props) {
     })
   }
 
-  const updateCategoryName = (index: number, name: string) => {
+  const updateCategoryName = (index: number, value: string) => {
     const updated = [...data.categories]
-    updated[index] = { ...updated[index], name }
+    // Write the field that's actually being displayed/edited for the chosen food language,
+    // otherwise (in ar/fr) the keystroke landed on the English `name` while the input showed
+    // name_ar/name_fr, so edits silently vanished on the next render.
+    const cat = { ...updated[index] }
+    if (data.foodLanguage === 'ar') cat.name_ar = value
+    else if (data.foodLanguage === 'fr') cat.name_fr = value
+    else cat.name = value
+    updated[index] = cat
     updateData({ categories: updated })
   }
 

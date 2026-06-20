@@ -182,6 +182,38 @@ function sendJSON(res: http.ServerResponse, status: number, data: unknown): void
   res.end(body)
 }
 
+/**
+ * Read a JSON request body with a hard size cap. Previously both POST handlers buffered
+ * req.on('data') into a string with no limit, so a LAN client could stream an arbitrarily
+ * large body to exhaust main-process memory. Caps at 256 KB and 413s anything larger.
+ */
+function readJsonBody(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  onParsed: (data: any) => void
+): void {
+  const MAX_BYTES = 256 * 1024
+  let body = ''
+  let aborted = false
+  req.on('data', (chunk) => {
+    if (aborted) return
+    body += chunk
+    if (body.length > MAX_BYTES) {
+      aborted = true
+      sendJSON(res, 413, { error: 'Payload too large' })
+      req.destroy()
+    }
+  })
+  req.on('end', () => {
+    if (aborted) return
+    try {
+      onParsed(JSON.parse(body))
+    } catch {
+      sendJSON(res, 400, { error: 'Invalid request' })
+    }
+  })
+}
+
 function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): void {
   const url = new URL(req.url ?? '/', `http://localhost`)
   const method = req.method ?? 'GET'
@@ -219,22 +251,16 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
 
   // PIN authentication
   if (method === 'POST' && url.pathname === '/api/pin') {
-    let body = ''
-    req.on('data', (chunk) => { body += chunk })
-    req.on('end', () => {
-      try {
-        const { pin } = JSON.parse(body) as { pin: string }
-        const storedPin = settingsRepo.get('tablet_pin') ?? '0000'
-        if (pin !== storedPin) {
-          sendJSON(res, 401, { error: 'PIN incorrect' })
-          return
-        }
-        const pinVersion = settingsRepo.get('tablet_pin_version') ?? '1'
-        const token = makeToken(pin, pinVersion)
-        sendJSON(res, 200, { ok: true, token })
-      } catch {
-        sendJSON(res, 400, { error: 'Invalid request' })
+    readJsonBody(req, res, (data) => {
+      const pin = String(data?.pin ?? '')
+      const storedPin = settingsRepo.get('tablet_pin') ?? '0000'
+      if (pin !== storedPin) {
+        sendJSON(res, 401, { error: 'PIN incorrect' })
+        return
       }
+      const pinVersion = settingsRepo.get('tablet_pin_version') ?? '1'
+      const token = makeToken(pin, pinVersion)
+      sendJSON(res, 200, { ok: true, token })
     })
     return
   }
@@ -245,12 +271,32 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
       sendJSON(res, 401, { error: 'Session expirée. Reconnectez-vous.' })
       return
     }
-    let body = ''
-    req.on('data', (chunk) => { body += chunk })
-    req.on('end', () => {
+    readJsonBody(req, res, (raw) => {
       try {
-        const input = JSON.parse(body)
-        const order = ordersRepo.create(input)
+        // Build a sanitized input from only the fields a self-order client may set.
+        // forceMenuPrice ensures prices always come from the menu, never from the client
+        // (a LAN client could otherwise POST unit_price: 0).
+        const rawItems = Array.isArray(raw?.items) ? raw.items : []
+        const items = rawItems
+          .filter((it: any) => it && Number.isFinite(Number(it.menu_item_id)) && Number(it.quantity) > 0)
+          .map((it: any) => ({
+            menu_item_id: Number(it.menu_item_id),
+            quantity: Number(it.quantity),
+            notes: typeof it.notes === 'string' ? it.notes.slice(0, 500) : undefined
+          }))
+        if (items.length === 0) {
+          sendJSON(res, 400, { error: 'No valid items' })
+          return
+        }
+        const order = ordersRepo.create({
+          order_type: ['local', 'takeout', 'delivery'].includes(raw?.order_type) ? raw.order_type : 'takeout',
+          table_number: raw?.table_number ? String(raw.table_number).slice(0, 50) : undefined,
+          customer_phone: raw?.customer_phone ? String(raw.customer_phone).slice(0, 50) : undefined,
+          customer_name: raw?.customer_name ? String(raw.customer_name).slice(0, 100) : undefined,
+          notes: raw?.notes ? String(raw.notes).slice(0, 500) : undefined,
+          forceMenuPrice: true,
+          items
+        })
         mainWin?.webContents.send('tablet:new-order', order)
         // Same side-effects as normal orders
         performAutoBackup()

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Search, ArrowUpDown, Phone, ShoppingCart, DollarSign, Star, ArrowLeft, Copy } from 'lucide-react'
 import { formatCurrency } from '../../utils/formatCurrency'
 import { useAppStore } from '../../store/appStore'
@@ -16,6 +17,7 @@ interface Customer {
 type SortKey = 'total_spent' | 'order_count' | 'last_order'
 
 export function LoyaltyDashboard() {
+  const { t } = useTranslation()
   const { foodLanguage } = useAppStore()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [search, setSearch] = useState('')
@@ -75,7 +77,12 @@ export function LoyaltyDashboard() {
     setSortBy(order[(idx + 1) % order.length])
   }
 
-  const sortLabel = sortBy === 'total_spent' ? 'Total Spent' : sortBy === 'order_count' ? 'Orders' : 'Last Order'
+  const sortLabel =
+    sortBy === 'total_spent'
+      ? t('loyalty.totalSpent', { defaultValue: 'Total Spent' })
+      : sortBy === 'order_count'
+        ? t('loyalty.orders', { defaultValue: 'Orders' })
+        : t('loyalty.lastOrder', { defaultValue: 'Last Order' })
 
   // Detail view
   if (selectedCustomer) {
@@ -86,7 +93,7 @@ export function LoyaltyDashboard() {
           className="flex items-center gap-1 text-sm text-orange-600 hover:text-orange-700 font-medium mb-4"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to customers
+          {t('loyalty.backToCustomers', { defaultValue: 'Back to customers' })}
         </button>
 
         {/* Customer header */}
@@ -98,11 +105,11 @@ export function LoyaltyDashboard() {
               </h2>
               <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
                 <span className="flex items-center gap-1"><Phone className="h-3.5 w-3.5" /> {selectedCustomer.phone}</span>
-                <span className="flex items-center gap-1"><ShoppingCart className="h-3.5 w-3.5" /> {selectedCustomer.order_count} orders</span>
-                <span className="flex items-center gap-1"><DollarSign className="h-3.5 w-3.5" /> {formatCurrency(selectedCustomer.total_spent)} spent</span>
+                <span className="flex items-center gap-1"><ShoppingCart className="h-3.5 w-3.5" /> {t('loyalty.ordersCount', { defaultValue: '{{count}} orders', count: selectedCustomer.order_count })}</span>
+                <span className="flex items-center gap-1"><DollarSign className="h-3.5 w-3.5" /> {t('loyalty.amountSpent', { defaultValue: '{{amount}} spent', amount: formatCurrency(selectedCustomer.total_spent) })}</span>
               </div>
               {selectedCustomer.last_order_date && (
-                <p className="text-xs text-gray-400 mt-1">Last order: {formatDate(selectedCustomer.last_order_date)}</p>
+                <p className="text-xs text-gray-400 mt-1">{t('loyalty.lastOrderLabel', { defaultValue: 'Last order: {{date}}', date: formatDate(selectedCustomer.last_order_date) })}</p>
               )}
             </div>
             <button
@@ -112,7 +119,7 @@ export function LoyaltyDashboard() {
               }}
               className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600"
             >
-              WhatsApp
+              {t('loyalty.whatsapp', { defaultValue: 'WhatsApp' })}
             </button>
           </div>
         </div>
@@ -122,10 +129,10 @@ export function LoyaltyDashboard() {
           <div className="bg-white rounded-xl border p-5">
             <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
               <Star className="h-4 w-4 text-yellow-500" />
-              Favorite Items
+              {t('loyalty.favoriteItems', { defaultValue: 'Favorite Items' })}
             </h3>
             {favoriteItems.length === 0 ? (
-              <p className="text-sm text-gray-400">No order data yet</p>
+              <p className="text-sm text-gray-400">{t('loyalty.noOrderData', { defaultValue: 'No order data yet' })}</p>
             ) : (
               <div className="space-y-2">
                 {favoriteItems.map((item: any, i: number) => (
@@ -145,15 +152,15 @@ export function LoyaltyDashboard() {
 
           {/* Recent orders */}
           <div className="bg-white rounded-xl border p-5">
-            <h3 className="font-semibold text-gray-900 mb-3">Recent Orders</h3>
+            <h3 className="font-semibold text-gray-900 mb-3">{t('loyalty.recentOrders', { defaultValue: 'Recent Orders' })}</h3>
             {customerOrders.length === 0 ? (
-              <p className="text-sm text-gray-400">No orders yet</p>
+              <p className="text-sm text-gray-400">{t('loyalty.noOrdersYet', { defaultValue: 'No orders yet' })}</p>
             ) : (
               <div className="space-y-2 max-h-80 overflow-y-auto">
                 {customerOrders.map((order: any) => (
                   <div key={order.id} className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg">
                     <div>
-                      <p className="text-sm font-medium">Order #{order.daily_number}</p>
+                      <p className="text-sm font-medium">{t('loyalty.orderNumber', { defaultValue: 'Order #{{n}}', n: order.daily_number })}</p>
                       <p className="text-xs text-gray-500">
                         {formatDate(order.order_date)} {formatTime(order.created_at)}
                       </p>
@@ -178,7 +185,7 @@ export function LoyaltyDashboard() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by phone or name..."
+            placeholder={t('loyalty.searchPlaceholder', { defaultValue: 'Search by phone or name...' })}
             className="w-full ps-10 pe-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
           />
         </div>
@@ -187,27 +194,27 @@ export function LoyaltyDashboard() {
           className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
         >
           <ArrowUpDown className="h-4 w-4" />
-          Sort: {sortLabel}
+          {t('loyalty.sortBy', { defaultValue: 'Sort: {{label}}', label: sortLabel })}
         </button>
       </div>
 
       {loading ? (
-        <div className="text-center py-16 text-gray-400">Loading...</div>
+        <div className="text-center py-16 text-gray-400">{t('common.loading')}</div>
       ) : customers.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
           <Phone className="h-12 w-12 mx-auto mb-3 opacity-50" />
-          <p>No customers tracked yet</p>
-          <p className="text-sm mt-1">Customers are automatically tracked when orders include a phone number</p>
+          <p>{t('loyalty.noCustomers', { defaultValue: 'No customers tracked yet' })}</p>
+          <p className="text-sm mt-1">{t('loyalty.noCustomersHint', { defaultValue: 'Customers are automatically tracked when orders include a phone number' })}</p>
         </div>
       ) : (
         <div className="bg-white rounded-xl border overflow-hidden">
           <table className="w-full">
             <thead>
               <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase">
-                <th className="px-4 py-3">Customer</th>
-                <th className="px-4 py-3 text-right">Orders</th>
-                <th className="px-4 py-3 text-right">Total Spent</th>
-                <th className="px-4 py-3 text-right">Last Order</th>
+                <th className="px-4 py-3">{t('loyalty.customer', { defaultValue: 'Customer' })}</th>
+                <th className="px-4 py-3 text-right">{t('loyalty.orders', { defaultValue: 'Orders' })}</th>
+                <th className="px-4 py-3 text-right">{t('loyalty.totalSpent', { defaultValue: 'Total Spent' })}</th>
+                <th className="px-4 py-3 text-right">{t('loyalty.lastOrder', { defaultValue: 'Last Order' })}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">

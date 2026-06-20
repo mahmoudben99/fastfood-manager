@@ -10,6 +10,15 @@ export async function GET(req: Request) {
 
   const today = new Date().toISOString().split('T')[0]
 
+  // Restaurant currency symbol (falls back to DA)
+  const { data: ds } = await supabase
+    .from('display_settings')
+    .select('settings')
+    .eq('machine_id', machineId)
+    .eq('profile_name', 'default')
+    .single()
+  const currency = (ds?.settings as any)?.currency_symbol || (ds?.settings as any)?.currency || 'DA'
+
   const { data: orders } = await supabase
     .from('owner_orders')
     .select('*')
@@ -48,6 +57,7 @@ export async function GET(req: Request) {
   return NextResponse.json({
     orders: orderList,
     stats: { totalRevenue, orderCount, avgOrder },
-    popularItems
+    popularItems,
+    currency
   })
 }

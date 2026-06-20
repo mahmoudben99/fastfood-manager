@@ -86,7 +86,8 @@ const api = {
       ipcRenderer.invoke('orders:updateStatus', id, status),
     cancel: (id: number) => ipcRenderer.invoke('orders:cancel', id),
     getToday: () => ipcRenderer.invoke('orders:getToday'),
-    updateItems: (id: number, items: any[]) => ipcRenderer.invoke('orders:updateItems', id, items)
+    updateItems: (id: number, items: any[], discountAmount?: number, discountDetails?: string) =>
+      ipcRenderer.invoke('orders:updateItems', id, items, discountAmount, discountDetails)
   },
   analytics: {
     getProfitSummary: (startDate: string, endDate: string) =>

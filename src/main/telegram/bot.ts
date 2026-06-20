@@ -7,6 +7,19 @@ import { analyticsRepo } from '../database/repositories/analytics.repo'
 let bot: any = null
 let isRunning = false
 
+/**
+ * Escape user/menu-derived text for Telegram HTML parse_mode.
+ * Previously the notification used Markdown and interpolated raw item names / notes;
+ * a single stray *, _, [ or ` made Telegram reject the message (400) and the owner
+ * silently never saw the new order. HTML mode only needs &, <, > escaped.
+ */
+function escapeHtml(text: unknown): string {
+  return String(text ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
 export function startBot(): { success: boolean; error?: string } {
   const token = settingsRepo.get('telegram_bot_token')
   const chatId = settingsRepo.get('telegram_chat_id')
@@ -92,23 +105,23 @@ export function sendOrderNotification(order: any): void {
   if (!chatId) return
 
   try {
-    const c = getCurrency()
+    const c = escapeHtml(getCurrency())
     const items = (order.items || [])
-      .map((i: any) => `  ${i.quantity}x ${i.menu_item_name}`)
+      .map((i: any) => `  ${i.quantity}x ${escapeHtml(i.menu_item_name)}`)
       .join('\n')
 
     const typeEmoji = order.order_type === 'delivery' ? '🛵' : order.order_type === 'takeout' ? '🥡' : '🍽️'
     const typeName = order.order_type === 'delivery' ? 'Delivery' : order.order_type === 'takeout' ? 'Take Out' : 'At Table'
 
-    let msg = `🔔 *New Order #${order.daily_number}*\n`
+    let msg = `🔔 <b>New Order #${escapeHtml(order.daily_number)}</b>\n`
     msg += `${typeEmoji} ${typeName}`
-    if (order.table_number) msg += ` — Table ${order.table_number}`
-    if (order.customer_phone) msg += `\n📞 ${order.customer_phone}`
+    if (order.table_number) msg += ` — Table ${escapeHtml(order.table_number)}`
+    if (order.customer_phone) msg += `\n📞 ${escapeHtml(order.customer_phone)}`
     msg += `\n\n${items}\n\n`
-    msg += `💰 *Total: ${Number(order.total || 0).toFixed(2)} ${c}*`
-    if (order.notes) msg += `\n📝 ${order.notes}`
+    msg += `💰 <b>Total: ${Number(order.total || 0).toFixed(2)} ${c}</b>`
+    if (order.notes) msg += `\n📝 ${escapeHtml(order.notes)}`
 
-    bot.api.sendMessage(chatId, msg, { parse_mode: 'Markdown' }).catch(() => {})
+    bot.api.sendMessage(chatId, msg, { parse_mode: 'HTML' }).catch(() => {})
   } catch {
     // Silent fail — don't block order creation
   }
@@ -116,6 +129,12 @@ export function sendOrderNotification(order: any): void {
 
 function getCurrency(): string {
   return settingsRepo.get('currency_symbol') || '$'
+}
+
+/** Restaurant-local date (YYYY-MM-DD) — matches orders.repo so /today etc. align with stored order_date. */
+function localDate(d = new Date()): string {
+  const off = d.getTimezoneOffset() * 60000
+  return new Date(d.getTime() - off).toISOString().split('T')[0]
 }
 
 function registerCommands(bot: any): void {
@@ -140,12 +159,12 @@ function registerCommands(bot: any): void {
 
   bot.command('today', async (ctx) => {
     try {
-      const today = new Date().toISOString().split('T')[0]
+      const today = localDate()
       const summary = analyticsRepo.getProfitSummary(today, today)
       const topItems = analyticsRepo.getTopSellingItems(today, today, 5)
-      const c = getCurrency()
+      const c = escapeHtml(getCurrency())
 
-      let msg = `📊 *Today's Summary* (${today})\n\n`
+      let msg = `📊 <b>Today's Summary</b> (${today})\n\n`
       msg += `🧾 Orders: ${summary.order_count}\n`
       msg += `💰 Revenue: ${Number(summary.total_revenue || 0).toFixed(2)} ${c}\n`
       msg += `📦 Stock Cost: ${Number(summary.total_stock_cost || 0).toFixed(2)} ${c}\n`
@@ -153,13 +172,13 @@ function registerCommands(bot: any): void {
       msg += `✅ Net Profit: ${Number(summary.net_profit || 0).toFixed(2)} ${c}\n`
 
       if (topItems.length > 0) {
-        msg += `\n🔥 *Top Items:*\n`
+        msg += `\n🔥 <b>Top Items:</b>\n`
         topItems.forEach((item: any, i: number) => {
-          msg += `${i + 1}. ${item.name} — ${item.total_quantity}x (${Number(item.total_revenue || 0).toFixed(2)} ${c})\n`
+          msg += `${i + 1}. ${escapeHtml(item.name)} — ${item.total_quantity}x (${Number(item.total_revenue || 0).toFixed(2)} ${c})\n`
         })
       }
 
-      await ctx.reply(msg, { parse_mode: 'Markdown' })
+      await ctx.reply(msg, { parse_mode: 'HTML' })
     } catch (err) {
       await ctx.reply('Error fetching today data.')
     }
@@ -174,13 +193,13 @@ function registerCommands(bot: any): void {
         return
       }
 
-      let msg = `⚠️ *Low Stock Alerts* (${lowStock.length} items)\n\n`
+      let msg = `⚠️ <b>Low Stock Alerts</b> (${lowStock.length} items)\n\n`
       lowStock.forEach((item: any) => {
         const icon = item.quantity <= 0 ? '🔴' : '🟡'
-        msg += `${icon} *${item.name}*: ${item.quantity} ${item.unit_type} (threshold: ${item.alert_threshold})\n`
+        msg += `${icon} <b>${escapeHtml(item.name)}</b>: ${item.quantity} ${escapeHtml(item.unit_type)} (threshold: ${item.alert_threshold})\n`
       })
 
-      await ctx.reply(msg, { parse_mode: 'Markdown' })
+      await ctx.reply(msg, { parse_mode: 'HTML' })
     } catch (err) {
       await ctx.reply('Error fetching stock data.')
     }
@@ -225,33 +244,33 @@ function registerCommands(bot: any): void {
 
   bot.command('workers', async (ctx) => {
     try {
-      const today = new Date().toISOString().split('T')[0]
+      const today = localDate()
       const attendance = workersRepo.getAttendance(today)
       const allWorkers = workersRepo.getAll()
-      const c = getCurrency()
+      const c = escapeHtml(getCurrency())
 
       if (attendance.length === 0) {
         await ctx.reply(
-          `👷 *Workers* (${today})\n\nNo attendance recorded yet today.\nTotal active workers: ${allWorkers.length}`,
-          { parse_mode: 'Markdown' }
+          `👷 <b>Workers</b> (${today})\n\nNo attendance recorded yet today.\nTotal active workers: ${allWorkers.length}`,
+          { parse_mode: 'HTML' }
         )
         return
       }
 
       let totalPay = 0
-      let msg = `👷 *Workers Attendance* (${today})\n\n`
+      let msg = `👷 <b>Workers Attendance</b> (${today})\n\n`
 
       attendance.forEach((a: any) => {
         const icon = a.shift_type === 'full' ? '🟢' : a.shift_type === 'half' ? '🟡' : '🔴'
-        const name = a.worker_name || a.name || `Worker #${a.worker_id}`
-        msg += `${icon} ${name}: ${a.shift_type} — ${Number(a.pay_amount || 0).toFixed(2)} ${c}\n`
+        const name = escapeHtml(a.worker_name || a.name || `Worker #${a.worker_id}`)
+        msg += `${icon} ${name}: ${escapeHtml(a.shift_type)} — ${Number(a.pay_amount || 0).toFixed(2)} ${c}\n`
         totalPay += Number(a.pay_amount || 0)
       })
 
       msg += `\nTotal recorded: ${attendance.length}/${allWorkers.length}\n`
       msg += `Total pay today: ${totalPay.toFixed(2)} ${c}`
 
-      await ctx.reply(msg, { parse_mode: 'Markdown' })
+      await ctx.reply(msg, { parse_mode: 'HTML' })
     } catch (err) {
       await ctx.reply('Error fetching worker data.')
     }
@@ -259,26 +278,26 @@ function registerCommands(bot: any): void {
 
   bot.command('status', async (ctx) => {
     try {
-      const today = new Date().toISOString().split('T')[0]
+      const today = localDate()
       const todayOrders = ordersRepo.getTodayOrders()
-      const restaurantName = settingsRepo.get('restaurant_name') || 'Restaurant'
+      const restaurantName = escapeHtml(settingsRepo.get('restaurant_name') || 'Restaurant')
       const lowCount = stockRepo.getLowStockCount()
 
       const lastOrder = todayOrders.length > 0 ? todayOrders[0] : null
 
-      let msg = `🖥️ *${restaurantName} — Status*\n\n`
+      let msg = `🖥️ <b>${restaurantName} — Status</b>\n\n`
       msg += `✅ App is running\n`
       msg += `📅 Date: ${today}\n`
       msg += `🧾 Today's orders: ${todayOrders.length}\n`
       if (lastOrder) {
-        msg += `🕐 Last order: #${lastOrder.daily_number} at ${lastOrder.created_at}\n`
+        msg += `🕐 Last order: #${lastOrder.daily_number} at ${escapeHtml(lastOrder.created_at)}\n`
       }
 
       if (lowCount > 0) {
         msg += `\n⚠️ ${lowCount} stock items are low!`
       }
 
-      await ctx.reply(msg, { parse_mode: 'Markdown' })
+      await ctx.reply(msg, { parse_mode: 'HTML' })
     } catch (err) {
       await ctx.reply('Error fetching status.')
     }

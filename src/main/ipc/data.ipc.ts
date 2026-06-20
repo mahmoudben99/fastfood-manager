@@ -8,31 +8,35 @@ export function registerDataHandlers(): void {
   ipcMain.handle('data:clearForImport', () => {
     const db = getDb()
 
-    // Temporarily disable foreign keys to allow category deletion
+    // Temporarily disable foreign keys to allow category deletion.
+    // try/finally guarantees FK enforcement is restored even if the transaction throws —
+    // otherwise a failed import would silently leave foreign_keys OFF for the whole
+    // (shared, singleton) connection until the app restarts.
     db.pragma('foreign_keys = OFF')
+    try {
+      const transaction = db.transaction(() => {
+        // Clear link tables
+        db.exec('DELETE FROM menu_item_ingredients')
+        db.exec('DELETE FROM worker_categories')
 
-    const transaction = db.transaction(() => {
-      // Clear link tables
-      db.exec('DELETE FROM menu_item_ingredients')
-      db.exec('DELETE FROM worker_categories')
+        // Clear stock audit data
+        db.exec('DELETE FROM stock_adjustments')
+        db.exec('DELETE FROM stock_purchases')
 
-      // Clear stock audit data
-      db.exec('DELETE FROM stock_adjustments')
-      db.exec('DELETE FROM stock_purchases')
+        // Soft-delete main entities (preserves order history references)
+        db.exec("UPDATE menu_items SET is_active = 0, updated_at = datetime('now')")
+        db.exec("UPDATE stock_items SET is_active = 0, updated_at = datetime('now')")
+        db.exec("UPDATE workers SET is_active = 0, updated_at = datetime('now')")
 
-      // Soft-delete main entities (preserves order history references)
-      db.exec("UPDATE menu_items SET is_active = 0, updated_at = datetime('now')")
-      db.exec("UPDATE stock_items SET is_active = 0, updated_at = datetime('now')")
-      db.exec("UPDATE workers SET is_active = 0, updated_at = datetime('now')")
+        // Hard-delete categories (FK disabled)
+        db.exec('DELETE FROM categories')
+      })
 
-      // Hard-delete categories (FK disabled)
-      db.exec('DELETE FROM categories')
-    })
-
-    transaction()
-
-    // Re-enable foreign keys
-    db.pragma('foreign_keys = ON')
+      transaction()
+    } finally {
+      // Re-enable foreign keys no matter what
+      db.pragma('foreign_keys = ON')
+    }
 
     return { success: true }
   })
@@ -144,8 +148,10 @@ export function registerDataHandlers(): void {
 
     const snapshot = JSON.parse(row.data)
 
-    // Clear current data (same as clearForImport)
+    // Clear current data (same as clearForImport).
+    // try/finally guarantees FK enforcement is restored even if restore throws midway.
     db.pragma('foreign_keys = OFF')
+    try {
     const clearAndRestore = db.transaction(() => {
       db.exec('DELETE FROM menu_item_ingredients')
       db.exec('DELETE FROM worker_categories')
@@ -242,7 +248,9 @@ export function registerDataHandlers(): void {
     })
 
     clearAndRestore()
-    db.pragma('foreign_keys = ON')
+    } finally {
+      db.pragma('foreign_keys = ON')
+    }
 
     return { success: true }
   })

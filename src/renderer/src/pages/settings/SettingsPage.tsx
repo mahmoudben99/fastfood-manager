@@ -391,7 +391,7 @@ export function SettingsPage() {
       const result = await window.api.printer.testPrintOnPrinter(printerName)
       setPrinterTestResults(prev => ({ ...prev, [configId]: result }))
     } catch {
-      setPrinterTestResults(prev => ({ ...prev, [configId]: { success: false, error: 'Test failed' } }))
+      setPrinterTestResults(prev => ({ ...prev, [configId]: { success: false, error: t('settings.testFailed', { defaultValue: 'Test failed' }) } }))
     }
     setPrinterTestingIds(prev => {
       const next = new Set(prev)
@@ -403,11 +403,11 @@ export function SettingsPage() {
   // Available tasks for printer assignment
   const getAvailableTasks = () => {
     const tasks: { value: string; label: string }[] = [
-      { value: 'receipt', label: 'Customer Receipt' },
-      { value: 'kitchen_all', label: 'Kitchen Ticket (All Items)' }
+      { value: 'receipt', label: t('settings.taskCustomerReceipt', { defaultValue: 'Customer Receipt' }) },
+      { value: 'kitchen_all', label: t('settings.taskKitchenAll', { defaultValue: 'Kitchen Ticket (All Items)' }) }
     ]
     for (const worker of workers) {
-      tasks.push({ value: `worker_${worker.id}`, label: `Kitchen: ${worker.name}` })
+      tasks.push({ value: `worker_${worker.id}`, label: t('settings.taskKitchenWorker', { defaultValue: 'Kitchen: {{name}}', name: worker.name }) })
     }
     return tasks
   }
@@ -451,7 +451,7 @@ export function SettingsPage() {
     }
     const valid = await window.api.settings.verifyPassword(currentPass)
     if (!valid) {
-      setPassError('Current password is incorrect')
+      setPassError(t('settings.currentPasswordIncorrect', { defaultValue: 'Current password is incorrect' }))
       return
     }
     const hash = await window.api.settings.hashPassword(newPass)
@@ -518,14 +518,14 @@ export function SettingsPage() {
   const getTrialTimeLeft = (): string => {
     if (!trialExpiresAt) return ''
     const msLeft = trialExpiresAt.getTime() - Date.now()
-    if (msLeft <= 0) return 'Expired'
+    if (msLeft <= 0) return t('settings.trialExpiredLabel', { defaultValue: 'Expired' })
     const days = Math.floor(msLeft / (1000 * 60 * 60 * 24))
     const hours = Math.floor((msLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
     const mins = Math.floor((msLeft % (1000 * 60 * 60)) / (1000 * 60))
     const secs = Math.floor((msLeft % (1000 * 60)) / 1000)
-    if (days > 0) return `${days}d ${hours}h ${mins}m ${secs}s remaining`
-    if (hours > 0) return `${hours}h ${mins}m ${secs}s remaining`
-    return `${mins}m ${secs}s remaining`
+    if (days > 0) return t('settings.trialRemainingDays', { defaultValue: '{{days}}d {{hours}}h {{mins}}m {{secs}}s remaining', days, hours, mins, secs })
+    if (hours > 0) return t('settings.trialRemainingHours', { defaultValue: '{{hours}}h {{mins}}m {{secs}}s remaining', hours, mins, secs })
+    return t('settings.trialRemainingMins', { defaultValue: '{{mins}}m {{secs}}s remaining', mins, secs })
   }
 
   const handleCopyLicMachineId = () => {
@@ -550,10 +550,10 @@ export function SettingsPage() {
         setActivateModal(false)
         window.location.reload()
       } else {
-        setActivateError('Invalid activation code for this machine.')
+        setActivateError(t('settings.activateInvalidCode', { defaultValue: 'Invalid activation code for this machine.' }))
       }
     } catch {
-      setActivateError('Activation failed. Try again.')
+      setActivateError(t('settings.activateFailed', { defaultValue: 'Activation failed. Try again.' }))
     } finally {
       setActivateLoading(false)
     }
@@ -565,8 +565,8 @@ export function SettingsPage() {
   }
 
   const handleSavePin = async () => {
-    if (newPin.length !== 4 || !/^\d{4}$/.test(newPin)) { setPinError('Le PIN doit être 4 chiffres.'); return }
-    if (newPin !== confirmPin) { setPinError('Les PINs ne correspondent pas.'); return }
+    if (newPin.length !== 4 || !/^\d{4}$/.test(newPin)) { setPinError(t('settings.pinMustBe4Digits', { defaultValue: 'Le PIN doit être 4 chiffres.' })); return }
+    if (newPin !== confirmPin) { setPinError(t('settings.pinMismatch', { defaultValue: 'Les PINs ne correspondent pas.' })); return }
     const result = await window.api.tablet.setPin(newPin)
     if (result.ok) {
       setTabletPinModal(false)
@@ -574,7 +574,7 @@ export function SettingsPage() {
       setConfirmPin('')
       setPinError('')
     } else {
-      setPinError(result.error || 'Erreur')
+      setPinError(result.error || t('settings.pinError', { defaultValue: 'Erreur' }))
     }
   }
 
@@ -582,10 +582,10 @@ export function SettingsPage() {
     { key: 'general' as const, label: t('settings.general') },
     { key: 'schedule' as const, label: t('settings.schedule') },
     { key: 'printer' as const, label: t('settings.printer') },
-    { key: 'ownerLink' as const, label: 'Owner Link' },
-    { key: 'remoteOrder' as const, label: 'Remote Order' },
+    { key: 'ownerLink' as const, label: t('settings.ownerLink', { defaultValue: 'Owner Link' }) },
+    { key: 'remoteOrder' as const, label: t('settings.remoteOrder', { defaultValue: 'Remote Order' }) },
     { key: 'security' as const, label: t('settings.security') },
-    { key: 'data' as const, label: 'Data' }
+    { key: 'data' as const, label: t('settings.data', { defaultValue: 'Data' }) }
   ]
 
   return (
@@ -660,16 +660,16 @@ export function SettingsPage() {
             {/* Social Media */}
             <div className="pt-3 border-t">
               <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-medium text-gray-700">Social Media</label>
+                <label className="text-sm font-medium text-gray-700">{t('settings.socialMedia', { defaultValue: 'Social Media' })}</label>
                 <button
                   onClick={() => setSocialMedia([...socialMedia, { platform: 'instagram', handle: '' }])}
                   className="flex items-center gap-1 text-xs text-orange-600 hover:text-orange-700 font-medium"
                 >
-                  + Add Platform
+                  {t('settings.addPlatform', { defaultValue: '+ Add Platform' })}
                 </button>
               </div>
               {socialMedia.length === 0 ? (
-                <p className="text-xs text-gray-400">No social media added. Add your accounts to show on receipts and ambiance screen.</p>
+                <p className="text-xs text-gray-400">{t('settings.noSocialMedia', { defaultValue: 'No social media added. Add your accounts to show on receipts and ambiance screen.' })}</p>
               ) : (
                 <div className="space-y-2">
                   {socialMedia.map((sm, i) => (
@@ -701,7 +701,7 @@ export function SettingsPage() {
                           updated[i] = { ...updated[i], handle: e.target.value }
                           setSocialMedia(updated)
                         }}
-                        placeholder="@username or link"
+                        placeholder={t('settings.socialHandlePlaceholder', { defaultValue: '@username or link' })}
                         className="flex-1 border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                       />
                       <button
@@ -788,7 +788,7 @@ export function SettingsPage() {
                         : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                     }`}
                   >
-                    {mode === 'keyboard' ? 'Keyboard & Mouse' : 'Touchscreen'}
+                    {mode === 'keyboard' ? t('settings.inputModeKeyboard', { defaultValue: 'Keyboard & Mouse' }) : t('settings.inputModeTouchscreen', { defaultValue: 'Touchscreen' })}
                   </button>
                 ))}
               </div>
@@ -833,12 +833,12 @@ export function SettingsPage() {
 
             {/* License Status */}
             <div className="pt-4 mt-4 border-t border-gray-200">
-              <h4 className="text-sm font-medium text-gray-900 mb-3">License</h4>
+              <h4 className="text-sm font-medium text-gray-900 mb-3">{t('settings.license', { defaultValue: 'License' })}</h4>
 
               {activationType === 'full' && (
                 <div className="flex items-center gap-2 px-3 py-2 bg-green-50 rounded-lg border border-green-200">
                   <ShieldCheck className="h-5 w-5 text-green-600 shrink-0" />
-                  <span className="text-sm font-medium text-green-700">Full License — Activated</span>
+                  <span className="text-sm font-medium text-green-700">{t('settings.fullLicenseActivated', { defaultValue: 'Full License — Activated' })}</span>
                 </div>
               )}
 
@@ -846,7 +846,7 @@ export function SettingsPage() {
                 <div className="flex items-center gap-2 px-3 py-2 bg-orange-50 rounded-lg border border-orange-200">
                   <Clock className="h-5 w-5 text-orange-500 shrink-0" />
                   <span className="text-sm font-medium text-orange-700 flex-1">
-                    Free Trial — {getTrialTimeLeft()}
+                    {t('settings.freeTrialPrefix', { defaultValue: 'Free Trial — {{time}}', time: getTrialTimeLeft() })}
                   </span>
                 </div>
               )}
@@ -855,7 +855,7 @@ export function SettingsPage() {
                 <div className="flex items-center gap-2 px-3 py-2 bg-red-50 rounded-lg border border-red-200">
                   <ShieldX className="h-5 w-5 text-red-500 shrink-0" />
                   <span className="text-sm font-medium text-red-700">
-                    {trialStatus === 'paused' ? 'Trial Paused' : 'Trial Expired'}
+                    {trialStatus === 'paused' ? t('settings.trialPaused', { defaultValue: 'Trial Paused' }) : t('settings.trialExpired', { defaultValue: 'Trial Expired' })}
                   </span>
                 </div>
               )}
@@ -867,13 +867,13 @@ export function SettingsPage() {
                   className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-semibold transition-colors"
                 >
                   <ShieldCheck className="h-4 w-4" />
-                  Activate Software
+                  {t('settings.activateSoftware', { defaultValue: 'Activate Software' })}
                 </button>
               )}
 
               {licMachineId && (
                 <div className="mt-3">
-                  <p className="text-xs text-gray-500 mb-1">Machine ID</p>
+                  <p className="text-xs text-gray-500 mb-1">{t('settings.machineId', { defaultValue: 'Machine ID' })}</p>
                   <div className="flex items-center gap-2">
                     <div className="flex-1 font-mono text-xs bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 select-all text-gray-700 truncate">
                       {licMachineId}
@@ -881,7 +881,7 @@ export function SettingsPage() {
                     <button
                       onClick={handleCopyLicMachineId}
                       className="shrink-0 p-2 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
-                      title="Copy machine ID"
+                      title={t('settings.copyMachineId', { defaultValue: 'Copy machine ID' })}
                     >
                       {licCopied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4 text-gray-500" />}
                     </button>
@@ -894,8 +894,8 @@ export function SettingsPage() {
             {activateModal && (
               <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
                 <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm">
-                  <h3 className="text-lg font-bold text-gray-900 mb-1">Activate Software</h3>
-                  <p className="text-xs text-gray-500 mb-4">Enter the serial code for this machine ID: <span className="font-mono">{licMachineId}</span></p>
+                  <h3 className="text-lg font-bold text-gray-900 mb-1">{t('settings.activateSoftware', { defaultValue: 'Activate Software' })}</h3>
+                  <p className="text-xs text-gray-500 mb-4">{t('settings.activateModalHint', { defaultValue: 'Enter the serial code for this machine ID:' })} <span className="font-mono">{licMachineId}</span></p>
                   <input
                     type="text"
                     value={activateCode}
@@ -913,14 +913,14 @@ export function SettingsPage() {
                       onClick={() => setActivateModal(false)}
                       className="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50"
                     >
-                      Cancel
+                      {t('common.cancel')}
                     </button>
                     <button
                       onClick={handleActivateSerial}
                       disabled={activateCode.length < 23 || activateLoading}
                       className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white rounded-lg text-sm font-semibold transition-colors"
                     >
-                      {activateLoading ? '...' : 'Activate'}
+                      {activateLoading ? '...' : t('settings.activate', { defaultValue: 'Activate' })}
                     </button>
                   </div>
                 </div>
@@ -970,11 +970,11 @@ export function SettingsPage() {
               <div className="flex gap-2">
                 <Button variant="secondary" size="sm" onClick={async () => { await savePrinter(); navigate('/admin/receipt-editor') }}>
                   <Palette className="h-4 w-4" />
-                  Receipt Editor
+                  {t('settings.receiptEditor', { defaultValue: 'Receipt Editor' })}
                 </Button>
                 <Button variant="secondary" size="sm" onClick={addPrinterConfig}>
                   <Plus className="h-4 w-4" />
-                  Add Printer
+                  {t('settings.addPrinter', { defaultValue: 'Add Printer' })}
                 </Button>
               </div>
             </div>
@@ -982,8 +982,8 @@ export function SettingsPage() {
             {printerConfigs.length === 0 && (
               <div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-xl">
                 <Printer className="h-10 w-10 text-gray-300 mx-auto mb-2" />
-                <p className="text-sm text-gray-400">No printers configured</p>
-                <p className="text-xs text-gray-400 mt-1">Click "Add Printer" to set up your first printer</p>
+                <p className="text-sm text-gray-400">{t('settings.noPrintersConfigured', { defaultValue: 'No printers configured' })}</p>
+                <p className="text-xs text-gray-400 mt-1">{t('settings.addPrinterHint', { defaultValue: 'Click "Add Printer" to set up your first printer' })}</p>
               </div>
             )}
 
@@ -993,16 +993,16 @@ export function SettingsPage() {
                   {/* Printer selection + remove */}
                   <div className="flex items-center gap-3">
                     <div className="flex-1">
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Printer {index + 1}</label>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">{t('settings.printerLabel', { defaultValue: 'Printer {{n}}', n: index + 1 })}</label>
                       <select
                         value={config.printerName}
                         onChange={(e) => updatePrinterConfig(config.id, { printerName: e.target.value })}
                         className="w-full border rounded-lg px-3 py-2 text-sm"
                       >
-                        <option value="">-- Select Printer --</option>
+                        <option value="">{t('settings.selectPrinter', { defaultValue: '-- Select Printer --' })}</option>
                         {printers.map(p => (
                           <option key={p.name} value={p.name}>
-                            {p.name}{p.isDefault ? ' (Default)' : ''}
+                            {p.name}{p.isDefault ? ` ${t('settings.defaultSuffix', { defaultValue: '(Default)' })}` : ''}
                           </option>
                         ))}
                       </select>
@@ -1010,7 +1010,7 @@ export function SettingsPage() {
                     <button
                       onClick={() => removePrinterConfig(config.id)}
                       className="mt-5 p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      title="Remove printer"
+                      title={t('settings.removePrinter', { defaultValue: 'Remove printer' })}
                     >
                       <X className="h-4 w-4" />
                     </button>
@@ -1018,7 +1018,7 @@ export function SettingsPage() {
 
                   {/* Task toggles */}
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-2">Print Tasks</label>
+                    <label className="block text-xs font-medium text-gray-500 mb-2">{t('settings.printTasks', { defaultValue: 'Print Tasks' })}</label>
                     <div className="flex flex-wrap gap-2">
                       {getAvailableTasks().map(task => (
                         <button
@@ -1050,7 +1050,7 @@ export function SettingsPage() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Receipt Font</label>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">{t('settings.receiptFont', { defaultValue: 'Receipt Font' })}</label>
                       <select
                         value={config.receiptFontSize}
                         onChange={(e) => updatePrinterConfig(config.id, { receiptFontSize: e.target.value })}
@@ -1062,7 +1062,7 @@ export function SettingsPage() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Kitchen Font</label>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">{t('settings.kitchenFont', { defaultValue: 'Kitchen Font' })}</label>
                       <select
                         value={config.kitchenFontSize}
                         onChange={(e) => updatePrinterConfig(config.id, { kitchenFontSize: e.target.value })}
@@ -1084,7 +1084,7 @@ export function SettingsPage() {
                         onChange={(e) => updatePrinterConfig(config.id, { autoPrint: e.target.checked })}
                         className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
                       />
-                      <span className="text-sm text-gray-600">Auto-print on new order</span>
+                      <span className="text-sm text-gray-600">{t('settings.autoPrintOnNewOrder', { defaultValue: 'Auto-print on new order' })}</span>
                     </label>
                     <Button
                       variant="secondary"
@@ -1094,7 +1094,7 @@ export function SettingsPage() {
                       disabled={!config.printerName}
                     >
                       <Printer className="h-3.5 w-3.5" />
-                      Test
+                      {t('settings.test', { defaultValue: 'Test' })}
                     </Button>
                   </div>
 
@@ -1104,7 +1104,7 @@ export function SettingsPage() {
                       printerTestResults[config.id].success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
                     }`}>
                       {printerTestResults[config.id].success ? <Check className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
-                      {printerTestResults[config.id].success ? 'Test print sent!' : printerTestResults[config.id].error || 'Print failed'}
+                      {printerTestResults[config.id].success ? t('settings.testPrintSent', { defaultValue: 'Test print sent!' }) : printerTestResults[config.id].error || t('settings.printFailed', { defaultValue: 'Print failed' })}
                     </div>
                   )}
                 </div>
@@ -1121,7 +1121,7 @@ export function SettingsPage() {
             {printers.length === 0 && (
               <div className="flex items-center gap-2 p-3 bg-orange-50 rounded-lg">
                 <AlertCircle className="h-4 w-4 text-orange-500" />
-                <p className="text-sm text-orange-700">No printers detected on this system. Make sure your printer is connected and turned on.</p>
+                <p className="text-sm text-orange-700">{t('settings.noPrintersDetected', { defaultValue: 'No printers detected on this system. Make sure your printer is connected and turned on.' })}</p>
               </div>
             )}
           </div>
@@ -1132,17 +1132,17 @@ export function SettingsPage() {
         <Card>
           <div className="space-y-6">
             <div>
-              <h3 className="text-lg font-semibold mb-1">Owner Link</h3>
-              <p className="text-sm text-gray-500">Monitor your restaurant remotely from any device.</p>
-              <p className="text-xs text-orange-600 mt-1 font-medium">The owner logs in with the admin password (set in Security tab).</p>
+              <h3 className="text-lg font-semibold mb-1">{t('settings.ownerLink', { defaultValue: 'Owner Link' })}</h3>
+              <p className="text-sm text-gray-500">{t('settings.ownerLinkDesc', { defaultValue: 'Monitor your restaurant remotely from any device.' })}</p>
+              <p className="text-xs text-orange-600 mt-1 font-medium">{t('settings.ownerLinkLoginNote', { defaultValue: 'The owner logs in with the admin password (set in Security tab).' })}</p>
             </div>
 
             {machineId ? (
               <div className="space-y-4">
                 <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                   <div className="flex items-center justify-between mb-1">
-                    <h4 className="font-medium text-sm">Owner Dashboard</h4>
-                    <span className="text-xs text-gray-400">Monitor orders, revenue &amp; analytics</span>
+                    <h4 className="font-medium text-sm">{t('settings.ownerDashboard', { defaultValue: 'Owner Dashboard' })}</h4>
+                    <span className="text-xs text-gray-400">{t('settings.ownerDashboardSub', { defaultValue: 'Monitor orders, revenue & analytics' })}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-mono text-gray-800 flex-1 bg-white rounded px-3 py-2 border border-gray-200">
@@ -1155,7 +1155,7 @@ export function SettingsPage() {
                         setTimeout(() => setCopiedCode(null), 2000)
                       }}
                       className="flex-shrink-0 text-orange-500 hover:text-orange-600 p-2"
-                      title="Copy link"
+                      title={t('settings.copyLink', { defaultValue: 'Copy link' })}
                     >
                       {copiedCode === 'owner' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                     </button>
@@ -1165,10 +1165,10 @@ export function SettingsPage() {
                 {/* QR code */}
                 {ownerDashQr && (
                   <div className="flex flex-col sm:flex-row gap-6 items-start">
-                    <img src={ownerDashQr} alt="Owner Dashboard QR" className="w-48 h-48 rounded-lg border border-gray-200" />
+                    <img src={ownerDashQr} alt={t('settings.ownerDashboardQrAlt', { defaultValue: 'Owner Dashboard QR' })} className="w-48 h-48 rounded-lg border border-gray-200" />
                     <div className="flex-1">
-                      <p className="text-sm text-gray-500 mb-2">Scan this QR code to open the owner dashboard on your phone.</p>
-                      <p className="text-xs text-gray-400 mt-2">Works from any device with internet access.</p>
+                      <p className="text-sm text-gray-500 mb-2">{t('settings.ownerQrScan', { defaultValue: 'Scan this QR code to open the owner dashboard on your phone.' })}</p>
+                      <p className="text-xs text-gray-400 mt-2">{t('settings.worksAnyDevice', { defaultValue: 'Works from any device with internet access.' })}</p>
                     </div>
                   </div>
                 )}
@@ -1176,7 +1176,7 @@ export function SettingsPage() {
             ) : (
               <div className="flex items-center gap-2 p-3 bg-orange-50 rounded-lg">
                 <AlertCircle className="h-4 w-4 text-orange-500" />
-                <p className="text-sm text-orange-700">Machine ID could not be loaded. Try restarting the app.</p>
+                <p className="text-sm text-orange-700">{t('settings.machineIdLoadError', { defaultValue: 'Machine ID could not be loaded. Try restarting the app.' })}</p>
               </div>
             )}
           </div>
@@ -1262,15 +1262,15 @@ export function SettingsPage() {
         <Card>
           <div className="space-y-6">
             <div>
-              <h3 className="text-lg font-semibold mb-1">Remote Ordering</h3>
-              <p className="text-sm text-gray-500">Let customers order from their phone by scanning a QR code.</p>
+              <h3 className="text-lg font-semibold mb-1">{t('settings.remoteOrdering', { defaultValue: 'Remote Ordering' })}</h3>
+              <p className="text-sm text-gray-500">{t('settings.remoteOrderingDesc', { defaultValue: 'Let customers order from their phone by scanning a QR code.' })}</p>
             </div>
 
             {/* Cloud ordering link */}
             {machineId ? (
               <div className="space-y-4">
                 <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                  <h4 className="font-medium text-sm mb-2">Ordering Link</h4>
+                  <h4 className="font-medium text-sm mb-2">{t('settings.orderingLink', { defaultValue: 'Ordering Link' })}</h4>
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-mono text-gray-800 flex-1 bg-white rounded px-3 py-2 border border-gray-200">
                       fastfood-manager.vercel.app/r/{machineId}
@@ -1282,21 +1282,21 @@ export function SettingsPage() {
                         setTimeout(() => setCopiedCode(null), 2000)
                       }}
                       className="flex-shrink-0 text-orange-500 hover:text-orange-600 p-2"
-                      title="Copy link"
+                      title={t('settings.copyLink', { defaultValue: 'Copy link' })}
                     >
                       {copiedCode === 'order' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                     </button>
                   </div>
-                  <p className="text-xs text-gray-400 mt-2">Customers scan this QR code to order from their phone.</p>
+                  <p className="text-xs text-gray-400 mt-2">{t('settings.orderingQrHint', { defaultValue: 'Customers scan this QR code to order from their phone.' })}</p>
                 </div>
 
                 {/* QR code */}
                 {remoteOrderQr && (
                   <div className="flex flex-col sm:flex-row gap-6 items-start">
-                    <img src={remoteOrderQr} alt="Remote Order QR" className="w-48 h-48 rounded-lg border border-gray-200" />
+                    <img src={remoteOrderQr} alt={t('settings.remoteOrderQrAlt', { defaultValue: 'Remote Order QR' })} className="w-48 h-48 rounded-lg border border-gray-200" />
                     <div className="flex-1">
-                      <p className="text-sm text-gray-500 mb-2">Print or display this QR code at your tables.</p>
-                      <p className="text-xs text-gray-400 mt-2">Works from any device with internet access.</p>
+                      <p className="text-sm text-gray-500 mb-2">{t('settings.orderQrPrintHint', { defaultValue: 'Print or display this QR code at your tables.' })}</p>
+                      <p className="text-xs text-gray-400 mt-2">{t('settings.worksAnyDevice', { defaultValue: 'Works from any device with internet access.' })}</p>
                     </div>
                   </div>
                 )}
@@ -1304,7 +1304,7 @@ export function SettingsPage() {
             ) : (
               <div className="flex items-center gap-2 p-3 bg-orange-50 rounded-lg">
                 <AlertCircle className="h-4 w-4 text-orange-500" />
-                <p className="text-sm text-orange-700">Machine ID could not be loaded. Try restarting the app.</p>
+                <p className="text-sm text-orange-700">{t('settings.machineIdLoadError', { defaultValue: 'Machine ID could not be loaded. Try restarting the app.' })}</p>
               </div>
             )}
 
@@ -1332,7 +1332,7 @@ export function SettingsPage() {
 
             {/* Note about local server */}
             <div className="border-t pt-4">
-              <p className="text-xs text-gray-400">The tablet server still runs in the background for local network access.</p>
+              <p className="text-xs text-gray-400">{t('settings.tabletServerNote', { defaultValue: 'The tablet server still runs in the background for local network access.' })}</p>
             </div>
           </div>
 

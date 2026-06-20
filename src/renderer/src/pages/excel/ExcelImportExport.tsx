@@ -246,7 +246,11 @@ export function ExcelImportExport() {
 
             setImportResult({
               success: true,
-              message: `${t('excel.success')} (${imported} items)`
+              message: t('excel.importSuccessCount', {
+                defaultValue: '{{message}} ({{count}} items)',
+                message: t('excel.success'),
+                count: imported
+              })
             })
 
             // Reload versions list
@@ -276,7 +280,10 @@ export function ExcelImportExport() {
       await window.api.data.saveVersion(label)
 
       await window.api.data.restoreVersion(versionId)
-      setImportResult({ success: true, message: 'Version restored successfully!' })
+      setImportResult({
+        success: true,
+        message: t('excel.restoreSuccess', { defaultValue: 'Version restored successfully!' })
+      })
       loadVersions()
     } catch (err: any) {
       setImportResult({ success: false, message: err.message })
@@ -322,13 +329,18 @@ export function ExcelImportExport() {
               <Download className="h-6 w-6 text-green-600" />
             </div>
             <div className="flex-1">
-              <h3 className="font-semibold text-gray-900 mb-1">Download Current Menu</h3>
+              <h3 className="font-semibold text-gray-900 mb-1">
+                {t('excel.downloadMenuTitle', { defaultValue: 'Download Current Menu' })}
+              </h3>
               <p className="text-sm text-gray-500 mb-3">
-                Export your current menu, stock, and workers data as an Excel file.
+                {t('excel.downloadMenuDesc', {
+                  defaultValue:
+                    'Export your current menu, stock, and workers data as an Excel file.'
+                })}
               </p>
               <Button variant="secondary" onClick={exportData} className="justify-start">
                 <FileSpreadsheet className="h-4 w-4" />
-                Export Excel
+                {t('excel.exportExcel', { defaultValue: 'Export Excel' })}
               </Button>
             </div>
           </div>
@@ -341,13 +353,18 @@ export function ExcelImportExport() {
               <Upload className="h-6 w-6 text-orange-600" />
             </div>
             <div className="flex-1">
-              <h3 className="font-semibold text-gray-900 mb-1">Update Menu</h3>
+              <h3 className="font-semibold text-gray-900 mb-1">
+                {t('excel.updateMenuTitle', { defaultValue: 'Update Menu' })}
+              </h3>
               <p className="text-sm text-gray-500 mb-3">
-                Import a new Excel file. Your current data will be saved as a version automatically.
+                {t('excel.updateMenuDesc', {
+                  defaultValue:
+                    'Import a new Excel file. Your current data will be saved as a version automatically.'
+                })}
               </p>
               <Button onClick={handleImport} loading={importing}>
                 <Upload className="h-4 w-4" />
-                Import New Excel
+                {t('excel.importNewExcel', { defaultValue: 'Import New Excel' })}
               </Button>
             </div>
           </div>
@@ -380,7 +397,9 @@ export function ExcelImportExport() {
         >
           <div className="flex items-center gap-2">
             <Clock className="h-5 w-5 text-gray-400" />
-            <h3 className="text-lg font-semibold text-gray-900">Version History</h3>
+            <h3 className="text-lg font-semibold text-gray-900">
+              {t('excel.versionHistory', { defaultValue: 'Version History' })}
+            </h3>
             {versions.length > 0 && (
               <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
                 {versions.length}
@@ -397,13 +416,16 @@ export function ExcelImportExport() {
         {showVersions && (
           <div className="mt-4">
             {loadingVersions ? (
-              <p className="text-sm text-gray-400 py-4 text-center">Loading...</p>
+              <p className="text-sm text-gray-400 py-4 text-center">{t('common.loading')}</p>
             ) : versions.length === 0 ? (
               <div className="text-center py-8 text-gray-400">
                 <FileSpreadsheet className="h-10 w-10 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No versions yet</p>
+                <p className="text-sm">{t('excel.noVersions', { defaultValue: 'No versions yet' })}</p>
                 <p className="text-xs mt-1">
-                  Versions are created automatically when you import a new Excel file.
+                  {t('excel.noVersionsHint', {
+                    defaultValue:
+                      'Versions are created automatically when you import a new Excel file.'
+                  })}
                 </p>
               </div>
             ) : (
@@ -423,13 +445,25 @@ export function ExcelImportExport() {
                         </span>
                         {version.counts && (
                           <span className="text-xs text-gray-400">
-                            {version.counts.categories} categories
+                            {t('excel.countCategories', {
+                              defaultValue: '{{count}} categories',
+                              count: version.counts.categories
+                            })}
                             {' \u00B7 '}
-                            {version.counts.menuItems} items
+                            {t('excel.countItems', {
+                              defaultValue: '{{count}} items',
+                              count: version.counts.menuItems
+                            })}
                             {' \u00B7 '}
-                            {version.counts.stockItems} stock
+                            {t('excel.countStock', {
+                              defaultValue: '{{count}} stock',
+                              count: version.counts.stockItems
+                            })}
                             {' \u00B7 '}
-                            {version.counts.workers} workers
+                            {t('excel.countWorkers', {
+                              defaultValue: '{{count}} workers',
+                              count: version.counts.workers
+                            })}
                           </span>
                         )}
                       </div>
@@ -439,18 +473,20 @@ export function ExcelImportExport() {
                       {/* Restore */}
                       {confirmRestoreId === version.id ? (
                         <div className="flex items-center gap-1">
-                          <span className="text-xs text-orange-600 mr-1">Restore?</span>
+                          <span className="text-xs text-orange-600 mr-1">
+                            {t('excel.restoreConfirm', { defaultValue: 'Restore?' })}
+                          </span>
                           <button
                             onClick={() => handleRestore(version.id)}
                             className="px-2 py-1 text-xs bg-orange-500 text-white rounded hover:bg-orange-600 transition-colors"
                           >
-                            Yes
+                            {t('common.yes')}
                           </button>
                           <button
                             onClick={() => setConfirmRestoreId(null)}
                             className="px-2 py-1 text-xs bg-gray-200 text-gray-600 rounded hover:bg-gray-300 transition-colors"
                           >
-                            No
+                            {t('common.no')}
                           </button>
                         </div>
                       ) : (
@@ -463,25 +499,29 @@ export function ExcelImportExport() {
                           className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-orange-600 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors disabled:opacity-50"
                         >
                           <RotateCcw className="h-3.5 w-3.5" />
-                          {restoringId === version.id ? 'Restoring...' : 'Restore'}
+                          {restoringId === version.id
+                            ? t('excel.restoring', { defaultValue: 'Restoring...' })
+                            : t('excel.restore', { defaultValue: 'Restore' })}
                         </button>
                       )}
 
                       {/* Delete */}
                       {confirmDeleteId === version.id ? (
                         <div className="flex items-center gap-1">
-                          <span className="text-xs text-red-600 mr-1">Delete?</span>
+                          <span className="text-xs text-red-600 mr-1">
+                            {t('excel.deleteConfirm', { defaultValue: 'Delete?' })}
+                          </span>
                           <button
                             onClick={() => handleDelete(version.id)}
                             className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
                           >
-                            Yes
+                            {t('common.yes')}
                           </button>
                           <button
                             onClick={() => setConfirmDeleteId(null)}
                             className="px-2 py-1 text-xs bg-gray-200 text-gray-600 rounded hover:bg-gray-300 transition-colors"
                           >
-                            No
+                            {t('common.no')}
                           </button>
                         </div>
                       ) : (

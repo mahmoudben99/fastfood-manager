@@ -1,6 +1,5 @@
 import { ipcMain } from 'electron'
 import { ordersRepo, type CreateOrderInput } from '../database/repositories/orders.repo'
-import { customersRepo } from '../database/repositories/customers.repo'
 import { performAutoBackup } from './backup.ipc'
 import { sendOrderNotification } from '../telegram/bot'
 import { printOrder } from './printer.ipc'
@@ -9,13 +8,9 @@ import { syncOrderToCloud, syncOrderStatusToCloud } from '../sync/owner-sync'
 
 export function registerOrdersHandlers(): void {
   ipcMain.handle('orders:create', (_, input: CreateOrderInput) => {
+    // Loyalty tracking + customer_id linkage now happen atomically inside ordersRepo.create()
+    // (so tablet & remote orders are covered too); don't upsert again here or totals double-count.
     const order = ordersRepo.create(input)
-    // Track customer by phone number (loyalty system)
-    if (input.customer_phone) {
-      try {
-        customersRepo.upsertFromOrder(input.customer_phone, order.total, input.customer_name)
-      } catch { /* non-critical */ }
-    }
     // Auto-backup after each order (overwrites today's file)
     performAutoBackup()
     // Send Telegram notification
@@ -60,8 +55,20 @@ export function registerOrdersHandlers(): void {
 
   ipcMain.handle(
     'orders:updateItems',
-    (_, id: number, items: { menu_item_id: number; quantity: number; notes?: string; worker_id?: number }[]) => {
-      return ordersRepo.updateItems(id, items)
+    (
+      _,
+      id: number,
+      items: {
+        menu_item_id: number
+        quantity: number
+        notes?: string
+        worker_id?: number
+        unit_price?: number
+      }[],
+      discountAmount?: number,
+      discountDetails?: string
+    ) => {
+      return ordersRepo.updateItems(id, items, discountAmount, discountDetails)
     }
   )
 }

@@ -202,7 +202,7 @@ export function PromotionsPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Promotions & Loyalty</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t('promotions.title', { defaultValue: 'Promotions & Loyalty' })}</h1>
       </div>
 
       {/* Tabs */}
@@ -214,7 +214,7 @@ export function PromotionsPage() {
           }`}
         >
           <Tag className="h-4 w-4" />
-          Discounts ({promos.length})
+          {t('promotions.tabDiscounts', { defaultValue: 'Discounts ({{count}})', count: promos.length })}
         </button>
         <button
           onClick={() => setTab('packs')}
@@ -223,7 +223,7 @@ export function PromotionsPage() {
           }`}
         >
           <Package className="h-4 w-4" />
-          Packs ({packs.length})
+          {t('promotions.tabPacks', { defaultValue: 'Packs ({{count}})', count: packs.length })}
         </button>
         <button
           onClick={() => setTab('loyalty')}
@@ -232,7 +232,7 @@ export function PromotionsPage() {
           }`}
         >
           <Users className="h-4 w-4" />
-          Loyalty
+          {t('promotions.tabLoyalty', { defaultValue: 'Loyalty' })}
         </button>
       </div>
 
@@ -242,15 +242,15 @@ export function PromotionsPage() {
           <div className="flex justify-end mb-4">
             <Button onClick={() => openPromoForm()}>
               <Plus className="h-4 w-4" />
-              Add Discount
+              {t('promotions.addDiscount', { defaultValue: 'Add Discount' })}
             </Button>
           </div>
 
           {promos.length === 0 ? (
             <div className="text-center py-16 text-gray-400">
               <Tag className="h-12 w-12 mx-auto mb-3 opacity-50" />
-              <p>No discounts yet</p>
-              <p className="text-sm mt-1">Create your first discount to attract more customers</p>
+              <p>{t('promotions.noDiscounts', { defaultValue: 'No discounts yet' })}</p>
+              <p className="text-sm mt-1">{t('promotions.noDiscountsHint', { defaultValue: 'Create your first discount to attract more customers' })}</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -267,7 +267,7 @@ export function PromotionsPage() {
                           {promo.type === 'percentage' ? `${promo.discount_value}%` : formatCurrency(promo.discount_value)}
                         </span>
                         <span className="text-xs text-gray-500">
-                          {promo.applies_to === 'all' ? 'All items' : 'Specific items'}
+                          {promo.applies_to === 'all' ? t('promotions.allItems', { defaultValue: 'All items' }) : t('promotions.specificItems', { defaultValue: 'Specific items' })}
                         </span>
                       </div>
                     </div>
@@ -302,15 +302,15 @@ export function PromotionsPage() {
           <div className="flex justify-end mb-4">
             <Button onClick={() => openPackForm()}>
               <Plus className="h-4 w-4" />
-              Add Pack
+              {t('promotions.addPack', { defaultValue: 'Add Pack' })}
             </Button>
           </div>
 
           {packs.length === 0 ? (
             <div className="text-center py-16 text-gray-400">
               <Package className="h-12 w-12 mx-auto mb-3 opacity-50" />
-              <p>No pack promotions yet</p>
-              <p className="text-sm mt-1">Group items together at a special price</p>
+              <p>{t('promotions.noPacks', { defaultValue: 'No pack promotions yet' })}</p>
+              <p className="text-sm mt-1">{t('promotions.noPacksHint', { defaultValue: 'Group items together at a special price' })}</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -328,7 +328,7 @@ export function PromotionsPage() {
                         </h3>
                         <p className="text-lg font-bold text-orange-600 mt-1">{formatCurrency(pack.pack_price)}</p>
                         {savings > 0 && (
-                          <p className="text-xs text-green-600 font-medium">Save {formatCurrency(savings)}</p>
+                          <p className="text-xs text-green-600 font-medium">{t('promotions.save', { defaultValue: 'Save {{amount}}', amount: formatCurrency(savings) })}</p>
                         )}
                       </div>
                       <button
@@ -373,28 +373,28 @@ export function PromotionsPage() {
       <Modal
         isOpen={showPromoForm}
         onClose={() => setShowPromoForm(false)}
-        title={editPromo ? 'Edit Discount' : 'New Discount'}
+        title={editPromo ? t('promotions.editDiscount', { defaultValue: 'Edit Discount' }) : t('promotions.newDiscount', { defaultValue: 'New Discount' })}
         size="lg"
       >
         <div className="space-y-4">
           <div className="grid grid-cols-3 gap-3">
-            <Input label="Name" value={promoName} onChange={(e) => setPromoName(e.target.value)} />
-            <Input label="Name (AR)" value={promoNameAr} onChange={(e) => setPromoNameAr(e.target.value)} dir="rtl" />
-            <Input label="Name (FR)" value={promoNameFr} onChange={(e) => setPromoNameFr(e.target.value)} />
+            <Input label={t('promotions.name', { defaultValue: 'Name' })} value={promoName} onChange={(e) => setPromoName(e.target.value)} />
+            <Input label={t('promotions.nameAr', { defaultValue: 'Name (AR)' })} value={promoNameAr} onChange={(e) => setPromoNameAr(e.target.value)} dir="rtl" />
+            <Input label={t('promotions.nameFr', { defaultValue: 'Name (FR)' })} value={promoNameFr} onChange={(e) => setPromoNameFr(e.target.value)} />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <Select
-              label="Discount Type"
+              label={t('promotions.discountType', { defaultValue: 'Discount Type' })}
               value={promoType}
               onChange={(e) => setPromoType(e.target.value as 'percentage' | 'fixed')}
               options={[
-                { value: 'percentage', label: 'Percentage (%)' },
-                { value: 'fixed', label: 'Fixed Amount' }
+                { value: 'percentage', label: t('promotions.percentage', { defaultValue: 'Percentage (%)' }) },
+                { value: 'fixed', label: t('promotions.fixedAmount', { defaultValue: 'Fixed Amount' }) }
               ]}
             />
             <Input
-              label={promoType === 'percentage' ? 'Discount (%)' : 'Discount Amount'}
+              label={promoType === 'percentage' ? t('promotions.discountPercent', { defaultValue: 'Discount (%)' }) : t('promotions.discountAmount', { defaultValue: 'Discount Amount' })}
               type="number"
               value={promoValue}
               onChange={(e) => setPromoValue(e.target.value)}
@@ -403,18 +403,18 @@ export function PromotionsPage() {
           </div>
 
           <Select
-            label="Applies To"
+            label={t('promotions.appliesTo', { defaultValue: 'Applies To' })}
             value={promoAppliesTo}
             onChange={(e) => setPromoAppliesTo(e.target.value as 'all' | 'specific')}
             options={[
-              { value: 'all', label: 'All menu items' },
-              { value: 'specific', label: 'Specific items only' }
+              { value: 'all', label: t('promotions.allMenuItems', { defaultValue: 'All menu items' }) },
+              { value: 'specific', label: t('promotions.specificItemsOnly', { defaultValue: 'Specific items only' }) }
             ]}
           />
 
           {promoAppliesTo === 'specific' && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Select Items</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">{t('promotions.selectItems', { defaultValue: 'Select Items' })}</label>
               <div className="max-h-48 overflow-y-auto border rounded-lg p-2 space-y-1">
                 {menuItems.map((item) => (
                   <label key={item.id} className="flex items-center gap-2 p-1.5 hover:bg-gray-50 rounded cursor-pointer">
@@ -433,8 +433,8 @@ export function PromotionsPage() {
           )}
 
           <div className="flex gap-2 pt-4 border-t">
-            <Button variant="secondary" onClick={() => setShowPromoForm(false)} className="flex-1">Cancel</Button>
-            <Button onClick={savePromo} loading={saving} disabled={!promoName || !promoValue} className="flex-1">Save</Button>
+            <Button variant="secondary" onClick={() => setShowPromoForm(false)} className="flex-1">{t('common.cancel')}</Button>
+            <Button onClick={savePromo} loading={saving} disabled={!promoName || !promoValue} className="flex-1">{t('common.save')}</Button>
           </div>
         </div>
       </Modal>
@@ -443,20 +443,20 @@ export function PromotionsPage() {
       <Modal
         isOpen={showPackForm}
         onClose={() => setShowPackForm(false)}
-        title={editPack ? 'Edit Pack' : 'New Pack'}
+        title={editPack ? t('promotions.editPack', { defaultValue: 'Edit Pack' }) : t('promotions.newPack', { defaultValue: 'New Pack' })}
         size="lg"
       >
         <div className="space-y-4">
           <div className="grid grid-cols-3 gap-3">
-            <Input label="Pack Name" value={packName} onChange={(e) => setPackName(e.target.value)} />
-            <Input label="Name (AR)" value={packNameAr} onChange={(e) => setPackNameAr(e.target.value)} dir="rtl" />
-            <Input label="Name (FR)" value={packNameFr} onChange={(e) => setPackNameFr(e.target.value)} />
+            <Input label={t('promotions.packName', { defaultValue: 'Pack Name' })} value={packName} onChange={(e) => setPackName(e.target.value)} />
+            <Input label={t('promotions.nameAr', { defaultValue: 'Name (AR)' })} value={packNameAr} onChange={(e) => setPackNameAr(e.target.value)} dir="rtl" />
+            <Input label={t('promotions.nameFr', { defaultValue: 'Name (FR)' })} value={packNameFr} onChange={(e) => setPackNameFr(e.target.value)} />
           </div>
 
           <div className="grid grid-cols-3 gap-3">
-            <Input label="Pack Price" type="number" value={packPrice} onChange={(e) => setPackPrice(e.target.value)} step="0.01" />
+            <Input label={t('promotions.packPrice', { defaultValue: 'Pack Price' })} type="number" value={packPrice} onChange={(e) => setPackPrice(e.target.value)} step="0.01" />
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Emoji</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('promotions.emoji', { defaultValue: 'Emoji' })}</label>
               <input
                 value={packEmoji}
                 onChange={(e) => setPackEmoji(e.target.value)}
@@ -470,13 +470,13 @@ export function PromotionsPage() {
           {/* Pack items */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium text-gray-700">Items in Pack</label>
+              <label className="text-sm font-medium text-gray-700">{t('promotions.itemsInPack', { defaultValue: 'Items in Pack' })}</label>
               <button
                 onClick={addPackItem}
                 className="flex items-center gap-1 text-sm text-orange-600 hover:text-orange-700 font-medium"
               >
                 <Plus className="h-4 w-4" />
-                Add Item
+                {t('promotions.addItem', { defaultValue: 'Add Item' })}
               </button>
             </div>
             <div className="space-y-2">
@@ -487,7 +487,7 @@ export function PromotionsPage() {
                     onChange={(e) => updatePackItem(i, 'menu_item_id', Number(e.target.value))}
                     className="flex-1 border rounded-lg px-2 py-1.5 text-sm"
                   >
-                    <option value={0}>Select item...</option>
+                    <option value={0}>{t('promotions.selectItem', { defaultValue: 'Select item...' })}</option>
                     {menuItems.map((m: any) => (
                       <option key={m.id} value={m.id}>{getName(m)} — {formatCurrency(m.price)}</option>
                     ))}
@@ -507,22 +507,22 @@ export function PromotionsPage() {
             </div>
             {packItems.length > 0 && packPrice && (
               <div className="mt-3 p-2 bg-gray-50 rounded-lg text-sm">
-                <span className="text-gray-500">Individual total: </span>
+                <span className="text-gray-500">{t('promotions.individualTotal', { defaultValue: 'Individual total: ' })}</span>
                 <span className="font-medium">
                   {formatCurrency(packItems.reduce((sum, pi) => {
                     const m = menuItems.find(x => x.id === pi.menu_item_id)
                     return sum + (m?.price || 0) * pi.quantity
                   }, 0))}
                 </span>
-                <span className="text-gray-500"> → Pack price: </span>
+                <span className="text-gray-500">{t('promotions.packPriceLabel', { defaultValue: ' → Pack price: ' })}</span>
                 <span className="font-bold text-green-600">{formatCurrency(Number(packPrice))}</span>
               </div>
             )}
           </div>
 
           <div className="flex gap-2 pt-4 border-t">
-            <Button variant="secondary" onClick={() => setShowPackForm(false)} className="flex-1">Cancel</Button>
-            <Button onClick={savePack} loading={saving} disabled={!packName || !packPrice || packItems.length === 0} className="flex-1">Save</Button>
+            <Button variant="secondary" onClick={() => setShowPackForm(false)} className="flex-1">{t('common.cancel')}</Button>
+            <Button onClick={savePack} loading={saving} disabled={!packName || !packPrice || packItems.length === 0} className="flex-1">{t('common.save')}</Button>
           </div>
         </div>
       </Modal>

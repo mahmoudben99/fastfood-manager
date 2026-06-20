@@ -18,6 +18,7 @@ export function RemoteOrder({ machineId }: { machineId: string }) {
   const [retryCount, setRetryCount] = useState(0)
   const [notFound, setNotFound] = useState(false)
   const [restaurantName, setRestaurantName] = useState('')
+  const [currency, setCurrency] = useState('DA')
   const [categories, setCategories] = useState<Category[]>([])
   const [items, setItems] = useState<MenuItem[]>([])
   const [selectedCategory, setSelectedCategory] = useState<string | number | null>(null)
@@ -75,6 +76,17 @@ export function RemoteOrder({ machineId }: { machineId: string }) {
       if (menuData.categories?.length > 0) {
         setSelectedCategory(menuData.categories[0].id)
       }
+
+      // Currency symbol from the restaurant's display settings (falls back to DA)
+      const { data: ds } = await supabaseBrowser
+        .from('display_settings')
+        .select('settings')
+        .eq('machine_id', machineId)
+        .eq('profile_name', 'default')
+        .single()
+      const sym = ds?.settings?.currency_symbol || ds?.settings?.currency
+      if (sym) setCurrency(sym)
+
       setLoading(false)
       setRetryCount(0)
     } catch {
@@ -350,12 +362,12 @@ export function RemoteOrder({ machineId }: { machineId: string }) {
             {cart.map(ci => (
               <div key={String(ci.item.id)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: 14 }}>
                 <span>{ci.quantity}x {ci.item.emoji || ''} {ci.item.name}</span>
-                <span style={{ color: '#f97316', fontWeight: 600 }}>{(ci.item.price * ci.quantity).toLocaleString()} DA</span>
+                <span style={{ color: '#f97316', fontWeight: 600 }}>{(ci.item.price * ci.quantity).toLocaleString()} {currency}</span>
               </div>
             ))}
             <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', marginTop: 12, paddingTop: 12, display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 16 }}>
               <span>Total</span>
-              <span style={{ color: '#f97316' }}>{cartTotal.toLocaleString()} DA</span>
+              <span style={{ color: '#f97316' }}>{cartTotal.toLocaleString()} {currency}</span>
             </div>
           </div>
 
@@ -370,7 +382,7 @@ export function RemoteOrder({ machineId }: { machineId: string }) {
               opacity: submitting ? 0.7 : 1,
             }}
           >
-            {submitting ? 'Placing Order...' : `Place Order - ${cartTotal.toLocaleString()} DA`}
+            {submitting ? 'Placing Order...' : `Place Order - ${cartTotal.toLocaleString()} ${currency}`}
           </button>
         </div>
       </div>
@@ -428,7 +440,7 @@ export function RemoteOrder({ machineId }: { machineId: string }) {
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ci.item.name}</div>
-                  <div style={{ fontSize: 13, color: '#f97316', fontWeight: 600, marginTop: 2 }}>{(ci.item.price * ci.quantity).toLocaleString()} DA</div>
+                  <div style={{ fontSize: 13, color: '#f97316', fontWeight: 600, marginTop: 2 }}>{(ci.item.price * ci.quantity).toLocaleString()} {currency}</div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                   <button
@@ -464,7 +476,7 @@ export function RemoteOrder({ machineId }: { machineId: string }) {
             }}>
               <div>
                 <div style={{ fontSize: 12, color: '#aaa' }}>Total</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: '#f97316' }}>{cartTotal.toLocaleString()} DA</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#f97316' }}>{cartTotal.toLocaleString()} {currency}</div>
               </div>
               <button
                 onClick={() => setShowOrderForm(true)}
@@ -575,7 +587,7 @@ export function RemoteOrder({ machineId }: { machineId: string }) {
               )}
               <div style={{ fontSize: 32, lineHeight: 1 }}>{item.emoji || '🍽️'}</div>
               <div style={{ fontSize: 13, fontWeight: 600, textAlign: 'center', lineHeight: 1.2, color: '#fff' }}>{item.name}</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#f97316' }}>{item.price.toLocaleString()} DA</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#f97316' }}>{item.price.toLocaleString()} {currency}</div>
             </div>
           )
         })}
@@ -602,7 +614,7 @@ export function RemoteOrder({ machineId }: { machineId: string }) {
             </span>
             <span style={{ fontWeight: 600, fontSize: 15 }}>View Cart</span>
           </div>
-          <span style={{ fontWeight: 700, fontSize: 16 }}>{cartTotal.toLocaleString()} DA</span>
+          <span style={{ fontWeight: 700, fontSize: 16 }}>{cartTotal.toLocaleString()} {currency}</span>
         </div>
       )}
     </div>

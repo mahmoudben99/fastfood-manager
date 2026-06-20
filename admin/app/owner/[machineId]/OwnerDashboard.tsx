@@ -50,8 +50,12 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(diff / 86400)}d ago`
 }
 
+// Restaurant currency symbol — set once from /api/owner/data, read by formatCurrency.
+// Module-level so all the dashboard sub-components share it without prop drilling.
+let CURRENCY = 'DA'
+
 function formatCurrency(amount: number): string {
-  return amount.toLocaleString('en-US') + ' DA'
+  return amount.toLocaleString('en-US') + ' ' + CURRENCY
 }
 
 function formatTime(dateStr: string): string {
@@ -352,6 +356,7 @@ function Dashboard({
       })
       if (res.ok) {
         const json: DashboardData = await res.json()
+        if ((json as any).currency) CURRENCY = (json as any).currency
         // Detect new orders for animation
         const currentIds = new Set(json.orders.map((o: any) => o.id))
         if (prevOrderIdsRef.current.size > 0) {

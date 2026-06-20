@@ -71,14 +71,14 @@ export function ActivationPage() {
         window.api.trial.ensureWatcher()
         navigate('/setup')
       } else if (result.error === 'trial_expired') {
-        setTrialError('Your free trial has expired. Please purchase a license to continue.')
+        setTrialError(t('activation.trialExpired', { defaultValue: 'Your free trial has expired. Please purchase a license to continue.' }))
       } else if (result.error === 'trial_paused') {
-        setTrialError('Your trial has been paused by the administrator.')
+        setTrialError(t('activation.trialPaused', { defaultValue: 'Your trial has been paused by the administrator.' }))
       } else {
-        setTrialError(result.error || 'Could not start trial. Please check your internet connection.')
+        setTrialError(result.error || t('activation.trialStartFailed', { defaultValue: 'Could not start trial. Please check your internet connection.' }))
       }
     } catch {
-      setTrialError('Could not connect to server. Please check your internet connection.')
+      setTrialError(t('activation.trialConnectFailed', { defaultValue: 'Could not connect to server. Please check your internet connection.' }))
     } finally {
       setStartingTrial(false)
     }
@@ -91,7 +91,7 @@ export function ActivationPage() {
         {/* Header */}
         <div className="text-center mb-2">
           <h1 className="text-2xl font-bold text-white">Fast Food Manager</h1>
-          <p className="text-gray-400 text-sm mt-1">Choose how to get started</p>
+          <p className="text-gray-400 text-sm mt-1">{t('activation.chooseStart', { defaultValue: 'Choose how to get started' })}</p>
         </div>
 
         {/* ── Card 1: Serial Code ── */}
@@ -101,8 +101,8 @@ export function ActivationPage() {
               <ShieldCheck className="h-5 w-5 text-orange-500" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-gray-900">I have a license</h2>
-              <p className="text-xs text-gray-500">Enter your serial code to activate</p>
+              <h2 className="text-base font-bold text-gray-900">{t('activation.haveLicense', { defaultValue: 'I have a license' })}</h2>
+              <p className="text-xs text-gray-500">{t('activation.enterSerial', { defaultValue: 'Enter your serial code to activate' })}</p>
             </div>
           </div>
 
@@ -116,7 +116,7 @@ export function ActivationPage() {
               <button
                 onClick={copyMachineId}
                 className="p-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                title="Copy Machine ID"
+                title={t('activation.copyMachineId', { defaultValue: 'Copy Machine ID' })}
               >
                 {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4 text-gray-500" />}
               </button>
@@ -155,7 +155,7 @@ export function ActivationPage() {
         {/* Divider */}
         <div className="flex items-center gap-3">
           <div className="flex-1 h-px bg-gray-600" />
-          <span className="text-gray-400 text-xs font-medium">OR</span>
+          <span className="text-gray-400 text-xs font-medium">{t('activation.or', { defaultValue: 'OR' })}</span>
           <div className="flex-1 h-px bg-gray-600" />
         </div>
 
@@ -166,15 +166,15 @@ export function ActivationPage() {
               <Clock className="h-5 w-5 text-blue-500" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-gray-900">Start Free Trial</h2>
-              <p className="text-xs text-gray-500">7 days, full features — no credit card</p>
+              <h2 className="text-base font-bold text-gray-900">{t('activation.startFreeTrial', { defaultValue: 'Start Free Trial' })}</h2>
+              <p className="text-xs text-gray-500">{t('activation.trialSubtitle', { defaultValue: '7 days, full features — no credit card' })}</p>
             </div>
           </div>
 
           <div className="flex items-start gap-2 bg-blue-50 rounded-lg px-3 py-2 mb-4">
             <Wifi className="h-3.5 w-3.5 text-blue-500 flex-shrink-0 mt-0.5" />
             <p className="text-xs text-blue-700">
-              Requires internet. App will show a warning if offline, and lock after 5 minutes without connection.
+              {t('activation.trialInternetNote', { defaultValue: 'Requires internet. App will show a warning if offline, and lock after 5 minutes without connection.' })}
             </p>
           </div>
 
@@ -190,12 +190,12 @@ export function ActivationPage() {
             loading={startingTrial}
             className="w-full justify-center bg-blue-600 hover:bg-blue-700 focus:ring-blue-500"
           >
-            Start 7-Day Free Trial
+            {t('activation.startTrialButton', { defaultValue: 'Start 7-Day Free Trial' })}
           </Button>
         </div>
 
         <p className="text-xs text-gray-500 text-center">
-          Need a license? Contact us to purchase.
+          {t('activation.needLicense', { defaultValue: 'Need a license? Contact us to purchase.' })}
         </p>
       </div>
     </div>

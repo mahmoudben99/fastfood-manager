@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../../store/appStore'
 import { ShieldX, WifiOff, Copy, Check, KeyRound } from 'lucide-react'
 import splashBg from '../../assets/splash-screen.png'
@@ -11,6 +12,7 @@ interface TrialLockedPageProps {
 
 export function TrialLockedPage({ reason, offlineSecondsLeft }: TrialLockedPageProps) {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const { setActivated, setTrialStatus } = useAppStore()
   const [machineId, setMachineId] = useState('')
   const [copied, setCopied] = useState(false)
@@ -71,21 +73,33 @@ export function TrialLockedPage({ reason, offlineSecondsLeft }: TrialLockedPageP
         <h1 className="text-xl font-bold text-gray-900 mb-2">
           {isOffline
             ? (offlineSecondsLeft && offlineSecondsLeft > 0
-                ? `No Internet — ${formatCountdown(offlineSecondsLeft)}`
-                : 'App Locked — No Internet')
+                ? t('trialLock.titleOfflineCountdown', {
+                    defaultValue: 'No Internet — {{time}}',
+                    time: formatCountdown(offlineSecondsLeft)
+                  })
+                : t('trialLock.titleOfflineLocked', { defaultValue: 'App Locked — No Internet' }))
             : reason === 'paused'
-              ? 'Trial Paused'
-              : 'Free Trial Expired'
+              ? t('trialLock.titlePaused', { defaultValue: 'Trial Paused' })
+              : t('trialLock.titleExpired', { defaultValue: 'Free Trial Expired' })
           }
         </h1>
 
         {/* Subtitle */}
         <p className="text-gray-500 text-sm mb-5">
           {isOffline
-            ? 'The free trial requires an internet connection to verify your license. Please reconnect to continue.'
+            ? t('trialLock.subtitleOffline', {
+                defaultValue:
+                  'The free trial requires an internet connection to verify your license. Please reconnect to continue.'
+              })
             : reason === 'paused'
-              ? 'Your trial has been paused by the administrator. Please contact us to resume access.'
-              : 'Your 7-day free trial has ended. Activate with a serial code to continue using Fast Food Manager.'
+              ? t('trialLock.subtitlePaused', {
+                  defaultValue:
+                    'Your trial has been paused by the administrator. Please contact us to resume access.'
+                })
+              : t('trialLock.subtitleExpired', {
+                  defaultValue:
+                    'Your 7-day free trial has ended. Activate with a serial code to continue using Fast Food Manager.'
+                })
           }
         </p>
 
@@ -98,7 +112,11 @@ export function TrialLockedPage({ reason, offlineSecondsLeft }: TrialLockedPageP
                 style={{ width: `${Math.max(0, (1 - offlineSecondsLeft / 120) * 100)}%` }}
               />
             </div>
-            <p className="text-xs text-gray-400 mt-1">App will lock when timer reaches zero</p>
+            <p className="text-xs text-gray-400 mt-1">
+              {t('trialLock.lockOnZero', {
+                defaultValue: 'App will lock when timer reaches zero'
+              })}
+            </p>
           </div>
         )}
 
@@ -110,7 +128,7 @@ export function TrialLockedPage({ reason, offlineSecondsLeft }: TrialLockedPageP
               className="w-full py-2.5 px-4 rounded-xl bg-orange-500 text-white text-sm font-semibold hover:bg-orange-600 transition-colors flex items-center justify-center gap-2"
             >
               <KeyRound className="h-4 w-4" />
-              Enter Activation Code
+              {t('trialLock.enterCode', { defaultValue: 'Enter Activation Code' })}
             </button>
           )}
 
@@ -118,14 +136,18 @@ export function TrialLockedPage({ reason, offlineSecondsLeft }: TrialLockedPageP
             onClick={handleShowMachineId}
             className="w-full py-2.5 px-4 rounded-xl border-2 border-gray-200 text-gray-600 text-sm font-medium hover:border-gray-300 transition-colors"
           >
-            Show Machine ID (for support)
+            {t('trialLock.showMachineId', { defaultValue: 'Show Machine ID (for support)' })}
           </button>
         </div>
 
         {/* Machine ID display */}
         {showMachineId && machineId && (
           <div className="mt-4 p-3 bg-gray-50 rounded-xl">
-            <p className="text-xs text-gray-500 mb-2">Send this ID to support to get an activation code:</p>
+            <p className="text-xs text-gray-500 mb-2">
+              {t('trialLock.sendIdHint', {
+                defaultValue: 'Send this ID to support to get an activation code:'
+              })}
+            </p>
             <div className="flex items-center gap-2">
               <div className="flex-1 font-mono text-sm bg-white border border-gray-200 rounded-lg px-3 py-2 select-all text-gray-800">
                 {machineId}

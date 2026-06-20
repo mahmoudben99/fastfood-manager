@@ -650,6 +650,7 @@ export function OrderScreen() {
     if (store.editingOrderId) {
       setUpdatingOrder(true)
       try {
+        const editDiscount = store.getDiscount()
         await window.api.orders.updateItems(
           store.editingOrderId,
           store.items.map((item) => ({
@@ -658,9 +659,12 @@ export function OrderScreen() {
             notes: item.notes || undefined,
             worker_id: item.worker_id || undefined,
             unit_price: item.price
-          }))
+          })),
+          editDiscount > 0 ? editDiscount : undefined,
+          editDiscount > 0 ? store.getDiscountDetails() : undefined
         )
         store.clearOrder()
+        store.loadActivePromos()
         loadOngoingCount()
         // Reload today's orders so the list is fresh if they open it again
         loadTodayOrders()
@@ -687,6 +691,7 @@ export function OrderScreen() {
         customer_name: store.customerName || undefined,
         notes: store.notes || undefined,
         discount_amount: currentDiscount > 0 ? currentDiscount : undefined,
+        discount_details: currentDiscount > 0 ? store.getDiscountDetails() : undefined,
         items: store.items.map((item) => ({
           menu_item_id: item.menu_item_id,
           quantity: item.quantity,
@@ -712,6 +717,8 @@ export function OrderScreen() {
         setSuccessOrderWorkers(workers)
       } catch { setSuccessOrderWorkers([]) }
       store.clearOrder()
+      // Refresh promos so the next order reflects any admin toggle (on/off) since mount
+      store.loadActivePromos()
       loadOngoingCount()
       // Push idle + updated queue to customer display
       try {

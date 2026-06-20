@@ -1,6 +1,18 @@
 import { getDb } from '../connection'
 import { stockRepo } from './stock.repo'
 import { menuRepo } from './menu.repo'
+import { customersRepo } from './customers.repo'
+
+/**
+ * Restaurant-LOCAL calendar date (YYYY-MM-DD).
+ * Using UTC here (the old `new Date().toISOString()`) bucketed late-night orders
+ * onto the wrong day for non-UTC timezones (Algeria is UTC+1). The machine running
+ * the POS is in the restaurant's timezone, so getTimezoneOffset() is correct here.
+ */
+function localDate(d = new Date()): string {
+  const off = d.getTimezoneOffset() * 60000
+  return new Date(d.getTime() - off).toISOString().split('T')[0]
+}
 
 export interface Order {
   id: number
@@ -13,6 +25,9 @@ export interface Order {
   status: string
   subtotal: number
   total: number
+  discount_amount: number
+  discount_details: string | null
+  customer_id: number | null
   notes: string | null
   created_at: string
   completed_at: string | null
@@ -38,6 +53,15 @@ export interface CreateOrderInput {
   customer_phone?: string
   customer_name?: string
   notes?: string
+  discount_amount?: number
+  discount_details?: string
+  /**
+   * When true, item prices are ALWAYS taken from the menu and any caller-supplied
+   * unit_price is ignored. Set by untrusted callers (tablet self-order server, remote
+   * online orders) so a client can't POST unit_price: 0. The trusted POS leaves this
+   * off so cashiers can still apply manual price overrides.
+   */
+  forceMenuPrice?: boolean
   items: {
     menu_item_id: number
     quantity: number
@@ -49,28 +73,23 @@ export interface CreateOrderInput {
 
 export const ordersRepo = {
   getNextDailyNumber(): number {
-    const today = new Date().toISOString().split('T')[0]
-    const counter = getDb()
-      .prepare('SELECT last_order_num FROM daily_counters WHERE date = ?')
-      .get(today) as { last_order_num: number } | undefined
-
-    if (!counter) {
-      getDb()
-        .prepare('INSERT INTO daily_counters (date, last_order_num) VALUES (?, 1)')
-        .run(today)
-      return 1
-    }
-
-    const next = counter.last_order_num + 1
-    getDb()
-      .prepare('UPDATE daily_counters SET last_order_num = ? WHERE date = ?')
-      .run(next, today)
-    return next
+    const today = localDate()
+    // Atomic increment in a single statement (date is PRIMARY KEY). Replaces the old
+    // SELECT-then-UPDATE which could hand out the same number to two near-simultaneous
+    // creates (e.g. a POS order and a remote order). RETURNING gives back the new value.
+    const row = getDb()
+      .prepare(
+        `INSERT INTO daily_counters (date, last_order_num) VALUES (?, 1)
+         ON CONFLICT(date) DO UPDATE SET last_order_num = last_order_num + 1
+         RETURNING last_order_num`
+      )
+      .get(today) as { last_order_num: number }
+    return row.last_order_num
   },
 
   create(input: CreateOrderInput): Order {
     const transaction = getDb().transaction(() => {
-      const today = new Date().toISOString().split('T')[0]
+      const today = localDate()
       const dailyNumber = this.getNextDailyNumber()
 
       // Calculate totals
@@ -88,7 +107,7 @@ export const ordersRepo = {
         const menuItem = menuRepo.getById(item.menu_item_id)
         if (!menuItem) throw new Error(`Menu item ${item.menu_item_id} not found`)
 
-        const unitPrice = item.unit_price ?? menuItem.price
+        const unitPrice = input.forceMenuPrice ? menuItem.price : (item.unit_price ?? menuItem.price)
         const totalPrice = unitPrice * item.quantity
         subtotal += totalPrice
 
@@ -102,13 +121,32 @@ export const ordersRepo = {
         })
       }
 
+      // Apply discount (clamped to [0, subtotal]) so the stored total reflects promos.
+      const discount = Math.min(Math.max(0, input.discount_amount ?? 0), subtotal)
+      const total = subtotal - discount
+
+      // Loyalty: link the order to a customer (and accrue their running total) inside
+      // this same transaction so customer_id is written atomically. Done here — not in
+      // the IPC handler — so tablet & remote orders also accrue loyalty.
+      let customerId: number | null = null
+      if (input.customer_phone) {
+        try {
+          customerId = customersRepo.upsertFromOrder(
+            input.customer_phone,
+            total,
+            input.customer_name
+          )
+        } catch {
+          customerId = null
+        }
+      }
+
       // Insert order (status = 'preparing' immediately)
-      // Use local time for created_at to avoid timezone issues
       const now = new Date().toISOString()
       const orderResult = getDb()
         .prepare(
-          `INSERT INTO orders (daily_number, order_date, order_type, table_number, customer_phone, customer_name, subtotal, total, notes, status, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'preparing', ?)`
+          `INSERT INTO orders (daily_number, order_date, order_type, table_number, customer_phone, customer_name, subtotal, total, discount_amount, discount_details, customer_id, notes, status, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'preparing', ?)`
         )
         .run(
           dailyNumber,
@@ -118,7 +156,10 @@ export const ordersRepo = {
           input.customer_phone ?? null,
           input.customer_name ?? null,
           subtotal,
-          subtotal,
+          total,
+          discount,
+          input.discount_details ?? null,
+          customerId,
           input.notes ?? null,
           now
         )
@@ -226,7 +267,7 @@ export const ordersRepo = {
 
   /** Auto-complete all preparing/pending orders from previous days */
   autoCompletePreviousDays(): number {
-    const today = new Date().toISOString().split('T')[0]
+    const today = localDate()
     const result = getDb()
       .prepare("UPDATE orders SET status = 'completed', completed_at = datetime('now') WHERE status IN ('preparing', 'pending') AND order_date < ?")
       .run(today)
@@ -280,7 +321,15 @@ export const ordersRepo = {
 
   updateItems(
     orderId: number,
-    items: { menu_item_id: number; quantity: number; notes?: string; worker_id?: number }[]
+    items: {
+      menu_item_id: number
+      quantity: number
+      notes?: string
+      worker_id?: number
+      unit_price?: number
+    }[],
+    discountAmount?: number,
+    discountDetails?: string
   ): Order | undefined {
     const order = this.getById(orderId)
     if (!order || order.status === 'cancelled' || order.status === 'completed') return order
@@ -317,7 +366,9 @@ export const ordersRepo = {
         const menuItem = menuRepo.getById(item.menu_item_id)
         if (!menuItem) continue
 
-        const unitPrice = menuItem.price
+        // Preserve the caller's unit price (custom-priced lines / the order's original
+        // price) instead of silently re-pricing to the current menu price on every edit.
+        const unitPrice = item.unit_price ?? menuItem.price
         const totalPrice = unitPrice * item.quantity
         subtotal += totalPrice
 
@@ -344,10 +395,17 @@ export const ordersRepo = {
         }
       }
 
-      // 4. Update order totals
+      // 4. Update order totals (preserve the order's existing discount unless a new one
+      //    is supplied), so editing an order no longer wipes its promo discount.
+      const discount = Math.min(
+        Math.max(0, discountAmount ?? order.discount_amount ?? 0),
+        subtotal
+      )
+      const total = subtotal - discount
+      const details = discountDetails ?? order.discount_details ?? null
       getDb()
-        .prepare("UPDATE orders SET subtotal = ?, total = ? WHERE id = ?")
-        .run(subtotal, subtotal, orderId)
+        .prepare('UPDATE orders SET subtotal = ?, total = ?, discount_amount = ?, discount_details = ? WHERE id = ?')
+        .run(subtotal, total, discount, details, orderId)
     })
 
     transaction()
@@ -355,7 +413,7 @@ export const ordersRepo = {
   },
 
   getTodayOrders(): Order[] {
-    const today = new Date().toISOString().split('T')[0]
+    const today = localDate()
     const orders = this.getByDate(today)
 
     // Load items for each order

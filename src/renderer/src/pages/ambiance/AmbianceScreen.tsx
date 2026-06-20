@@ -329,7 +329,8 @@ export function AmbianceScreen() {
     }
   }
 
-  const getDisplayLabel = (profile: string) => (profile === 'default' ? 'Main Display' : profile)
+  const getDisplayLabel = (profile: string) =>
+    profile === 'default' ? t('ambiance.mainDisplay', { defaultValue: 'Main Display' }) : profile
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text)
@@ -351,7 +352,7 @@ export function AmbianceScreen() {
       {saved && (
         <div className="fixed top-4 right-4 z-50 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg text-sm font-medium animate-pulse">
           <Check className="h-4 w-4 inline mr-1" />
-          Saved
+          {t('ambiance.saved', { defaultValue: 'Saved' })}
         </div>
       )}
 
@@ -361,12 +362,12 @@ export function AmbianceScreen() {
           <Monitor className="h-7 w-7 text-orange-500" />
           <div>
             <h1 className="text-2xl font-bold text-gray-900">{t('nav.ambianceScreen', { defaultValue: 'Ambiance Screen' })}</h1>
-            <p className="text-sm text-gray-500">Manage branded TV displays for your restaurant</p>
+            <p className="text-sm text-gray-500">{t('ambiance.subtitle', { defaultValue: 'Manage branded TV displays for your restaurant' })}</p>
           </div>
         </div>
         <Button onClick={() => setNewProfileModal(true)}>
           <Plus className="h-4 w-4" />
-          Add Display
+          {t('ambiance.addDisplay', { defaultValue: 'Add Display' })}
         </Button>
       </div>
 
@@ -388,7 +389,7 @@ export function AmbianceScreen() {
               <button
                 onClick={() => handleDeleteProfile(profile)}
                 className="p-1 text-gray-400 hover:text-red-500 transition-colors"
-                title="Delete profile"
+                title={t('ambiance.deleteProfile', { defaultValue: 'Delete profile' })}
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -404,7 +405,7 @@ export function AmbianceScreen() {
           {/* Link Section */}
           <Card>
             <div className="space-y-3">
-              <h3 className="font-semibold text-sm text-gray-700">Display Link</h3>
+              <h3 className="font-semibold text-sm text-gray-700">{t('ambiance.displayLink', { defaultValue: 'Display Link' })}</h3>
               {current.tvUrl ? (
                 <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
                   <div className="flex items-center gap-2">
@@ -419,7 +420,7 @@ export function AmbianceScreen() {
                         )
                       }
                       className="flex-shrink-0 text-orange-500 hover:text-orange-600 p-2"
-                      title="Copy link"
+                      title={t('ambiance.copyLink', { defaultValue: 'Copy link' })}
                     >
                       {copiedCode === 'cloud' ? (
                         <Check className="h-4 w-4" />
@@ -428,15 +429,15 @@ export function AmbianceScreen() {
                       )}
                     </button>
                   </div>
-                  <p className="text-xs text-gray-400 mt-1">Works from any device with internet</p>
+                  <p className="text-xs text-gray-400 mt-1">{t('ambiance.worksAnyDevice', { defaultValue: 'Works from any device with internet' })}</p>
                 </div>
               ) : (
-                <p className="text-sm text-gray-400">TV display URL not available. Restart the app if this persists.</p>
+                <p className="text-sm text-gray-400">{t('ambiance.urlNotAvailable', { defaultValue: 'TV display URL not available. Restart the app if this persists.' })}</p>
               )}
 
               {tabletRunning && activeProfile === 'default' && (
                 <div className="bg-green-50 rounded-lg p-3 border border-green-200">
-                  <p className="text-xs font-medium text-green-700 mb-1">Local Network URL</p>
+                  <p className="text-xs font-medium text-green-700 mb-1">{t('ambiance.localNetworkUrl', { defaultValue: 'Local Network URL' })}</p>
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-mono text-green-800 flex-1">
                       {tabletUrl.replace(/\/$/, '')}/display
@@ -462,7 +463,7 @@ export function AmbianceScreen() {
           {/* Background */}
           <Card>
             <div className="space-y-3">
-              <h3 className="font-semibold text-sm text-gray-700">Background</h3>
+              <h3 className="font-semibold text-sm text-gray-700">{t('ambiance.background', { defaultValue: 'Background' })}</h3>
               <div className="grid grid-cols-5 gap-2">
                 {GRADIENT_PRESETS.map((preset, idx) => (
                   <button
@@ -483,7 +484,7 @@ export function AmbianceScreen() {
                 ))}
               </div>
               <p className="text-xs text-gray-400">
-                Selected: {currentGradient.name}
+                {t('ambiance.selected', { defaultValue: 'Selected: {{name}}', name: currentGradient.name })}
               </p>
             </div>
           </Card>
@@ -491,7 +492,7 @@ export function AmbianceScreen() {
           {/* Font */}
           <Card>
             <div className="space-y-3">
-              <h3 className="font-semibold text-sm text-gray-700">Font</h3>
+              <h3 className="font-semibold text-sm text-gray-700">{t('ambiance.font', { defaultValue: 'Font' })}</h3>
               <div className="grid grid-cols-3 gap-2">
                 {FONT_OPTIONS.map((font) => (
                   <button
@@ -514,7 +515,7 @@ export function AmbianceScreen() {
           {/* Text Color */}
           <Card>
             <div className="space-y-3">
-              <h3 className="font-semibold text-sm text-gray-700">Text Color</h3>
+              <h3 className="font-semibold text-sm text-gray-700">{t('ambiance.textColor', { defaultValue: 'Text Color' })}</h3>
               <div className="flex flex-wrap gap-2">
                 {TEXT_COLOR_OPTIONS.map(({ color, label }) => (
                   <button
@@ -536,7 +537,7 @@ export function AmbianceScreen() {
           {/* Accent Color */}
           <Card>
             <div className="space-y-3">
-              <h3 className="font-semibold text-sm text-gray-700">Accent Color</h3>
+              <h3 className="font-semibold text-sm text-gray-700">{t('ambiance.accentColor', { defaultValue: 'Accent Color' })}</h3>
               <div className="flex flex-wrap gap-2">
                 {ACCENT_COLOR_OPTIONS.map(({ color, label }) => (
                   <button
@@ -558,12 +559,12 @@ export function AmbianceScreen() {
           {/* Text Size */}
           <Card>
             <div className="space-y-3">
-              <h3 className="font-semibold text-sm text-gray-700">Text Size</h3>
+              <h3 className="font-semibold text-sm text-gray-700">{t('ambiance.textSize', { defaultValue: 'Text Size' })}</h3>
               <div className="flex gap-2">
                 {([
-                  { value: 'small' as const, label: 'Small', scale: '0.8x' },
-                  { value: 'medium' as const, label: 'Medium', scale: '1.0x' },
-                  { value: 'large' as const, label: 'Large', scale: '1.3x' }
+                  { value: 'small' as const, label: t('ambiance.sizeSmall', { defaultValue: 'Small' }), scale: '0.8x' },
+                  { value: 'medium' as const, label: t('ambiance.sizeMedium', { defaultValue: 'Medium' }), scale: '1.0x' },
+                  { value: 'large' as const, label: t('ambiance.sizeLarge', { defaultValue: 'Large' }), scale: '1.3x' }
                 ]).map((opt) => (
                   <button
                     key={opt.value}
@@ -584,7 +585,7 @@ export function AmbianceScreen() {
           {/* Logo Size */}
           <Card>
             <div className="space-y-3">
-              <h3 className="font-semibold text-sm text-gray-700">Logo Size</h3>
+              <h3 className="font-semibold text-sm text-gray-700">{t('ambiance.logoSize', { defaultValue: 'Logo Size' })}</h3>
               <div className="flex gap-2">
                 {[
                   { label: '1x', value: 1 },
@@ -611,9 +612,9 @@ export function AmbianceScreen() {
           <Card>
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-semibold text-sm text-gray-700">Show Restaurant Name</h3>
+                <h3 className="font-semibold text-sm text-gray-700">{t('ambiance.showRestaurantName', { defaultValue: 'Show Restaurant Name' })}</h3>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  Display the restaurant name on the welcome screen (logo still shows)
+                  {t('ambiance.showRestaurantNameHint', { defaultValue: 'Display the restaurant name on the welcome screen (logo still shows)' })}
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
@@ -632,8 +633,8 @@ export function AmbianceScreen() {
           <Card>
             <div className="space-y-3">
               <div>
-                <h3 className="font-semibold text-sm text-gray-700">Active Panels</h3>
-                <p className="text-xs text-gray-400 mt-0.5">Choose which panels show on the TV. Disabled panels are skipped.</p>
+                <h3 className="font-semibold text-sm text-gray-700">{t('ambiance.activePanels', { defaultValue: 'Active Panels' })}</h3>
+                <p className="text-xs text-gray-400 mt-0.5">{t('ambiance.activePanelsHint', { defaultValue: 'Choose which panels show on the TV. Disabled panels are skipped.' })}</p>
               </div>
               <div className="space-y-2">
                 {PANEL_OPTIONS.map((panel) => (
@@ -647,7 +648,7 @@ export function AmbianceScreen() {
                       }}
                       className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
                     />
-                    <span className="text-sm text-gray-700">{panel.label}</span>
+                    <span className="text-sm text-gray-700">{t(`ambiance.panel.${panel.key}`, { defaultValue: panel.label })}</span>
                   </label>
                 ))}
               </div>
@@ -657,7 +658,7 @@ export function AmbianceScreen() {
           {/* Welcome Message */}
           <Card>
             <div className="space-y-3">
-              <h3 className="font-semibold text-sm text-gray-700">Welcome Message</h3>
+              <h3 className="font-semibold text-sm text-gray-700">{t('ambiance.welcomeMessage', { defaultValue: 'Welcome Message' })}</h3>
               <div className="flex gap-2">
                 <button
                   onClick={() => updateSetting('welcomeMode', 'animated')}
@@ -667,7 +668,7 @@ export function AmbianceScreen() {
                       : 'bg-gray-100 text-gray-600'
                   }`}
                 >
-                  Animated (3 languages)
+                  {t('ambiance.welcomeAnimated', { defaultValue: 'Animated (3 languages)' })}
                 </button>
                 <button
                   onClick={() => updateSetting('welcomeMode', 'static')}
@@ -677,16 +678,16 @@ export function AmbianceScreen() {
                       : 'bg-gray-100 text-gray-600'
                   }`}
                 >
-                  Custom Text
+                  {t('ambiance.welcomeCustom', { defaultValue: 'Custom Text' })}
                 </button>
               </div>
               <Input
-                placeholder="Custom welcome text..."
+                placeholder={t('ambiance.welcomeTextPlaceholder', { defaultValue: 'Custom welcome text...' })}
                 value={current.welcomeText}
                 onChange={(e) => updateSetting('welcomeText', e.target.value)}
               />
               <p className="text-xs text-gray-400">
-                If &quot;Animated&quot; is selected, welcome cycles through English, French, and Arabic automatically
+                {t('ambiance.welcomeAnimatedHint', { defaultValue: 'If "Animated" is selected, welcome cycles through English, French, and Arabic automatically' })}
               </p>
             </div>
           </Card>
@@ -694,14 +695,14 @@ export function AmbianceScreen() {
           {/* YouTube Music */}
           <Card>
             <div className="space-y-3">
-              <h3 className="font-semibold text-sm text-gray-700">Background Music (YouTube)</h3>
+              <h3 className="font-semibold text-sm text-gray-700">{t('ambiance.backgroundMusic', { defaultValue: 'Background Music (YouTube)' })}</h3>
               <p className="text-xs text-gray-400">
-                Paste a YouTube video or playlist URL. Audio plays in the background on the display.
+                {t('ambiance.backgroundMusicHint', { defaultValue: 'Paste a YouTube video or playlist URL. Audio plays in the background on the display.' })}
               </p>
               <div className="flex gap-2">
                 <Input
                   className="flex-1"
-                  placeholder="https://www.youtube.com/watch?v=... or playlist URL"
+                  placeholder={t('ambiance.youtubeUrlPlaceholder', { defaultValue: 'https://www.youtube.com/watch?v=... or playlist URL' })}
                   value={current.youtubeUrl}
                   onChange={(e) => {
                     // Update local state immediately without saving
@@ -716,7 +717,7 @@ export function AmbianceScreen() {
                   size="sm"
                   onClick={() => updateSetting('youtubeUrl', current.youtubeUrl)}
                 >
-                  Save
+                  {t('common.save')}
                 </Button>
                 {current.youtubeUrl && (
                   <Button
@@ -736,9 +737,9 @@ export function AmbianceScreen() {
             <div className="space-y-3">
               <h3 className="font-semibold text-sm text-gray-700">
                 <Image className="h-4 w-4 inline mr-1" />
-                Slideshow Images
+                {t('ambiance.slideshowImages', { defaultValue: 'Slideshow Images' })}
               </h3>
-              <p className="text-xs text-gray-400">Upload food photos, restaurant images, etc. Max 10 images.</p>
+              <p className="text-xs text-gray-400">{t('ambiance.slideshowImagesHint', { defaultValue: 'Upload food photos, restaurant images, etc. Max 10 images.' })}</p>
               <Button
                 variant="secondary"
                 size="sm"
@@ -756,7 +757,7 @@ export function AmbianceScreen() {
                 }}
               >
                 <Upload className="h-4 w-4" />
-                Upload Images {current.images.length > 0 && `(${current.images.length}/10)`}
+                {t('ambiance.uploadImages', { defaultValue: 'Upload Images' })} {current.images.length > 0 && `(${current.images.length}/10)`}
               </Button>
               {current.images.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-3">
@@ -797,7 +798,7 @@ export function AmbianceScreen() {
         <div className="w-[40%]">
           <div className="sticky top-4">
             <h4 className="text-sm font-medium text-gray-500 mb-2 uppercase tracking-wide">
-              Live Preview
+              {t('ambiance.livePreview', { defaultValue: 'Live Preview' })}
             </h4>
             <div
               className="rounded-xl overflow-hidden shadow-2xl border border-gray-700"
@@ -828,7 +829,7 @@ export function AmbianceScreen() {
                     className="text-2xl font-bold mb-2 drop-shadow-lg"
                     style={{ fontFamily: current.fontFamily, color: current.textColor }}
                   >
-                    {restaurantName || 'Restaurant Name'}
+                    {restaurantName || t('ambiance.restaurantNamePlaceholder', { defaultValue: 'Restaurant Name' })}
                   </div>
                 )}
                 {/* Welcome text */}
@@ -838,7 +839,7 @@ export function AmbianceScreen() {
                 >
                   {current.welcomeMode === 'static' && current.welcomeText
                     ? current.welcomeText
-                    : 'Welcome'}
+                    : t('ambiance.welcome', { defaultValue: 'Welcome' })}
                 </div>
                 {/* Menu indicator */}
                 {current.showMenu && (
@@ -850,7 +851,7 @@ export function AmbianceScreen() {
                       backgroundColor: current.textColor + '0a'
                     }}
                   >
-                    Menu Panel Active
+                    {t('ambiance.menuPanelActive', { defaultValue: 'Menu Panel Active' })}
                   </div>
                 )}
                 {/* Thumbnail strip */}
@@ -891,17 +892,17 @@ export function AmbianceScreen() {
               />
             </div>
             <p className="text-xs text-gray-400 mt-2 text-center">
-              Preview updates as you change settings
+              {t('ambiance.previewUpdates', { defaultValue: 'Preview updates as you change settings' })}
             </p>
 
             {/* Profile info below preview */}
             <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
               <p className="text-xs text-gray-500">
-                Profile: <span className="font-medium text-gray-700">{getDisplayLabel(activeProfile)}</span>
+                {t('ambiance.profileLabel', { defaultValue: 'Profile:' })} <span className="font-medium text-gray-700">{getDisplayLabel(activeProfile)}</span>
               </p>
               {current.tvUrl && (
                 <p className="text-xs text-gray-400 mt-1 truncate" title={current.tvUrl}>
-                  URL: <span className="font-mono">{current.tvUrl}</span>
+                  {t('ambiance.urlLabel', { defaultValue: 'URL:' })} <span className="font-mono">{current.tvUrl}</span>
                 </p>
               )}
             </div>
@@ -914,7 +915,7 @@ export function AmbianceScreen() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Add Display Profile</h3>
+              <h3 className="text-lg font-semibold">{t('ambiance.addDisplayProfile', { defaultValue: 'Add Display Profile' })}</h3>
               <button
                 onClick={() => {
                   setNewProfileModal(false)
@@ -926,10 +927,10 @@ export function AmbianceScreen() {
               </button>
             </div>
             <p className="text-sm text-gray-500 mb-4">
-              Create a separate TV display with its own settings and short code.
+              {t('ambiance.addDisplayProfileHint', { defaultValue: 'Create a separate TV display with its own settings and short code.' })}
             </p>
             <Input
-              placeholder='Profile name (e.g. "Terrace TV")'
+              placeholder={t('ambiance.profileNamePlaceholder', { defaultValue: 'Profile name (e.g. "Terrace TV")' })}
               value={newProfileName}
               onChange={(e) => setNewProfileName(e.target.value)}
               onKeyDown={(e) => {
@@ -944,13 +945,15 @@ export function AmbianceScreen() {
                   setNewProfileName('')
                 }}
               >
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button
                 disabled={!newProfileName.trim() || creatingProfile}
                 onClick={handleAddProfile}
               >
-                {creatingProfile ? 'Creating...' : 'Create'}
+                {creatingProfile
+                  ? t('ambiance.creating', { defaultValue: 'Creating...' })
+                  : t('ambiance.create', { defaultValue: 'Create' })}
               </Button>
             </div>
           </div>
