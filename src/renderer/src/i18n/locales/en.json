@@ -563,7 +563,13 @@
     "addDisplayProfileHint": "Create a separate TV display with its own settings and short code.",
     "profileNamePlaceholder": "Profile name (e.g. \"Terrace TV\")",
     "creating": "Creating...",
-    "create": "Create"
+    "create": "Create",
+    "tvAppCode": "TV App — pairing code",
+    "tvAppCodeHint": "Install the Fast Food TV app on the television, then type this code once. It connects automatically and remembers it.",
+    "firewallBtn": "Make TV connection faster (allow through firewall)",
+    "firewallWorking": "Allowing…",
+    "firewallDone": "✓ Firewall allowed",
+    "firewallFailed": "Skipped (still works via internet)"
   },
   "promotions": {
     "title": "Promotions & Loyalty",

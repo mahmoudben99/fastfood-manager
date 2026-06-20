@@ -1,0 +1,37 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'com.fastfood.tv'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.fastfood.tv'
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName '1.0'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+}
+
+// Intentionally dependency-free: MainActivity uses only the Android framework (WebView,
+// Activity, framework widgets), so CI is fast and there's nothing to break.
+dependencies {
+}

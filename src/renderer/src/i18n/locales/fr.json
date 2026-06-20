@@ -563,7 +563,13 @@
     "addDisplayProfileHint": "Créez un écran TV distinct avec ses propres réglages et son code court.",
     "profileNamePlaceholder": "Nom du profil (ex. « TV Terrasse »)",
     "creating": "Création...",
-    "create": "Créer"
+    "create": "Créer",
+    "tvAppCode": "Application TV — code d'association",
+    "tvAppCodeHint": "Installez l'application Fast Food TV sur le téléviseur, puis saisissez ce code une seule fois. Elle se connecte automatiquement et le mémorise.",
+    "firewallBtn": "Accélérer la connexion TV (autoriser dans le pare-feu)",
+    "firewallWorking": "Autorisation…",
+    "firewallDone": "✓ Pare-feu autorisé",
+    "firewallFailed": "Ignoré (fonctionne quand même via internet)"
   },
   "promotions": {
     "title": "Promotions et fidélité",

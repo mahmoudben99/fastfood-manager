@@ -121,6 +121,25 @@ export function AmbianceScreen() {
   const [restaurantName, setRestaurantName] = useState('')
   const [tabletRunning, setTabletRunning] = useState(false)
   const [tabletUrl, setTabletUrl] = useState('')
+  const [pairingCode, setPairingCode] = useState('')
+  const [firewallState, setFirewallState] = useState<'idle' | 'working' | 'done' | 'failed'>('idle')
+
+  useEffect(() => {
+    window.api.tablet
+      .getPairingCode()
+      .then((r: any) => setPairingCode(r?.code || ''))
+      .catch(() => {})
+  }, [])
+
+  const allowFirewall = async () => {
+    setFirewallState('working')
+    try {
+      const r = await window.api.tablet.allowFirewall()
+      setFirewallState(r?.ok ? 'done' : 'failed')
+    } catch {
+      setFirewallState('failed')
+    }
+  }
 
   const flashSaved = () => {
     setSaved(true)
@@ -405,6 +424,39 @@ export function AmbianceScreen() {
           {/* Link Section */}
           <Card>
             <div className="space-y-3">
+              {/* TV App pairing code — the easy way: install the TV app, type these 4 digits */}
+              {activeProfile === 'default' && pairingCode && (
+                <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
+                  <p className="text-xs font-semibold text-orange-700 uppercase tracking-wide">
+                    {t('ambiance.tvAppCode', { defaultValue: 'TV App — pairing code' })}
+                  </p>
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className="text-4xl font-bold tracking-[0.3em] text-orange-600 font-mono">
+                      {pairingCode}
+                    </span>
+                    <p className="text-xs text-gray-500 flex-1">
+                      {t('ambiance.tvAppCodeHint', {
+                        defaultValue:
+                          'Install the Fast Food TV app on the television, then type this code once. It connects automatically and remembers it.'
+                      })}
+                    </p>
+                  </div>
+                  <button
+                    onClick={allowFirewall}
+                    disabled={firewallState === 'working'}
+                    className="mt-3 text-xs px-3 py-1.5 rounded-md border border-orange-300 text-orange-700 hover:bg-orange-100 disabled:opacity-50"
+                  >
+                    {firewallState === 'working'
+                      ? t('ambiance.firewallWorking', { defaultValue: 'Allowing…' })
+                      : firewallState === 'done'
+                        ? t('ambiance.firewallDone', { defaultValue: '✓ Firewall allowed' })
+                        : firewallState === 'failed'
+                          ? t('ambiance.firewallFailed', { defaultValue: 'Skipped (still works via internet)' })
+                          : t('ambiance.firewallBtn', { defaultValue: 'Make TV connection faster (allow through firewall)' })}
+                  </button>
+                </div>
+              )}
+
               <h3 className="font-semibold text-sm text-gray-700">{t('ambiance.displayLink', { defaultValue: 'Display Link' })}</h3>
               {current.tvUrl ? (
                 <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">

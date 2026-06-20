@@ -14,6 +14,8 @@ import { getDisplayImagesPath } from '../database/connection'
 import { syncOwnerPin } from '../sync/owner-sync'
 import { getMachineId } from '../activation/activation'
 import { getShortCodes, syncDisplaySettings, syncMenuToCloud, createDisplayProfile, deleteDisplayProfileFromCloud } from '../sync/cloud-sync'
+import { getPairingCode } from '../tablet/pairing'
+import { addFirewallRule } from '../tablet/firewall'
 
 // getWindow is a lazy getter so we always grab the live BrowserWindow reference,
 // not a stale null captured at registration time (createWindow() runs after registerAllHandlers()).
@@ -63,6 +65,19 @@ export function registerTabletHandlers(getWindow: () => BrowserWindow | null): v
 
   ipcMain.handle('tablet:isRunning', () => {
     return isTabletServerRunning()
+  })
+
+  // 4-digit TV pairing code shown in the Ambiance screen (typed into the TV app once).
+  ipcMain.handle('tablet:getPairingCode', () => {
+    return { code: getPairingCode() }
+  })
+
+  // Add a Windows Firewall allow-rule for the display port (one UAC prompt). Optional —
+  // the TV app's cloud fallback works even without it; this just enables the fast LAN path.
+  ipcMain.handle('tablet:allowFirewall', async () => {
+    const status = await getTabletServerStatus()
+    const ok = await addFirewallRule(status?.port ?? 3333)
+    return { ok }
   })
 
   ipcMain.handle('tablet:pushDisplayUpdate', (_event, data: any) => {

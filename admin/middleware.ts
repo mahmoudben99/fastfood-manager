@@ -17,7 +17,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/tv-') ||
     pathname.startsWith('/r/') ||
     pathname.startsWith('/o/') ||
-    pathname.startsWith('/api/remote-order')
+    pathname.startsWith('/api/remote-order') ||
+    pathname.startsWith('/api/pair')
   ) {
     return NextResponse.next()
   }

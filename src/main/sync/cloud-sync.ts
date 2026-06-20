@@ -6,6 +6,9 @@ import { categoriesRepo } from '../database/repositories/categories.repo'
 import { promotionsRepo } from '../database/repositories/promotions.repo'
 import { net } from 'electron'
 import { readFileSync } from 'fs'
+import { getLanIPs } from '../tablet/network'
+import { getCurrentPort } from '../tablet/server'
+import { getPairingCode } from '../tablet/pairing'
 
 function generateShortCode(): string {
   // 4-digit numeric code
@@ -67,6 +70,12 @@ export async function syncDisplaySettings(profileName: string = 'default'): Prom
         settings._slideshow_images = JSON.stringify(images)
       }
     } catch { /* skip */ }
+
+    // TV pairing info: 4-digit code + reachable LAN IPs + port, so /api/pair can hand the
+    // TV app a fast LAN target (with the cloud display as the fallback).
+    settings._pairing_code = getPairingCode()
+    settings._lan_ips = JSON.stringify(getLanIPs())
+    settings._port = String(getCurrentPort())
 
     const { error } = await supabase.from('display_settings').upsert({
       machine_id: machineId,

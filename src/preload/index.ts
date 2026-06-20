@@ -279,7 +279,9 @@ const api = {
     uploadDisplayImages: (profile?: string) => ipcRenderer.invoke('display:uploadImages', profile),
     getDisplayImages: (profile?: string) => ipcRenderer.invoke('display:getImages', profile),
     removeDisplayImage: (path: string, profile?: string) => ipcRenderer.invoke('display:removeImage', path, profile),
-    getOwnerDashboard: () => ipcRenderer.invoke('owner:getQR')
+    getOwnerDashboard: () => ipcRenderer.invoke('owner:getQR'),
+    getPairingCode: () => ipcRenderer.invoke('tablet:getPairingCode'),
+    allowFirewall: () => ipcRenderer.invoke('tablet:allowFirewall')
   },
   cloud: {
     getShortCodes: () => ipcRenderer.invoke('cloud:getShortCodes'),

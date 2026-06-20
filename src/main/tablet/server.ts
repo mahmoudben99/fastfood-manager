@@ -1,7 +1,6 @@
 import http from 'http'
 import { createHash } from 'crypto'
 import { readFileSync } from 'fs'
-import os from 'os'
 import type { BrowserWindow } from 'electron'
 import QRCode from 'qrcode'
 import { menuRepo } from '../database/repositories/menu.repo'
@@ -11,6 +10,7 @@ import { settingsRepo } from '../database/repositories/settings.repo'
 import { promotionsRepo } from '../database/repositories/promotions.repo'
 import { getTabletHTML } from './tablet-ui'
 import { getDisplayHTML } from './display-ui'
+import { getBestLanIP } from './network'
 import { printOrder } from '../ipc/printer.ipc'
 import { sendOrderNotification } from '../telegram/bot'
 import { performAutoBackup } from '../ipc/backup.ipc'
@@ -147,15 +147,14 @@ export function pushDisplayUpdate(data: any): void {
 }
 
 export function getLocalIP(): string {
-  const nets = os.networkInterfaces()
-  for (const iface of Object.values(nets)) {
-    for (const addr of (iface ?? [])) {
-      if (addr.family === 'IPv4' && !addr.internal) {
-        return addr.address
-      }
-    }
-  }
-  return '127.0.0.1'
+  // Smart pick (filters printer/virtual NICs). The TV pairing path uses the full
+  // ranked list from network.ts and probes every address instead of trusting one.
+  return getBestLanIP()
+}
+
+/** The port the display server is bound to (3333 by default, may shift on conflict). */
+export function getCurrentPort(): number {
+  return currentPort
 }
 
 function makeToken(pin: string, pinVersion: string): string {
