@@ -34,6 +34,10 @@ export function verifyIntegrity(): boolean {
 }
 
 export function getMachineId(): string {
+  // Test isolation: the automated test harness sets this so a throwaway test instance gets
+  // its own cloud identity and never reads/overwrites a real machine's Supabase rows.
+  const override = process.env.FFM_MACHINE_ID_OVERRIDE
+  if (override) return override.toUpperCase()
   const cpuModel = cpus()[0]?.model || 'unknown'
   const host = hostname()
   const user = userInfo().username

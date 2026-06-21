@@ -44,12 +44,22 @@ class MainActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("ffm_tv", MODE_PRIVATE) }
     private val ui = Handler(Looper.getMainLooper())
 
-    private val resolver = "https://fastfood-manager.vercel.app/api/pair"
+    private val defaultResolver = "https://fastfood-manager.vercel.app/api/pair"
+
+    /** Resolver base — overridable for local testing via:
+     *  adb shell am start -n com.fastfood.tv/.MainActivity --es resolver http://10.0.2.2:3000/api/pair */
+    private fun resolver(): String =
+        prefs.getString("resolver_override", null) ?: defaultResolver
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideSystemUi()
+
+        // Allow the test harness to point the app at a local admin (offline end-to-end).
+        intent?.getStringExtra("resolver")?.let {
+            prefs.edit().putString("resolver_override", it).apply()
+        }
 
         root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         web = WebView(this)
@@ -151,7 +161,7 @@ class MainActivity : Activity() {
 
     /** Ask the cloud resolver for this code's connection info. */
     private fun resolve(code: String): JSONObject? {
-        val conn = URL("$resolver?code=$code").openConnection() as HttpURLConnection
+        val conn = URL("${resolver()}?code=$code").openConnection() as HttpURLConnection
         return try {
             conn.connectTimeout = 6000
             conn.readTimeout = 6000

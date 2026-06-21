@@ -1,0 +1,14 @@
+{
+  "name": "ffm-test-harness",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Agentic test lab: drive the POS (Electron via Playwright) + the TV app (Android emulator via adb)",
+  "scripts": {
+    "pos": "node run.js pos-smoke",
+    "tv": "node run.js tv-ui",
+    "run": "node run.js"
+  },
+  "dependencies": {
+    "playwright": "^1.49.1"
+  }
+}
