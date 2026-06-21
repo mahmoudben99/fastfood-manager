@@ -32,6 +32,10 @@ async function seedViaIpc(win, { machineId = 'TESTLAB000000001' } = {}) {
     })
   )
 
+  // Admin password '1234' (so deeper scenarios can pass the admin PasswordGate).
+  const hash = await win.evaluate(() => window.api.settings.hashPassword('1234'))
+  await win.evaluate((h) => window.api.settings.set('admin_password_hash', h), hash)
+
   const menu = await win.evaluate(() => window.api.menu.getAll())
   if (!menu || menu.length === 0) {
     const cat = await win.evaluate(() => window.api.categories.create({ name: 'Burgers', icon: '🍔' }))
