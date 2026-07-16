@@ -306,6 +306,8 @@
     "restoreConfirm": "Restore?",
     "restoring": "Restoring...",
     "restore": "Restore",
+    "restoreDisabledButton": "Restore unavailable",
+    "restoreDisabledDesc": "Menu recovery-point restore is temporarily disabled in production because it can replace live menu, stock, and worker data.",
     "deleteConfirm": "Delete?"
   },
   "backup": {

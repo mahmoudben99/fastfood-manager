@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { app, ipcMain } from 'electron'
 import Database from 'better-sqlite3'
 import { unlinkSync } from 'fs'
 import { dirname, join } from 'path'
@@ -9,6 +9,26 @@ import {
   type SetupImportPayload,
   type SetupImportResult
 } from '../../shared/excel-import'
+
+/** Raised when an old renderer tries to invoke a production-disabled destructive action. */
+export class DestructiveImportDisabledError extends Error {
+  readonly code = 'FFM_DESTRUCTIVE_IMPORT_DISABLED'
+
+  constructor(action: string) {
+    super(`${action} is disabled in production. No data was changed.`)
+    this.name = 'DestructiveImportDisabledError'
+  }
+}
+
+/**
+ * The escape hatch exists only for a deliberate support/recovery session. It is checked in the
+ * main process, so a stale or modified renderer cannot re-enable destructive operations.
+ */
+export function assertDestructiveImportAllowed(isPackaged: boolean): void {
+  if (isPackaged && process.env.FFM_ALLOW_DESTRUCTIVE_IMPORT !== '1') {
+    throw new DestructiveImportDisabledError('Destructive Excel menu replacement')
+  }
+}
 
 /** Create a verified whole-database safety snapshot before the atomic first-run import. */
 async function snapshotBeforeImport(): Promise<string | null> {
@@ -206,6 +226,7 @@ function importSetupData(payload: SetupImportPayload): Omit<SetupImportResult, '
 export function registerDataHandlers(): void {
   // Fail-closed compatibility endpoint for renderer bundles from before atomic setup import.
   ipcMain.handle('data:clearForImport', () => {
+    assertDestructiveImportAllowed(app.isPackaged)
     return {
       success: false,
       error: 'Destructive Excel replacement is disabled. No data was changed.'
@@ -339,6 +360,7 @@ export function registerDataHandlers(): void {
 
   // Restore from a saved version
   ipcMain.handle('data:restoreVersion', (_, versionId: number) => {
+    assertDestructiveImportAllowed(app.isPackaged)
     if (!Number.isInteger(versionId) || versionId <= 0) throw new Error('Invalid recovery point')
     const db = getDb()
 

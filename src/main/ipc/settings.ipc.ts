@@ -131,7 +131,6 @@ export function registerSettingsHandlers(): void {
       activation_code: '',
       trial_expires_at: '',
       trial_status: '',
-      setup_complete: 'false',
       _integrity: ''
     })
     return { success: true }

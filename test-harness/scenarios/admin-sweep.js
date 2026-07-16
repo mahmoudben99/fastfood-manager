@@ -37,7 +37,7 @@ exports.run = async () => {
       }
     }
     saveText(out, 'results.txt', results.join('\n'))
-    const fails = results.filter((r) => r.includes('FAIL'))
+    const fails = results.filter((r) => r.includes('FAIL') || r.includes('ERROR'))
     if (fails.length) throw new Error('admin pages failed to render: ' + fails.join(', '))
     return { artifacts: out }
   } finally {

@@ -30,6 +30,7 @@ interface MenuVersion {
 
 export function ExcelImportExport() {
   const { t } = useTranslation()
+  const restoreDisabled = import.meta.env.PROD
   const [importResult, setImportResult] = useState<{
     success: boolean
     message: string
@@ -202,6 +203,14 @@ export function ExcelImportExport() {
   }
 
   const handleRestore = async (versionId: number) => {
+    if (restoreDisabled) {
+      setConfirmRestoreId(null)
+      setImportResult({
+        success: false,
+        message: t('excel.restoreDisabledDesc')
+      })
+      return
+    }
     setRestoringId(versionId)
     setConfirmRestoreId(null)
     try {
@@ -373,6 +382,12 @@ export function ExcelImportExport() {
 
         {showVersions && (
           <div className="mt-4">
+            {restoreDisabled && (
+              <div className="mb-4 flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{t('excel.restoreDisabledDesc')}</span>
+              </div>
+            )}
             {loadingVersions ? (
               <p className="text-sm text-gray-400 py-4 text-center">{t('common.loading')}</p>
             ) : versions.length === 0 ? (
@@ -429,7 +444,15 @@ export function ExcelImportExport() {
 
                     <div className="flex items-center gap-2 ml-4 shrink-0">
                       {/* Restore */}
-                      {confirmRestoreId === version.id ? (
+                      {restoreDisabled ? (
+                        <button
+                          disabled
+                          className="flex items-center gap-1 rounded-lg bg-gray-100 px-2.5 py-1.5 text-xs font-medium text-gray-500 opacity-70"
+                        >
+                          <AlertCircle className="h-3.5 w-3.5" />
+                          {t('excel.restoreDisabledButton')}
+                        </button>
+                      ) : confirmRestoreId === version.id ? (
                         <div className="flex items-center gap-1">
                           <span className="text-xs text-orange-600 mr-1">
                             {t('excel.restoreConfirm', { defaultValue: 'Restore?' })}
