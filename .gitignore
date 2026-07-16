@@ -7,3 +7,4 @@ nul
 build-log.txt
 _test_electron.js
 *.zip
+test-harness/node_modules
