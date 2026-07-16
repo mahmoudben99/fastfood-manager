@@ -306,6 +306,8 @@
     "restoreConfirm": "Restaurer ?",
     "restoring": "Restauration...",
     "restore": "Restaurer",
+    "restoreDisabledButton": "Restauration indisponible",
+    "restoreDisabledDesc": "La restauration d’un point de menu est temporairement désactivée en production, car elle peut remplacer les données actuelles du menu, du stock et des employés.",
     "deleteConfirm": "Supprimer ?"
   },
   "backup": {

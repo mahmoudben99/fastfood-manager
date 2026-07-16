@@ -44,6 +44,14 @@ exports.run = async () => {
     !/FATAL EXCEPTION[\s\S]{0,2000}Process: com\.fastfood\.tv/.test(logcat),
     'Fast Food TV crashed during pairing; inspect logcat.txt'
   )
+  assert(
+    !finalUi.includes('text="1234"'),
+    'pairing submission did not leave the code-entry screen; inspect 3-after-connect.xml'
+  )
+  assert(
+    /Code Not Found|Unable to connect|Connection failed|Try again/i.test(finalUi),
+    'invalid pairing code did not show a visible error state; inspect 3-after-connect.xml'
+  )
   log('TV focus:', finalFocus)
   log('screens in', out)
   return { artifacts: out }

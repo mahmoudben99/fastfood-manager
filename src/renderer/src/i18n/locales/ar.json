@@ -306,6 +306,8 @@
     "restoreConfirm": "استعادة؟",
     "restoring": "جارٍ الاستعادة...",
     "restore": "استعادة",
+    "restoreDisabledButton": "الاستعادة غير متاحة",
+    "restoreDisabledDesc": "تم تعطيل استعادة نقاط القائمة مؤقتًا في إصدار الإنتاج لأنها قد تستبدل بيانات القائمة والمخزون والعمال الحالية.",
     "deleteConfirm": "حذف؟"
   },
   "backup": {
