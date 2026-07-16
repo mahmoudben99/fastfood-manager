@@ -1,7 +1,4 @@
--- Legacy base-schema bootstrap retained for the frozen suite's documented flow.
--- Production and `npm test` use the ordered files in migrations/.
-
-CREATE TABLE IF NOT EXISTS licenses (
+CREATE TABLE licenses (
   machine_id          TEXT PRIMARY KEY,
   -- A tombstone is status='revoked' plus its audit marker in notes.
   status              TEXT NOT NULL DEFAULT 'trial'
@@ -19,10 +16,10 @@ CREATE TABLE IF NOT EXISTS licenses (
   check_count         INTEGER NOT NULL DEFAULT 0
 );
 
-CREATE INDEX IF NOT EXISTS idx_licenses_status ON licenses(status);
-CREATE INDEX IF NOT EXISTS idx_licenses_last_seen ON licenses(last_seen);
+CREATE INDEX idx_licenses_status ON licenses(status);
+CREATE INDEX idx_licenses_last_seen ON licenses(last_seen);
 
-CREATE TABLE IF NOT EXISTS admin_log (
+CREATE TABLE admin_log (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   machine_id  TEXT,
   action      TEXT NOT NULL,
@@ -30,4 +27,4 @@ CREATE TABLE IF NOT EXISTS admin_log (
   at          TEXT NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_admin_log_machine ON admin_log(machine_id);
+CREATE INDEX idx_admin_log_machine ON admin_log(machine_id);

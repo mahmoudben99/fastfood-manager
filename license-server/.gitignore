@@ -1,0 +1,7 @@
+node_modules/
+.wrangler/
+.npm-cache/
+.dev.vars
+.dev.vars.*
+wrangler.test.toml
+npm-debug.log*

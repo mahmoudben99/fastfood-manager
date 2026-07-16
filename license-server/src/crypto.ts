@@ -1,39 +1,31 @@
-/**
- * Ed25519 signing for license tokens, using the Workers Web Crypto runtime.
- *
- * The PRIVATE key lives ONLY here, as a Cloudflare secret (never shipped to any client).
- * The desktop app carries only the matching PUBLIC key and can verify — but never forge —
- * a token. That is the whole point: the client can no longer lie about its own license.
- *
- * Token wire format:  base64url(payloadJSON) + "." + base64url(rawEd25519Signature)
- * The signature is computed over the exact payload bytes that are sent, so the verifier
- * checks the received bytes directly — no canonical-JSON pitfalls.
- */
+/** Ed25519 compact-artifact helpers for the Workers Web Crypto runtime. */
 
 export function b64urlEncode(bytes: Uint8Array): string {
-  let bin = ''
-  for (const b of bytes) bin += String.fromCharCode(b)
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  let binary = ''
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
-export function b64urlDecode(s: string): Uint8Array {
-  const b64 = s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)
-  const bin = atob(b64)
-  const out = new Uint8Array(bin.length)
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
-  return out
+function decodeBase64(value: string): ArrayBuffer {
+  const normalized = value.trim().replace(/-/g, '+').replace(/_/g, '/')
+  const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4)
+  const binary = atob(padded)
+  const bytes = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index)
+  return bytes.buffer
 }
 
-/** Import the PKCS8 (base64) private key produced by scripts/genkeys.mjs. */
 async function importPrivateKey(pkcs8Base64: string): Promise<CryptoKey> {
-  const der = b64urlDecode(pkcs8Base64.replace(/-/g, '+').replace(/_/g, '/'))
-  return crypto.subtle.importKey('pkcs8', der, { name: 'Ed25519' }, false, ['sign'])
+  return crypto.subtle.importKey('pkcs8', decodeBase64(pkcs8Base64), { name: 'Ed25519' }, false, ['sign'])
 }
 
-/** Sign a payload object, returning the compact token string. */
-export async function signToken(payload: unknown, pkcs8Base64: string): Promise<string> {
+/**
+ * Sign the exact UTF-8 JSON bytes emitted in the artifact payload segment.
+ * The caller supplies `kid` in the payload, keeping signing rotation-ready.
+ */
+export async function signArtifact(payload: unknown, pkcs8Base64: string): Promise<string> {
   const key = await importPrivateKey(pkcs8Base64)
   const payloadBytes = new TextEncoder().encode(JSON.stringify(payload))
-  const sig = new Uint8Array(await crypto.subtle.sign({ name: 'Ed25519' }, key, payloadBytes))
-  return `${b64urlEncode(payloadBytes)}.${b64urlEncode(sig)}`
+  const signature = new Uint8Array(await crypto.subtle.sign('Ed25519', key, payloadBytes))
+  return `${b64urlEncode(payloadBytes)}.${b64urlEncode(signature)}`
 }

@@ -1,0 +1,17 @@
+name = "ffm-license"
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+
+[vars]
+LICENSE_KID = "k1"
+TRIAL_DAYS = "7"
+TOKEN_TTL_DAYS = "7"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ffm-license"
+database_id = "d321e07d-b41c-4024-872a-df3ffca334aa"
+migrations_dir = "migrations"
+
+[triggers]
+crons = ["0 3 * * *"]
