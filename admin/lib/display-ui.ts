@@ -491,7 +491,7 @@ export function getDisplayHTML(lang: string): string {
     ═══════════════════════════════════ */
     var state = {
       name: '', logo: '',
-      promos: [], packs: [],
+      promos: [],
       social: [], phone: '',
       youtubeUrl: '',
       gradientPreset: 0,
@@ -748,7 +748,8 @@ export function getDisplayHTML(lang: string): string {
         build: function() {
           var html = '<div class="panel" id="panel-welcome">';
           if (state.logo) {
-            var src = state.logo.startsWith('data:') ? state.logo : 'data:image/png;base64,' + state.logo;
+            var isUrl = state.logo.startsWith('http://') || state.logo.startsWith('https://');
+            var src = state.logo.startsWith('data:') || isUrl ? state.logo : 'data:image/png;base64,' + state.logo;
             html += '<img class="welcome-logo" src="' + src + '" alt="">';
           }
           if (state.showName) {
@@ -803,12 +804,6 @@ export function getDisplayHTML(lang: string): string {
           var p = state.promos[i];
           var val = p.type === 'percentage' ? ('-' + p.value + '%') : ('-' + fmtPrice(p.value));
           allPromos.push({ name: p.name, value: val, emoji: '', badge: esc(t.deal), items: [] });
-        }
-      }
-      if (state.packs) {
-        for (var i = 0; i < state.packs.length; i++) {
-          var pk = state.packs[i];
-          allPromos.push({ name: pk.name, value: fmtPrice(pk.pack_price || pk.price), emoji: pk.emoji || '', badge: '', items: pk.items || [] });
         }
       }
       if (allPromos.length > 0 && state.panelPromos) {
@@ -1065,7 +1060,6 @@ export function getDisplayHTML(lang: string): string {
           state.name = data.name || '';
           state.logo = data.logo || '';
           state.promos = data.promos || [];
-          state.packs = data.packs || [];
           state.social = data.social || [];
           state.phone = data.phone || '';
           state.youtubeUrl = data.youtubeUrl || '';

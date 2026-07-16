@@ -46,13 +46,6 @@ function getDisplayInfoPayload(profile: string = 'default'): Record<string, unkn
   const promos = promotionsRepo.getActivePromotions().map((p: any) => ({
     name: p.name, type: p.type, value: p.discount_value
   }))
-  const packs = promotionsRepo.getActivePacks().map((p: any) => ({
-    name: p.name, price: p.pack_price, emoji: p.emoji || '',
-    items: (p.items || []).map((pi: any) => ({
-      name: pi.menu_item_name || '',
-      quantity: pi.quantity || 1
-    }))
-  }))
 
   // Social media from settings (stored as JSON string)
   let social: { platform: string; handle: string }[] = []
@@ -131,7 +124,7 @@ function getDisplayInfoPayload(profile: string = 'default'): Record<string, unkn
   const panelOrders = dget('panel_orders') !== 'false'
   const panelMenu = dget('panel_menu') !== 'false'
 
-  return { type: 'info', name, logo, currency, promos, packs, social, youtubeUrl, themeColor, slideshowImages, welcomeMode, welcomeText, phone, gradientPreset, fontFamily, textColor, accentColor, textScale, showMenu, menuItems, showName, logoScale, panelWelcome, panelSocial, panelPromos, panelSlideshow, panelOrders, panelMenu }
+  return { type: 'info', name, logo, currency, promos, social, youtubeUrl, themeColor, slideshowImages, welcomeMode, welcomeText, phone, gradientPreset, fontFamily, textColor, accentColor, textScale, showMenu, menuItems, showName, logoScale, panelWelcome, panelSocial, panelPromos, panelSlideshow, panelOrders, panelMenu }
 }
 
 function getQueuePayload(): Record<string, unknown> {

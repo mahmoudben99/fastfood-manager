@@ -40,22 +40,32 @@ release APK so future versions can update the existing installation.
 
 ## Signed release build
 
-Release tasks intentionally fail when signing material is absent. Keep the keystore outside the
-repository and provide all five values through environment variables or Gradle properties:
+Release tasks intentionally fail when signing material is absent. Generate the production key
+once on an offline/admin machine, retain its password in the team's secret manager, and keep the
+keystore outside the repository:
+
+```sh
+keytool -genkeypair -v -storetype PKCS12 -keystore ffm-tv-release.p12 -alias fastfood-tv -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=Fast Food Manager TV, OU=Engineering, O=Fast Food Manager, C=DZ"
+```
+
+Use the passwords requested by `keytool` for `TV_KEYSTORE_PASSWORD` and `TV_KEY_PASSWORD` (they
+may be the same). Keep the resulting `ffm-tv-release.p12` offline and upload its base64 content,
+not the file, to the protected GitHub environment. Local release builds use these environment
+variables or Gradle properties:
 
 ```text
-FFM_TV_KEYSTORE_PATH=/secure/location/ffm-tv-release.jks
-FFM_TV_KEYSTORE_PASSWORD=...
-FFM_TV_KEY_ALIAS=...
-FFM_TV_KEY_PASSWORD=...
-FFM_TV_SIGNING_CERT_SHA256=...
+TV_KEYSTORE_PATH=/secure/location/ffm-tv-release.p12
+TV_KEYSTORE_PASSWORD=...
+TV_KEY_ALIAS=fastfood-tv
+TV_KEY_PASSWORD=...
+TV_SIGNING_CERT_SHA256=...
 ```
 
 Optional release version overrides:
 
 ```text
-FFM_TV_VERSION_CODE=3
-FFM_TV_VERSION_NAME=1.2.0
+TV_VERSION_CODE=3
+TV_VERSION_NAME=1.2.0
 ```
 
 `versionCode` must increase for every APK distributed to restaurants. Never replace or lose the
@@ -73,18 +83,19 @@ uses the protected **Production** environment. Require reviewer approval on that
 protect `tv-v*` tags before provisioning its signing material. Configure these Production
 environment secrets before using that path:
 
-- `FFM_TV_KEYSTORE_BASE64`
-- `FFM_TV_KEYSTORE_PASSWORD`
-- `FFM_TV_KEY_ALIAS`
-- `FFM_TV_KEY_PASSWORD`
-- `FFM_TV_SIGNING_CERT_SHA256`
+- `TV_KEYSTORE_BASE64` — `base64 -w 0 ffm-tv-release.p12` on GNU/Linux, or
+  `[Convert]::ToBase64String([IO.File]::ReadAllBytes('ffm-tv-release.p12'))` in PowerShell
+- `TV_KEYSTORE_PASSWORD`
+- `TV_KEY_ALIAS`
+- `TV_KEY_PASSWORD`
+- `TV_SIGNING_CERT_SHA256`
 
-`FFM_TV_SIGNING_CERT_SHA256` is the SHA-256 digest of the production signing certificate. The
+`TV_SIGNING_CERT_SHA256` is the SHA-256 digest of the production signing certificate. The
 workflow verifies the finished APK against it, so accidentally replacing the keystore with a
 different valid key cannot produce a green, fleet-incompatible artifact.
 
 Obtain the digest once from the protected keystore with
-`keytool -list -v -keystore /secure/location/ffm-tv-release.jks -alias YOUR_ALIAS`, record the
+`keytool -list -v -storetype PKCS12 -keystore /secure/location/ffm-tv-release.p12 -alias fastfood-tv`, record the
 displayed `SHA256` value in the repository secret, and verify it through a second trusted copy
 before the first restaurant rollout.
 
