@@ -1,9 +1,7 @@
 import { getClient } from '../activation/cloud'
 import { getMachineId } from '../activation/activation'
 import { ordersRepo } from '../database/repositories/orders.repo'
-import { syncOrderToCloud } from './owner-sync'
 import { performAutoBackup } from '../ipc/backup.ipc'
-import { sendOrderNotification } from '../telegram/bot'
 import { settingsRepo } from '../database/repositories/settings.repo'
 import { computeAutoDiscount, sanitizeOrderItems } from '../services/order-promotions'
 import { BrowserWindow } from 'electron'
@@ -152,6 +150,7 @@ async function handleRemoteOrder(remoteOrder: any): Promise<void> {
   }
 
   inFlight.add(id)
+  try {
 
   const orderData = remoteOrder?.order_data
 
@@ -174,6 +173,8 @@ async function handleRemoteOrder(remoteOrder: any): Promise<void> {
 
     // forceMenuPrice: never trust client-supplied prices from a remote order.
     const order = ordersRepo.create({
+      source: 'remote',
+      source_request_id: String(id),
       order_type: normalizeOrderType(orderData.orderType),
       table_number: orderData.tableNumber || undefined,
       customer_phone: orderData.customerPhone || undefined,
@@ -192,13 +193,13 @@ async function handleRemoteOrder(remoteOrder: any): Promise<void> {
     // missed: owner-dashboard sync, auto-backup, Telegram alert, and auto-print. Previously
     // only the renderer got a 5s toast — if staff weren't watching the POS, the order was
     // never cooked. All fire-and-forget so none can throw the order into the 'failed' path.
-    syncOrderToCloud(order).catch(() => {})
-    try { performAutoBackup() } catch { /* ignore */ }
-    try { sendOrderNotification(order) } catch { /* ignore */ }
+    if (!order.duplicate) {
+      try { performAutoBackup() } catch { /* backup retry remains independent */ }
+    }
     // Durable automatic print jobs were committed by ordersRepo.create().
 
     // Notify the renderer
-    mainWin?.webContents.send('remote:new-order', order)
+    if (!order.duplicate) mainWin?.webContents.send('remote:new-order', order)
 
     // Mark as processed in Supabase. If this never succeeds, processedIds keeps us honest.
     const marked = await markRemoteOrder(id, 'processed')
@@ -206,10 +207,19 @@ async function handleRemoteOrder(remoteOrder: any): Promise<void> {
       console.error('[Remote Order] Created locally but could not mark processed — will retry:', id)
     }
   } catch (err) {
-    // create() throwing here is almost always a permanent data problem (e.g. an unknown
-    // menu_item_id), so mark failed rather than retry the same bad order every 10s.
-    console.error('[Remote Order] Failed to process, marking failed:', err)
-    await markRemoteOrder(id, 'failed')
+    const code = String((err as { code?: string })?.code || '')
+    const permanent = ['invalid_input', 'inactive_item', 'incompatible_unit'].includes(code)
+    if (permanent) {
+      console.error('[Remote Order] Rejected invalid order, marking failed:', err)
+      await markRemoteOrder(id, 'failed')
+    } else {
+      // Infrastructure failures remain pending in Supabase. The DB transaction has rolled
+      // back, and removing the in-flight guard below lets the poll retry instead of losing it.
+      console.error('[Remote Order] Transient processing failure; leaving pending for retry:', err)
+    }
+  }
+  } finally {
+    inFlight.delete(id)
   }
 }
 

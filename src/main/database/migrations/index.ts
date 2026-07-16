@@ -15,6 +15,8 @@ import { migration013 } from './013_loyalty'
 import { migration014 } from './014_customer_phone_identity'
 import { migration015 } from './015_print_jobs'
 import { migration016 } from './016_order_sources'
+import { migration017 } from './017_order_effects'
+import { migration018 } from './018_order_effects_hardening'
 
 interface Migration {
   version: number
@@ -38,7 +40,9 @@ const migrations: Migration[] = [
   migration013,
   migration014,
   migration015,
-  migration016
+  migration016,
+  migration017,
+  migration018
 ]
 
 export function runMigrations(db: Database.Database): void {
@@ -68,5 +72,25 @@ export function runMigrations(db: Database.Database): void {
       })()
       console.log(`Migration ${migration.version} applied successfully`)
     }
+  }
+
+  // Migration 015 deliberately preserved any historical duplicate display numbers and
+  // installed an INSERT trigger. Create the stronger index whenever the data permits it,
+  // but do not brick an otherwise recoverable installation that needs owner-reviewed repair.
+  const historicalDailyDuplicates = db.prepare(
+    `SELECT order_date, daily_number, COUNT(*) AS count
+     FROM orders GROUP BY order_date, daily_number HAVING COUNT(*) > 1 LIMIT 1`
+  ).get() as { order_date: string; daily_number: number; count: number } | undefined
+  if (historicalDailyDuplicates) {
+    console.error(
+      `Cannot create idx_orders_daily_number_unique: ${historicalDailyDuplicates.count} orders share ` +
+      `${historicalDailyDuplicates.order_date} #${historicalDailyDuplicates.daily_number}. ` +
+      'The migration-015 trigger still blocks new duplicates; repair the historical rows and restart.'
+    )
+  } else {
+    db.exec(
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_daily_number_unique
+       ON orders(order_date, daily_number)`
+    )
   }
 }

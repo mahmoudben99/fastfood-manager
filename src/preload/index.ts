@@ -336,7 +336,39 @@ const api = {
   }
 }
 
-contextBridge.exposeInMainWorld('api', api)
+// ==================== WP-F ORDER-EFFECTS IPC (APPEND-ONLY BLOCK) ====================
+// Kept adjacent to exposure so Electron snapshots the widened API, and ElectronAPI includes it.
+const orderEffectsIpc = {
+  updateOrderHeader: (input: {
+    orderId: number
+    note?: string
+    tableNumber?: string
+    customer?: { phone?: string; name?: string }
+  }) => ipcRenderer.invoke('orders:effects:updateHeader', input),
+  updateOrderLines: (input: {
+    orderId: number
+    lines: {
+      orderItemId?: number
+      menuItemId: number
+      quantity: number
+      unitPriceOverride?: number
+      note?: string
+      workerId?: number
+    }[]
+    discountAmount?: number
+  }) => ipcRenderer.invoke('orders:effects:updateLines', input),
+  updateOrderStatus: (
+    orderId: number,
+    status: 'pending' | 'preparing' | 'completed' | 'cancelled'
+  ) => ipcRenderer.invoke('orders:effects:updateStatus', orderId, status)
+}
+
+const exposedApi = {
+  ...api,
+  orders: { ...api.orders, ...orderEffectsIpc }
+}
+
+contextBridge.exposeInMainWorld('api', exposedApi)
 
 // For splash window
 const electronAPI = {
@@ -345,4 +377,4 @@ const electronAPI = {
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)
 
-export type ElectronAPI = typeof api
+export type ElectronAPI = typeof exposedApi

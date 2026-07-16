@@ -133,6 +133,18 @@ export async function sendMessageToChat(message: string): Promise<boolean> {
   }
 }
 
+/** Strict notification entry point; failures remain pending in the durable outbox. */
+export async function sendOrderNotificationStrict(order: any, eventId: number): Promise<void> {
+  if (settingsRepo.get('telegram_order_notifications') === 'false') return
+  if (!settingsRepo.get('telegram_bot_token') || !settingsRepo.get('telegram_chat_id')) return
+  const items = (order.items || [])
+    .map((item: any) => `${item.quantity}x ${String(item.menu_item_name || 'Item')}`)
+    .join(', ')
+  const message = `New Order #${order.daily_number}\n${items}\nTotal: ${Number(order.total || 0).toFixed(2)} ${getCurrency()}\nEvent: ${eventId}`
+  const sent = await sendMessageToChat(message)
+  if (!sent) throw new Error('Telegram notification failed')
+}
+
 export function sendOrderNotification(order: any): void {
   if (!bot || !isRunning) return
   const notifySetting = settingsRepo.get('telegram_order_notifications')

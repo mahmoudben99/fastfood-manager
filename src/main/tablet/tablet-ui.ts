@@ -417,6 +417,7 @@ function applyTranslations() {
 let menu = { categories: [], items: [] };
 let currencySymbol = 'DA';
 let cart = []; // { menu_item_id, name, price, quantity }
+let checkoutRequestId = null; // stable through a failed request; cleared only on success/reset
 let currentCategoryId = null;
 let orderType = 'local';
 let sessionToken = null;
@@ -424,6 +425,23 @@ let sessionToken = null;
 // ── PIN logic ─────────────────────────────────────────────────────────────────
 let pinBuffer = '';
 const STORAGE_KEY = 'ffm_session_v' + PIN_VERSION;
+
+function newRequestId() {
+  if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+  const bytes = new Uint8Array(16);
+  if (globalThis.crypto && typeof globalThis.crypto.getRandomValues === 'function') {
+    globalThis.crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+  return hex.slice(0, 8) + '-' + hex.slice(8, 12) + '-' + hex.slice(12, 16) + '-' +
+    hex.slice(16, 20) + '-' + hex.slice(20);
+}
 
 function checkStoredSession() {
   if (!PIN_ENABLED) { bootApp(); return; }
@@ -673,7 +691,9 @@ async function placeOrder() {
   if (orderType === 'local' && !tableVal) { alert(t.err_table); return; }
   if (orderType === 'delivery' && !phoneVal) { alert(t.err_phone); return; }
 
+  if (!checkoutRequestId) checkoutRequestId = newRequestId();
   const payload = {
+    source_request_id: checkoutRequestId,
     order_type: orderType,
     table_number: orderType === 'local' ? tableVal : null,
     customer_phone: orderType === 'delivery' ? phoneVal : null,
@@ -698,6 +718,7 @@ async function placeOrder() {
       btn.disabled = false; updateSubmitBtn(); return;
     }
     if (data.ok) {
+      checkoutRequestId = null;
       closeCart();
       showConfirm(data.order_number);
     } else {
@@ -719,6 +740,7 @@ function showConfirm(orderNum) {
 
 function resetOrder() {
   cart = [];
+  checkoutRequestId = null;
   document.getElementById('tableInput').value = '';
   document.getElementById('phoneInput').value = '';
   document.getElementById('notesInput').value = '';
