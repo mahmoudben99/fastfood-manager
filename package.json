@@ -13,6 +13,10 @@
     "test:excel:e2e": "node test-harness/run.js excel-safety",
     "test:unit": "node --no-warnings --test test-harness/unit/*.test.mjs",
     "verify:baseline": "npx tsc --noEmit -p tsconfig.node.json && npx tsc --noEmit -p tsconfig.web.json && npm --prefix admin exec tsc -- --noEmit && npm run test:unit",
+    "test:license": "node --test test-harness/unit/license-client/*.test.mjs",
+    "test:license:integration": "node --test test-harness/unit/license-client-integration/*.test.mjs",
+    "license:live-check": "node scripts/live-check.mjs",
+    "diagnostics:machine-id": "node scripts/diagnostics-machine-id.mjs",
     "lint": "eslint . --ext .ts,.tsx"
   },
   "keywords": [],

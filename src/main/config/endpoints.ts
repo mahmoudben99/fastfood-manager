@@ -1,28 +1,30 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { app } from 'electron'
+import { createRequire } from 'node:module'
 
+/**
+ * Desktop endpoint resolution (CONTRACT.md §4). Precedence per field: env > file > baked.
+ *
+ * The pure `resolveEndpoints({ baked, file, env, log })` carries NO Electron / filesystem /
+ * module-cache coupling so the frozen acceptance test can exercise it deterministically. The
+ * production entry point `getEndpoints()` layers process.env + userData/endpoints.json on top and
+ * caches the result. Electron is loaded lazily (only inside getEndpoints) so importing this module
+ * under `node --test` never pulls in the Electron runtime.
+ */
 export interface FfmEndpoints {
-  supabaseUrl: string
-  supabaseAnonKey: string
-  licenseServerUrl: string
+  supabaseUrl: string // https URL of the Supabase project
+  supabaseAnonKey: string // publishable anon key (public by design)
+  licenseServerUrl: string // https URL of the CF Worker, no trailing slash
 }
 
+/** Current production values, compiled in. licenseServerUrl = the LIVE ffm-license worker. */
 export const BAKED_DEFAULTS: FfmEndpoints = {
   supabaseUrl: 'https://ijdiiixkemrmkhhkbcng.supabase.co',
   supabaseAnonKey: 'sb_publishable_xmW71xs0XzNYbTEwnmbLCA_ZmphJkIV',
-  licenseServerUrl: 'https://fastfood-manager.vercel.app'
+  licenseServerUrl: 'https://ffm-license.xilentm20.workers.dev'
 }
 
-type EndpointSource = 'env' | 'file' | 'baked'
-type EndpointSources = { [K in keyof FfmEndpoints]: EndpointSource }
+export type EndpointSource = 'env' | 'file' | 'baked'
+export type EndpointSources = { [K in keyof FfmEndpoints]: EndpointSource }
 type EndpointEnvironment = Readonly<Record<string, string | undefined>>
-
-interface EndpointResolution {
-  values: FfmEndpoints
-  sources: EndpointSources
-  invalid: Array<{ field: keyof FfmEndpoints; source: EndpointSource }>
-}
 
 const ENV_NAMES: { [K in keyof FfmEndpoints]: string } = {
   supabaseUrl: 'FFM_SUPABASE_URL',
@@ -30,109 +32,138 @@ const ENV_NAMES: { [K in keyof FfmEndpoints]: string } = {
   licenseServerUrl: 'FFM_LICENSE_SERVER_URL'
 }
 
-let cachedEndpoints: FfmEndpoints | undefined
-let cachedSources: EndpointSources | undefined
+const FIELDS: (keyof FfmEndpoints)[] = ['supabaseUrl', 'supabaseAnonKey', 'licenseServerUrl']
 
-function validHttpsUrl(value: unknown, trailingSlashAllowed: boolean): value is string {
-  if (typeof value !== 'string' || value.length === 0) return false
+export interface ResolveInput {
+  baked: FfmEndpoints
+  file?: Partial<FfmEndpoints>
+  env?: EndpointEnvironment
+  log?: (message: string) => void
+}
+
+export interface ResolvedEndpoints {
+  values: FfmEndpoints
+  source: EndpointSources
+}
+
+/**
+ * Parse + normalize an https override into a clean, trailing-slash-free plain origin(+path). Returns
+ * undefined for anything unusable so resolution falls through to the next source (M9): whitespace
+ * (e.g. a trailing space that would build an invalid request URL), non-https, embedded credentials,
+ * or a query/hash are all rejected rather than silently accepted.
+ */
+function normalizeHttpsUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string' || value.length === 0) return undefined
+  if (/\s/.test(value)) return undefined // a URL with whitespace is a corrupt override
+  let parsed: URL
   try {
-    const parsed = new URL(value)
-    return parsed.protocol === 'https:' && (trailingSlashAllowed || !value.endsWith('/'))
+    parsed = new URL(value)
   } catch {
-    return false
+    return undefined
   }
+  if (parsed.protocol !== 'https:') return undefined
+  if (parsed.search || parsed.hash || parsed.username || parsed.password) return undefined
+  return parsed.origin + parsed.pathname.replace(/\/+$/, '')
 }
 
-function validValue(field: keyof FfmEndpoints, value: unknown): value is string {
-  if (field === 'supabaseAnonKey') return typeof value === 'string' && value.length > 0
-  return validHttpsUrl(value, field !== 'licenseServerUrl')
+/** Validate + normalize a single field value from one source. Returns undefined if unusable. */
+function normalizeField(field: keyof FfmEndpoints, value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined
+  if (field === 'supabaseAnonKey') {
+    return typeof value === 'string' && value.length > 0 ? value : undefined
+  }
+  return normalizeHttpsUrl(value)
 }
 
-function resolveWithMetadata(
-  env: EndpointEnvironment,
-  fileConfig: Partial<FfmEndpoints> = {}
-): EndpointResolution {
+/**
+ * Pure resolver — no I/O, no caching, no Electron. Per field, try env then file then baked and
+ * take the FIRST that validates; an invalid override is logged and skipped (falls through). If no
+ * source yields a valid value for a field it throws — but the baked defaults are always valid, so
+ * that only happens if a caller passes a broken `baked`.
+ */
+export function resolveEndpoints({ baked, file = {}, env = {}, log }: ResolveInput): ResolvedEndpoints {
   const values = {} as FfmEndpoints
-  const sources = {} as EndpointSources
-  const invalid: EndpointResolution['invalid'] = []
-  const fields: (keyof FfmEndpoints)[] = [
-    'supabaseUrl',
-    'supabaseAnonKey',
-    'licenseServerUrl'
-  ]
+  const source = {} as EndpointSources
 
-  for (const field of fields) {
+  for (const field of FIELDS) {
     const candidates: Array<{ source: EndpointSource; value: unknown }> = [
       { source: 'env', value: env[ENV_NAMES[field]] },
-      { source: 'file', value: fileConfig[field] },
-      { source: 'baked', value: BAKED_DEFAULTS[field] }
+      { source: 'file', value: file[field] },
+      { source: 'baked', value: baked[field] }
     ]
 
+    let resolved = false
     for (const candidate of candidates) {
       if (candidate.value === undefined) continue
-      if (validValue(field, candidate.value)) {
-        values[field] = candidate.value
-        sources[field] = candidate.source
+      const normalized = normalizeField(field, candidate.value)
+      if (normalized !== undefined) {
+        values[field] = normalized
+        source[field] = candidate.source
+        resolved = true
         break
       }
-      invalid.push({ field, source: candidate.source })
+      log?.(`[Endpoints] Ignoring invalid ${candidate.source} override for ${field}`)
+    }
+
+    if (!resolved) {
+      throw new Error(`[Endpoints] Unable to resolve required field: ${field}`)
     }
   }
 
-  const unresolved = fields.filter((field) => !validValue(field, values[field]))
-  if (unresolved.length > 0) {
-    throw new Error(`[Endpoints] Unable to resolve required fields: ${unresolved.join(', ')}`)
-  }
-
-  return { values, sources, invalid }
+  return { values, source }
 }
 
-/** Resolve endpoint values without filesystem access, logging, caching, or mutation. */
-export function resolveEndpoints(
-  env: EndpointEnvironment,
-  fileConfig: Partial<FfmEndpoints> = {}
-): FfmEndpoints {
-  return resolveWithMetadata(env, fileConfig).values
-}
+let cached: ResolvedEndpoints | undefined
 
-function readFileOverrides(): Partial<FfmEndpoints> {
-  const path = join(app.getPath('userData'), 'endpoints.json')
+/** Lazily load Electron's app so this module stays importable outside the Electron runtime. */
+function loadElectronApp(): { getPath(name: string): string } | undefined {
   try {
+    const req = createRequire(import.meta.url)
+    return (req('electron') as { app?: { getPath(name: string): string } }).app
+  } catch {
+    return undefined
+  }
+}
+
+function readFileOverrides(log: (message: string) => void): Partial<FfmEndpoints> {
+  const app = loadElectronApp()
+  if (!app) return {}
+  let path: string
+  try {
+    // node:path avoided at top-level to keep the pure resolver dependency-free; require lazily.
+    const { join } = createRequire(import.meta.url)('node:path') as typeof import('node:path')
+    const { readFileSync } = createRequire(import.meta.url)('node:fs') as typeof import('node:fs')
+    path = join(app.getPath('userData'), 'endpoints.json')
     const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'))
     if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
       return parsed as Partial<FfmEndpoints>
     }
-    console.warn('[Endpoints] Ignoring endpoints.json: expected a JSON object')
+    log('[Endpoints] Ignoring endpoints.json: expected a JSON object')
   } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code
-    if (code !== 'ENOENT') {
-      console.warn('[Endpoints] Ignoring unreadable endpoints.json:', error)
+    const code = (error as NodeJS.ErrnoException | undefined)?.code
+    if (code && code !== 'ENOENT') {
+      log(`[Endpoints] Ignoring unreadable endpoints.json: ${String(error)}`)
     }
   }
   return {}
 }
 
+/** Resolve once (env > file > baked), then cache. The POS must never crash/lock on a bad override. */
 export function getEndpoints(): FfmEndpoints {
-  if (cachedEndpoints) return cachedEndpoints
-
-  const file = readFileOverrides()
-  const resolution = resolveWithMetadata(process.env, file)
-  for (const invalid of resolution.invalid) {
-    console.warn(`[Endpoints] Ignoring invalid ${invalid.source} override for ${invalid.field}`)
-  }
-
-  cachedEndpoints = resolveEndpoints(process.env, file)
-  cachedSources = resolution.sources
-  return cachedEndpoints
+  if (cached) return cached.values
+  const log = (message: string): void => console.warn(message)
+  const file = readFileOverrides(log)
+  cached = resolveEndpoints({ baked: BAKED_DEFAULTS, file, env: process.env, log })
+  return cached.values
 }
 
 export function endpointsDiagnostics(): {
-  source: { [K in keyof FfmEndpoints]: 'env' | 'file' | 'baked' }
+  source: EndpointSources
   values: Omit<FfmEndpoints, 'supabaseAnonKey'> & { supabaseAnonKey: '<redacted>' }
 } {
   const values = getEndpoints()
   return {
-    source: cachedSources!,
+    source: cached!.source,
     values: {
       supabaseUrl: values.supabaseUrl,
       supabaseAnonKey: '<redacted>',

@@ -9,7 +9,10 @@ import { settingsRepo } from './database/repositories/settings.repo'
 import { startBackupSystem, stopBackupSystem } from './database/backup'
 import { createSplashWindow, closeSplashWindow } from './splash'
 import { getMachineId, validateActivation, verifyIntegrity } from './activation/activation'
-import { registerInstallation, checkTrialStatus, checkCloudActivation } from './activation/cloud'
+import { registerInstallation, checkCloudActivation } from './activation/cloud'
+import { checkLicense } from './activation/license-service'
+import { resolveWatcherOutcome } from './activation/license-outcome'
+import type { LicenseReason } from './activation/license-client'
 import { registerTabletHandlers } from './ipc/tablet.ipc'
 import { startTabletServer, stopTabletServer } from './tablet/server'
 import { startAnalyticsSync, stopAnalyticsSync } from './sync/analytics-sync'
@@ -229,92 +232,83 @@ function checkTrialCloud(): Promise<void> {
 
 async function doCheckTrialCloud(): Promise<void> {
   const activationType = settingsRepo.get('activation_type')
-  if (activationType !== 'trial') return
+  // B2: run the entitlement check for EVERY activated install — trial AND paid — so revocation and
+  // the 7-day grace boundary apply uniformly. (Previously only 'trial' was watched; full licenses
+  // checked once at startup and then ran forever.)
+  if (activationType !== 'trial' && activationType !== 'full') return
 
-  // Skip cloud check if we're offline — the fast check handles that
-  if (!net.isOnline()) return
-
+  // The license CLIENT is the single source of truth. It owns the tri-state (offline ≠ revocation)
+  // and the 7-day signed-entitlement grace (monotonic-bounded), so we deliberately do NOT gate on
+  // net.isOnline() here: online it returns a definitive answer; offline it returns licensed-grace or
+  // a grace-exhausted lock. That replaces the old Supabase-era 2-minute offline countdown, which —
+  // once a paid plan was mis-tagged as trial — locked paying customers ~7 days early.
+  let decision
   try {
-    const machineId = getMachineId()
-    // Throws NETWORK_ERROR unless the server actually answered, so reaching the next line is a
-    // genuine verification — safe to reset the offline/staleness clocks.
-    const result = await checkTrialStatus(machineId)
-
-    clearOfflineCountdown()
-    cumulativeOfflineSeconds = 0
-    lastCloudSuccessTime = Date.now()
-    staleGraceDeadline = 0
-
-    if (result.status === 'active' && result.expiresAt) {
-      settingsRepo.set('trial_expires_at', result.expiresAt)
-      mainWindow?.webContents.send('trial:status-update', {
-        status: 'active',
-        expiresAt: result.expiresAt
-      })
-      // 'not_found' means the server DEFINITIVELY has no trial row for a machine that believes it
-      // is on a trial (row deleted by admin, or a restored/reset project). Previously it matched
-      // neither branch, so the machine ran an unlocked trial forever while the staleness clock was
-      // refreshed on every tick. Treat it like an expired trial — the full-license check below
-      // still rescues an admin-granted license.
-    } else if (result.status === 'expired' || result.status === 'paused' || result.status === 'not_found') {
-      // Before locking, check if admin granted a full license. If that check is inconclusive it
-      // throws, we skip the lock, and the next tick (30s) retries — never lock on a maybe.
-      let cloudFull = false
-      try {
-        cloudFull = await checkCloudActivation(machineId)
-      } catch {
-        log('Trial expired but cloud activation check was inconclusive — deferring lock')
-        return
-      }
-      if (cloudFull) {
-        log('Trial expired but cloud activation found — upgrading to full license')
-        settingsRepo.set('activation_type', 'full')
-        settingsRepo.set('activation_status', 'activated')
-        settingsRepo.set('activation_code', 'CLOUD-VERIFIED')
-        clearOfflineCountdown()
-        // Stop the trial watcher — no longer needed
-        if (trialCheckInterval) { clearInterval(trialCheckInterval); trialCheckInterval = null }
-        if (fastOfflineInterval) { clearInterval(fastOfflineInterval); fastOfflineInterval = null }
-        mainWindow?.webContents.send('trial:status-update', { status: 'full' })
-        // Reload the app to reflect the new state
-        mainWindow?.webContents.reload()
-        return
-      }
-      // The renderer's lock screen understands 'expired' / 'paused'; map the missing-row case.
-      mainWindow?.webContents.send('trial:locked', result.status === 'not_found' ? 'expired' : result.status)
-    }
+    decision = await checkLicense()
   } catch {
-    // Network error from fetch — the fast offline check handles countdown
+    return // the client does not throw; if it somehow does, no-op and retry next cycle
   }
+
+  const outcome = resolveWatcherOutcome(decision, {
+    hasCachedEntitlement: !!settingsRepo.get('license_cached_entitlement'),
+    persistedLock: (settingsRepo.get('license_lock') || null) as LicenseReason | null
+  })
+
+  if (outcome.kind === 'defer') return // offline & never licensed — don't lock on a maybe
+
+  if (outcome.kind === 'lock') {
+    // Definitive revocation/expiry (M8: no second independent call can suppress it), or grace
+    // exhausted. Persist the lock so it survives restart/offline.
+    settingsRepo.set('license_lock', outcome.reason)
+    log(`License lock: ${outcome.reason}`)
+    mainWindow?.webContents.send('trial:locked', 'expired')
+    return
+  }
+
+  // Licensed / migration → keep the POS unlocked and refresh local state.
+  settingsRepo.set('license_lock', '')
+  clearOfflineCountdown()
+  cumulativeOfflineSeconds = 0
+  lastCloudSuccessTime = Date.now()
+  staleGraceDeadline = 0
+
+  if (outcome.activationType) {
+    const previousType = settingsRepo.get('activation_type')
+    settingsRepo.set('activation_status', 'activated')
+    settingsRepo.set('activation_type', outcome.activationType) // B1: paid → 'full', trial → 'trial'
+    if (previousType === 'trial' && outcome.activationType === 'full') {
+      log('Trial upgraded to a paid plan — promoting to full license')
+      if (outcome.expiresAt) settingsRepo.set('trial_expires_at', outcome.expiresAt)
+      mainWindow?.webContents.send('trial:status-update', { status: 'full' })
+      mainWindow?.webContents.reload()
+      return
+    }
+  }
+  if (outcome.expiresAt) settingsRepo.set('trial_expires_at', outcome.expiresAt)
+  mainWindow?.webContents.send('trial:status-update', { status: 'active', expiresAt: outcome.expiresAt })
 }
 
 function setupTrialWatcher(): void {
-  // Initial cloud check after 3s (window ready)
+  // Initial check after 3s (window ready)
   setTimeout(() => { checkTrialCloud().catch(() => {}) }, 3000)
 
-  // Sleeping is not "using the app offline". Without this, waking a laptop after an hour makes
-  // Date.now() jump past CLOUD_STALE_SECONDS and the lock screen appears on working internet.
-  //
-  // Do NOT stamp lastCloudSuccessTime here: that would record a verification that never happened
-  // and hand an unverified machine a fresh 10-minute window. Instead open the bounded grace
-  // window and kick a real check — only its success may reset the clock.
+  // Sleeping is not "using the app offline". Re-check on resume so a wake doesn't strand the UI.
   // Registered once: setupTrialWatcher() also runs from the `trial:ensureWatcher` IPC.
   if (!resumeListenerAttached) {
     resumeListenerAttached = true
     powerMonitor.on('resume', () => {
-      log('Trial: system resumed — re-checking with the cloud before any staleness lock')
-      staleGraceDeadline = Date.now() + STALE_GRACE_MS
+      log('License: system resumed — re-checking entitlement')
       checkTrialCloud().catch(() => {})
     })
   }
 
-  // Fast offline detection every 3 seconds using net.isOnline()
-  fastOfflineInterval = setInterval(checkOfflineInstant, FAST_OFFLINE_CHECK_MS)
-
-  // Cloud check every 30 seconds for admin actions
-  trialCheckInterval = setInterval(() => {
-    checkTrialCloud().catch(() => {})
-  }, CLOUD_CHECK_MS)
+  // Periodic entitlement check (admin actions, revocation, grace boundary). The client owns offline
+  // grace, so the old 3-second net.isOnline() countdown loop is retired.
+  if (!trialCheckInterval) {
+    trialCheckInterval = setInterval(() => {
+      checkTrialCloud().catch(() => {})
+    }, CLOUD_CHECK_MS)
+  }
 }
 
 // ─── Auto-updater setup ───────────────────────────────────────────────────────
@@ -435,22 +429,22 @@ app.whenReady().then(async () => {
     // Allow trial activation page to start the watcher mid-session (after factory reset)
     ipcMain.handle('trial:ensureWatcher', () => {
       const activationType = settingsRepo.get('activation_type')
-      if (activationType === 'trial') {
+      if (activationType === 'trial' || activationType === 'full') {
         if (!trialCheckInterval) {
-          log('Trial watcher started on demand (mid-session trial activation)')
+          log('License watcher started on demand (mid-session activation)')
           setupTrialWatcher()
         } else {
           // Watcher already running (from before reset) — trigger an immediate check
-          log('Trial watcher already running — triggering immediate check')
+          log('License watcher already running — triggering immediate check')
           checkTrialCloud().catch(() => {})
         }
       }
     })
 
-    // Renderer can trigger an immediate trial check (e.g. on browser offline/online events)
+    // Renderer can trigger an immediate license check (e.g. on browser offline/online events)
     ipcMain.handle('trial:checkNow', () => {
       const activationType = settingsRepo.get('activation_type')
-      if (activationType === 'trial') {
+      if (activationType === 'trial' || activationType === 'full') {
         checkTrialCloud().catch(() => {})
       }
     })
@@ -525,13 +519,20 @@ app.whenReady().then(async () => {
     registerInstallation(machineId, restaurantName, phone, app.getVersion()).catch(() => {})
 
     const activationType = settingsRepo.get('activation_type')
-    if (activationType === 'trial') {
-      log('Trial mode detected — starting trial watcher')
+    // B2: watch BOTH trial and paid installs so the periodic entitlement /check applies revocation
+    // and the 7-day grace boundary uniformly — a paid license no longer just checks once at startup.
+    if (activationType === 'trial' || activationType === 'full') {
+      log(`${activationType} activation detected — starting license watcher`)
       setupTrialWatcher()
     }
+    // If a previous session persisted a definitive lock, surface it immediately; the watcher's first
+    // check() re-evaluates (a re-licensed machine clears it, a still-revoked one stays locked).
+    if (settingsRepo.get('license_lock')) {
+      mainWindow?.webContents.send('trial:locked', 'expired')
+    }
 
-    // Verify full license on startup — re-validate serial code AND integrity checksum
-    // Also check cloud activations table (admin-granted licenses don't have serial codes)
+    // Local tamper check for full licenses (serial + integrity). The CLOUD authority is now the
+    // periodic license watcher above; this only guards against LOCAL settings tampering offline.
     if (activationType === 'full') {
       log('Full license detected — verifying integrity')
       const storedCode = settingsRepo.get('activation_code')

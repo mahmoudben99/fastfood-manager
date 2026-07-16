@@ -1,67 +1,43 @@
 import { ipcMain } from 'electron'
-import { getMachineId } from '../activation/activation'
+import { getMachineId, getPinnedMachineId } from '../activation/activation'
 import { settingsRepo } from '../database/repositories/settings.repo'
-import {
-  startTrial,
-  checkTrialStatus,
-  validateCloudResetCode
-} from '../activation/cloud'
+import { checkTrialStatus, validateCloudResetCode } from '../activation/cloud'
+import { startLicenseTrial } from '../activation/license-service'
+import { activationTypeForEntitlement, expiresAtForEntitlement } from '../activation/license-outcome'
 import { issueResetTicket } from '../activation/reset-ticket'
 
 export function registerTrialHandlers(): void {
-  /** Start a 7-day free trial. Stores activation_type='trial' locally on success. */
-  ipcMain.handle('trial:start', async () => {
-    const machineId = getMachineId()
+  /**
+   * Explicit "Start free trial" action → license server /v1/trial/start (the ONLY path that creates
+   * a trial). The server call is idempotent: a machine that already has a trial or a migrated PAID
+   * row is bound and returned as-is (never re-trialed, never downgraded). We tag activation_type from
+   * the SIGNED plan (B1: a bound paid row must become 'full', never 'trial'), and we PIN — never
+   * overwrite — the machine id (B3). Never invoked by the periodic watcher.
+   */
+  ipcMain.handle('trial:start', async (_, info?: { restaurantName?: string; phone?: string }) => {
+    // Pin the identity: seed it once if absent, but never clobber an existing pin with a recompute.
+    if (!settingsRepo.get('machine_id')) settingsRepo.set('machine_id', getMachineId())
 
-    // First, always check the cloud for any existing trial on this machine.
-    // This prevents a reset when local data is cleared (reinstall, etc.)
-    try {
-      const existing = await checkTrialStatus(machineId)
-      if (existing.status === 'active' && existing.expiresAt) {
-        // Machine already has an active trial — restore it locally without inserting
-        settingsRepo.set('activation_status', 'activated')
-        settingsRepo.set('activation_type', 'trial')
-        settingsRepo.set('trial_expires_at', existing.expiresAt)
-        settingsRepo.set('machine_id', machineId)
-        return { success: true, expiresAt: existing.expiresAt, alreadyStarted: true }
-      }
-      if (existing.status === 'expired') {
-        return { success: false, error: 'trial_expired' }
-      }
-      if (existing.status === 'paused') {
-        return { success: false, error: 'trial_paused' }
-      }
-      // status === 'not_found' → fall through to insert a new trial below
-    } catch {
-      // Cloud unreachable — fall through and let startTrial handle the error
-    }
+    const decision = await startLicenseTrial(info ?? {})
 
-    const result = await startTrial(machineId)
-
-    if (result.success && result.expiresAt) {
+    if (decision.state === 'licensed' || decision.state === 'migration') {
+      const activationType = activationTypeForEntitlement(decision.entitlement)
+      const expiresAt = expiresAtForEntitlement(decision.entitlement)
       settingsRepo.set('activation_status', 'activated')
-      settingsRepo.set('activation_type', 'trial')
-      settingsRepo.set('trial_expires_at', result.expiresAt)
-      settingsRepo.set('machine_id', machineId)
-      return { success: true, expiresAt: result.expiresAt }
+      settingsRepo.set('activation_type', activationType)
+      if (activationType === 'full') settingsRepo.set('activation_code', 'CLOUD-VERIFIED')
+      if (expiresAt) settingsRepo.set('trial_expires_at', expiresAt)
+      settingsRepo.set('license_lock', '')
+      return { success: true, expiresAt, plan: decision.entitlement?.plan ?? 'trial', activationType }
     }
 
-    // Belt-and-suspenders: race condition where two processes insert at same time
-    if (result.error === 'trial_exists' && result.expiresAt) {
-      settingsRepo.set('activation_status', 'activated')
-      settingsRepo.set('activation_type', 'trial')
-      settingsRepo.set('trial_expires_at', result.expiresAt)
-      settingsRepo.set('machine_id', machineId)
-      return { success: true, expiresAt: result.expiresAt, alreadyStarted: true }
-    }
-
-    return { success: false, error: result.error || 'Could not start trial. Check your internet connection.' }
+    const error = decision.reason === 'inconclusive' ? 'Network error' : decision.reason
+    return { success: false, error: error || 'Could not start trial. Check your internet connection.' }
   })
 
   /** Check trial status from the cloud. Used by the trial watcher. */
   ipcMain.handle('trial:check', async () => {
-    const machineId = getMachineId()
-    return await checkTrialStatus(machineId)
+    return await checkTrialStatus(getPinnedMachineId())
   })
 
   /** Get trial status from local DB only (fast, no network). */
@@ -77,7 +53,7 @@ export function registerTrialHandlers(): void {
    *  success mint the ticket that reset:resetPassword redeems — re-checking the (now consumed)
    *  code on the new-password screen could never succeed. */
   ipcMain.handle('reset:validateCloud', async (_, code: string) => {
-    const machineId = getMachineId()
+    const machineId = getPinnedMachineId()
     const result = await validateCloudResetCode(machineId, code)
     return result.valid ? { valid: true, token: issueResetTicket() } : { valid: false }
   })
