@@ -4,8 +4,8 @@ import { settingsRepo } from '../database/repositories/settings.repo'
 import { menuRepo } from '../database/repositories/menu.repo'
 import { categoriesRepo } from '../database/repositories/categories.repo'
 import { promotionsRepo } from '../database/repositories/promotions.repo'
-import { net } from 'electron'
-import { readFileSync } from 'fs'
+import { nativeImage, net } from 'electron'
+import { createHash } from 'crypto'
 import { getLanIPs } from '../tablet/network'
 import { getCurrentPort } from '../tablet/server'
 import { getPairingCode } from '../tablet/pairing'
@@ -15,18 +15,103 @@ function generateShortCode(): string {
   return String(Math.floor(1000 + Math.random() * 9000))
 }
 
+const TV_MEDIA_UPLOAD_URL = 'https://fastfood-manager.vercel.app/api/tv-media'
+const MAX_TV_MEDIA_IMAGES = 10
+const MAX_TV_MEDIA_WIDTH = 1920
+const MAX_TV_MEDIA_HEIGHT = 1080
+const MAX_TV_MEDIA_BYTES = 750 * 1024
+
+/** Converts local artwork into a bounded, content-addressed TV asset. */
+function boundedTvJpeg(path: string): Buffer {
+  const source = nativeImage.createFromPath(path)
+  if (source.isEmpty()) throw new Error(`Could not decode display image: ${path}`)
+
+  const size = source.getSize()
+  if (size.width < 1 || size.height < 1) throw new Error(`Invalid display image size: ${path}`)
+
+  let scale = Math.min(1, MAX_TV_MEDIA_WIDTH / size.width, MAX_TV_MEDIA_HEIGHT / size.height)
+  while (scale > 0.05) {
+    const width = Math.max(1, Math.floor(size.width * scale))
+    const height = Math.max(1, Math.floor(size.height * scale))
+    const resized = source.resize({ width, height })
+    for (const quality of [82, 72, 62, 52, 42, 32]) {
+      const jpeg = resized.toJPEG(quality)
+      if (jpeg.length <= MAX_TV_MEDIA_BYTES) return jpeg
+    }
+    scale *= 0.8
+  }
+  throw new Error(`Display image could not be reduced below ${MAX_TV_MEDIA_BYTES} bytes: ${path}`)
+}
+
+async function uploadTvMedia(
+  accessToken: string | null,
+  machineId: string,
+  profileName: string,
+  kind: string,
+  localPath: string
+): Promise<string> {
+  if (!accessToken) throw new Error('Authenticated cloud session is required for TV media upload')
+  const jpeg = boundedTvJpeg(localPath)
+  const version = createHash('sha256').update(jpeg).digest('hex')
+  const response = await net.fetch(TV_MEDIA_UPLOAD_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      machineId,
+      profileName,
+      kind,
+      version,
+      jpegBase64: jpeg.toString('base64')
+    })
+  })
+  const result = await response.json() as { url?: unknown; error?: unknown }
+  if (!response.ok || typeof result.url !== 'string' || !result.url.startsWith('https://')) {
+    const detail = typeof result.error === 'string' ? result.error : `HTTP ${response.status}`
+    throw new Error(`TV media upload failed: ${detail}`)
+  }
+  return result.url
+}
+
 /** Sync display settings to Supabase for Vercel-hosted display */
 export async function syncDisplaySettings(profileName: string = 'default'): Promise<void> {
   if (!net.isOnline()) return
   try {
     const machineId = getMachineId()
     const supabase = getClient()
+    const [{ data: authData }, { data: previousRow }] = await Promise.all([
+      supabase.auth.getSession(),
+      supabase
+        .from('display_settings')
+        .select('settings')
+        .eq('machine_id', machineId)
+        .eq('profile_name', profileName)
+        .maybeSingle()
+    ])
+    const mediaAccessToken = authData.session?.access_token || null
+    const previousSettings = (previousRow?.settings || {}) as Record<string, unknown>
+    const previousLogoUrl = typeof previousSettings._logo_url === 'string' &&
+      previousSettings._logo_url.startsWith('https://')
+      ? previousSettings._logo_url
+      : ''
+    let previousSlideshowMedia: string[] = []
+    try {
+      const parsed = JSON.parse(String(previousSettings._slideshow_media || '[]'))
+      if (Array.isArray(parsed)) {
+        previousSlideshowMedia = parsed
+          .filter((value): value is string => typeof value === 'string' && value.startsWith('https://'))
+          .slice(0, MAX_TV_MEDIA_IMAGES)
+      }
+    } catch { /* no valid prior cloud media */ }
 
     // Gather all display settings
     const allSettings = settingsRepo.getAll()
     const displayKeys = Object.keys(allSettings).filter(k =>
-      k.startsWith('display_') || k === 'restaurant_name' || k === 'restaurant_phone' ||
-      k === 'restaurant_phone2' || k === 'restaurant_address' || k === 'logo_path' ||
+      (k.startsWith('display_') && !k.endsWith('_slideshow_images')) ||
+      k === 'restaurant_name' || k === 'restaurant_phone' ||
+      k === 'restaurant_phone2' || k === 'restaurant_address' ||
       k === 'social_media' || k === 'currency' || k === 'currency_symbol' || k === 'language'
     )
 
@@ -35,24 +120,26 @@ export async function syncDisplaySettings(profileName: string = 'default'): Prom
       settings[key] = allSettings[key]
     }
 
-    // Get logo as base64
+    // Store artwork outside the JSON row. Base64 settings made a cloud refresh allocate every
+    // image in the TV WebView at once.
     const logoPath = allSettings.logo_path
     if (logoPath) {
       try {
-        const buf = readFileSync(logoPath)
-        settings._logo_base64 = 'data:image/png;base64,' + buf.toString('base64')
-      } catch { /* skip */ }
+        settings._logo_url = await uploadTvMedia(mediaAccessToken, machineId, profileName, 'logo', logoPath)
+      } catch (error) {
+        if (previousLogoUrl) settings._logo_url = previousLogoUrl
+        console.warn('[CloudSync] Display logo upload skipped; keeping last cloud version:', error)
+      }
     }
 
-    // Get active promos and packs
+    // Packs are intentionally absent from TV payloads until their price and item-display rules
+    // are safe for unattended signage.
     try {
       const promos = promotionsRepo.getActivePromotions()
-      const packs = promotionsRepo.getActivePacks()
       settings._promos = JSON.stringify(promos.map((p: any) => ({ name: p.name, type: p.type, value: p.discount_value })))
-      settings._packs = JSON.stringify(packs.map((p: any) => ({ name: p.name, price: p.pack_price, emoji: p.emoji || '', items: p.items || [] })))
     } catch { /* skip */ }
 
-    // Get slideshow images as base64 — per-profile key (default keeps legacy)
+    // Convert per-profile local slideshow paths to authenticated, versioned Storage URLs.
     try {
       const slideshowKey = profileName === 'default'
         ? 'display_slideshow_images'
@@ -60,14 +147,17 @@ export async function syncDisplaySettings(profileName: string = 'default'): Prom
       const raw = allSettings[slideshowKey]
       if (raw) {
         const paths: string[] = JSON.parse(raw)
-        const images = paths.slice(0, 10).map(p => {
+        if (!Array.isArray(paths)) throw new Error('Display image setting is not an array')
+        const images: string[] = []
+        for (const [index, path] of paths.slice(0, MAX_TV_MEDIA_IMAGES).entries()) {
           try {
-            const buf = readFileSync(p)
-            const ext = p.split('.').pop()?.toLowerCase() || 'png'
-            return 'data:image/' + (ext === 'jpg' ? 'jpeg' : ext) + ';base64,' + buf.toString('base64')
-          } catch { return '' }
-        }).filter(Boolean)
-        settings._slideshow_images = JSON.stringify(images)
+            images.push(await uploadTvMedia(mediaAccessToken, machineId, profileName, `slideshow-${index}`, path))
+          } catch (error) {
+            if (previousSlideshowMedia[index]) images.push(previousSlideshowMedia[index])
+            console.warn('[CloudSync] Display image upload skipped; keeping last cloud version:', error)
+          }
+        }
+        settings._slideshow_media = JSON.stringify(images)
       }
     } catch { /* skip */ }
 

@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   debug:
-    name: Test and build debug APK
+    name: Test Android TV app
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -45,16 +45,9 @@ jobs:
         working-directory: tv-app
         run: gradle wrapper --gradle-version 8.7
 
-      - name: Run unit tests and build debug APK
+      - name: Run unit tests
         working-directory: tv-app
-        run: ./gradlew testDebugUnitTest assembleDebug --no-daemon --stacktrace
-
-      - name: Upload debug APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: fastfood-tv-debug-apk
-          path: tv-app/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
+        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
 
   release:
     name: Test and build signed release APK
@@ -94,24 +87,24 @@ jobs:
       - name: Validate release signing secrets
         shell: bash
         env:
-          FFM_TV_KEYSTORE_BASE64: ${{ secrets.FFM_TV_KEYSTORE_BASE64 }}
-          FFM_TV_KEYSTORE_PASSWORD: ${{ secrets.FFM_TV_KEYSTORE_PASSWORD }}
-          FFM_TV_KEY_ALIAS: ${{ secrets.FFM_TV_KEY_ALIAS }}
-          FFM_TV_KEY_PASSWORD: ${{ secrets.FFM_TV_KEY_PASSWORD }}
-          FFM_TV_SIGNING_CERT_SHA256: ${{ secrets.FFM_TV_SIGNING_CERT_SHA256 }}
+          TV_KEYSTORE_BASE64: ${{ secrets.TV_KEYSTORE_BASE64 }}
+          TV_KEYSTORE_PASSWORD: ${{ secrets.TV_KEYSTORE_PASSWORD }}
+          TV_KEY_ALIAS: ${{ secrets.TV_KEY_ALIAS }}
+          TV_KEY_PASSWORD: ${{ secrets.TV_KEY_PASSWORD }}
+          TV_SIGNING_CERT_SHA256: ${{ secrets.TV_SIGNING_CERT_SHA256 }}
         run: |
           missing=()
-          [[ -n "$FFM_TV_KEYSTORE_BASE64" ]] || missing+=(FFM_TV_KEYSTORE_BASE64)
-          [[ -n "$FFM_TV_KEYSTORE_PASSWORD" ]] || missing+=(FFM_TV_KEYSTORE_PASSWORD)
-          [[ -n "$FFM_TV_KEY_ALIAS" ]] || missing+=(FFM_TV_KEY_ALIAS)
-          [[ -n "$FFM_TV_KEY_PASSWORD" ]] || missing+=(FFM_TV_KEY_PASSWORD)
-          [[ -n "$FFM_TV_SIGNING_CERT_SHA256" ]] || missing+=(FFM_TV_SIGNING_CERT_SHA256)
+          [[ -n "$TV_KEYSTORE_BASE64" ]] || missing+=(TV_KEYSTORE_BASE64)
+          [[ -n "$TV_KEYSTORE_PASSWORD" ]] || missing+=(TV_KEYSTORE_PASSWORD)
+          [[ -n "$TV_KEY_ALIAS" ]] || missing+=(TV_KEY_ALIAS)
+          [[ -n "$TV_KEY_PASSWORD" ]] || missing+=(TV_KEY_PASSWORD)
+          [[ -n "$TV_SIGNING_CERT_SHA256" ]] || missing+=(TV_SIGNING_CERT_SHA256)
           if (( ${#missing[@]} > 0 )); then
             echo "Release signing is unavailable. Missing GitHub secrets: ${missing[*]}" >&2
             exit 1
           fi
           umask 077
-          printf '%s' "$FFM_TV_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/ffm-tv-release.jks"
+          printf '%s' "$TV_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/ffm-tv-release.jks"
 
       - name: Set release version
         shell: bash
@@ -123,8 +116,8 @@ jobs:
           fi
           # Offset keeps the first CI release newer than the legacy versionCode=1 APK while
           # retaining a monotonic value for every later workflow run.
-          echo "FFM_TV_VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
-          echo "FFM_TV_VERSION_NAME=$version_name" >> "$GITHUB_ENV"
+          echo "TV_VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
+          echo "TV_VERSION_NAME=$version_name" >> "$GITHUB_ENV"
 
       - name: Generate Gradle wrapper (8.7)
         working-directory: tv-app
@@ -133,17 +126,17 @@ jobs:
       - name: Run unit tests and build signed release APK
         working-directory: tv-app
         env:
-          FFM_TV_KEYSTORE_PATH: ${{ runner.temp }}/ffm-tv-release.jks
-          FFM_TV_KEYSTORE_PASSWORD: ${{ secrets.FFM_TV_KEYSTORE_PASSWORD }}
-          FFM_TV_KEY_ALIAS: ${{ secrets.FFM_TV_KEY_ALIAS }}
-          FFM_TV_KEY_PASSWORD: ${{ secrets.FFM_TV_KEY_PASSWORD }}
-          FFM_TV_SIGNING_CERT_SHA256: ${{ secrets.FFM_TV_SIGNING_CERT_SHA256 }}
+          TV_KEYSTORE_PATH: ${{ runner.temp }}/ffm-tv-release.jks
+          TV_KEYSTORE_PASSWORD: ${{ secrets.TV_KEYSTORE_PASSWORD }}
+          TV_KEY_ALIAS: ${{ secrets.TV_KEY_ALIAS }}
+          TV_KEY_PASSWORD: ${{ secrets.TV_KEY_PASSWORD }}
+          TV_SIGNING_CERT_SHA256: ${{ secrets.TV_SIGNING_CERT_SHA256 }}
         run: ./gradlew testReleaseUnitTest assembleRelease --no-daemon --stacktrace
 
       - name: Verify release signing certificate
         shell: bash
         env:
-          FFM_TV_SIGNING_CERT_SHA256: ${{ secrets.FFM_TV_SIGNING_CERT_SHA256 }}
+          TV_SIGNING_CERT_SHA256: ${{ secrets.TV_SIGNING_CERT_SHA256 }}
         run: |
           apk="tv-app/app/build/outputs/apk/release/app-release.apk"
           apksigner="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)"
@@ -152,9 +145,9 @@ jobs:
             exit 1
           fi
           actual="$($apksigner verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1 | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
-          expected="$(printf '%s' "$FFM_TV_SIGNING_CERT_SHA256" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
+          expected="$(printf '%s' "$TV_SIGNING_CERT_SHA256" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
           if [[ -z "$actual" || "$actual" != "$expected" ]]; then
-            echo "Release APK signer does not match FFM_TV_SIGNING_CERT_SHA256; refusing to publish it." >&2
+            echo "Release APK signer does not match TV_SIGNING_CERT_SHA256; refusing to publish it." >&2
             exit 1
           fi
 

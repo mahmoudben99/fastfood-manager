@@ -820,7 +820,7 @@ export function AmbianceScreen() {
                 <Image className="h-4 w-4 inline mr-1" />
                 {t('ambiance.slideshowImages', { defaultValue: 'Slideshow Images' })}
               </h3>
-              <p className="text-xs text-gray-400">{t('ambiance.slideshowImagesHint', { defaultValue: 'Upload food photos, restaurant images, etc. Max 10 images.' })}</p>
+              <p className="text-xs text-gray-400">{t('ambiance.slideshowImagesHint', { defaultValue: 'Upload food photos or restaurant images. Max 10; cloud copies are resized to 1920×1080 and 750 KiB each.' })}</p>
               <Button
                 variant="secondary"
                 size="sm"
@@ -828,9 +828,10 @@ export function AmbianceScreen() {
                 onClick={async () => {
                   const paths = await window.api.tablet.uploadDisplayImages(activeProfile)
                   if (paths) {
+                    const boundedPaths = paths.slice(0, 10)
                     setSettings((prev) => ({
                       ...prev,
-                      [activeProfile]: { ...current, images: paths }
+                      [activeProfile]: { ...current, images: boundedPaths }
                     }))
                     // Push the new images to cloud immediately
                     try { await window.api.cloud?.syncDisplay?.(activeProfile) } catch { /* ignore */ }

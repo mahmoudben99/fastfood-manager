@@ -10,11 +10,11 @@ def rawConfigValue = { String name ->
 }
 def configValue = { String name -> rawConfigValue(name)?.trim() }
 
-def releaseKeystorePath = configValue('FFM_TV_KEYSTORE_PATH')
-def releaseKeystorePassword = rawConfigValue('FFM_TV_KEYSTORE_PASSWORD')
-def releaseKeyAlias = rawConfigValue('FFM_TV_KEY_ALIAS')
-def releaseKeyPassword = rawConfigValue('FFM_TV_KEY_PASSWORD')
-def expectedSigningFingerprint = configValue('FFM_TV_SIGNING_CERT_SHA256')
+def releaseKeystorePath = configValue('TV_KEYSTORE_PATH')
+def releaseKeystorePassword = rawConfigValue('TV_KEYSTORE_PASSWORD')
+def releaseKeyAlias = rawConfigValue('TV_KEY_ALIAS')
+def releaseKeyPassword = rawConfigValue('TV_KEY_PASSWORD')
+def expectedSigningFingerprint = configValue('TV_SIGNING_CERT_SHA256')
 def releaseSigningValues = [
     releaseKeystorePath,
     releaseKeystorePassword,
@@ -23,10 +23,10 @@ def releaseSigningValues = [
 ]
 def hasReleaseSigning = releaseSigningValues.every { it != null && !it.isEmpty() }
 
-def configuredVersionCode = (configValue('FFM_TV_VERSION_CODE') ?: '2').toInteger()
-def configuredVersionName = configValue('FFM_TV_VERSION_NAME') ?: '1.1.0'
+def configuredVersionCode = (configValue('TV_VERSION_CODE') ?: '2').toInteger()
+def configuredVersionName = configValue('TV_VERSION_NAME') ?: '1.1.0'
 if (configuredVersionCode < 1) {
-    throw new GradleException('FFM_TV_VERSION_CODE must be a positive integer.')
+    throw new GradleException('TV_VERSION_CODE must be a positive integer.')
 }
 
 android {
@@ -82,19 +82,19 @@ def verifyReleaseSigning = tasks.register('verifyReleaseSigning') {
     doLast {
         if (!hasReleaseSigning) {
             throw new GradleException(
-                'Release signing is not configured. Set FFM_TV_KEYSTORE_PATH, ' +
-                    'FFM_TV_KEYSTORE_PASSWORD, FFM_TV_KEY_ALIAS, and FFM_TV_KEY_PASSWORD. ' +
+                'Release signing is not configured. Set TV_KEYSTORE_PATH, ' +
+                    'TV_KEYSTORE_PASSWORD, TV_KEY_ALIAS, and TV_KEY_PASSWORD. ' +
                     'Use assembleDebug only for local development.'
             )
         }
         if (expectedSigningFingerprint == null || expectedSigningFingerprint.isEmpty()) {
             throw new GradleException(
-                'FFM_TV_SIGNING_CERT_SHA256 is required for release builds. ' +
+                'TV_SIGNING_CERT_SHA256 is required for release builds. ' +
                     'Use assembleDebug only for local development.'
             )
         }
         if (!file(releaseKeystorePath).isFile()) {
-            throw new GradleException('FFM_TV_KEYSTORE_PATH does not point to a readable keystore file.')
+            throw new GradleException('TV_KEYSTORE_PATH does not point to a readable keystore file.')
         }
 
         def keyStore = null
@@ -116,7 +116,7 @@ def verifyReleaseSigning = tasks.register('verifyReleaseSigning') {
 
         def certificate = keyStore.getCertificate(releaseKeyAlias)
         if (certificate == null) {
-            throw new GradleException('FFM_TV_KEY_ALIAS was not found in the release keystore.')
+            throw new GradleException('TV_KEY_ALIAS was not found in the release keystore.')
         }
         def actualFingerprint = java.security.MessageDigest.getInstance('SHA-256')
             .digest(certificate.getEncoded())
@@ -127,7 +127,7 @@ def verifyReleaseSigning = tasks.register('verifyReleaseSigning') {
             .toLowerCase(java.util.Locale.ROOT)
         if (normalizedExpected.length() != 64 || actualFingerprint != normalizedExpected) {
             throw new GradleException(
-                'The release keystore certificate does not match FFM_TV_SIGNING_CERT_SHA256.'
+                'The release keystore certificate does not match TV_SIGNING_CERT_SHA256.'
             )
         }
     }

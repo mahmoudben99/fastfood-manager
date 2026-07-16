@@ -491,7 +491,7 @@ export function getDisplayHTML(lang: string): string {
     ═══════════════════════════════════ */
     var state = {
       name: '', logo: '',
-      promos: [], packs: [],
+      promos: [],
       social: [], phone: '',
       youtubeUrl: '',
       gradientPreset: 0,
@@ -805,12 +805,6 @@ export function getDisplayHTML(lang: string): string {
           allPromos.push({ name: p.name, value: val, emoji: '', badge: esc(t.deal), items: [] });
         }
       }
-      if (state.packs) {
-        for (var i = 0; i < state.packs.length; i++) {
-          var pk = state.packs[i];
-          allPromos.push({ name: pk.name, value: fmtPrice(pk.pack_price || pk.price), emoji: pk.emoji || '', badge: '', items: pk.items || [] });
-        }
-      }
       if (allPromos.length > 0 && state.panelPromos) {
         panelDefs.push({
           id: 'promos',
@@ -1065,7 +1059,6 @@ export function getDisplayHTML(lang: string): string {
           state.name = data.name || '';
           state.logo = data.logo || '';
           state.promos = data.promos || [];
-          state.packs = data.packs || [];
           state.social = data.social || [];
           state.phone = data.phone || '';
           state.youtubeUrl = data.youtubeUrl || '';
