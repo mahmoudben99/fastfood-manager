@@ -7,7 +7,7 @@ import { isLocked, nextRowAfterFailure, retryAfterSeconds } from '@/lib/rate-lim
 
 const APP_ORIGIN = 'https://admin.example.test'
 const ADMIN_ROOT = new URL('../../', import.meta.url)
-const routeUrl = path => new URL(path, ADMIN_ROOT).href
+const routeUrl = path => new URL(path, path.startsWith('../../') ? import.meta.url : ADMIN_ROOT).href
 
 async function route(path, requiredExport) {
   const module = await import(routeUrl(path))
@@ -107,17 +107,17 @@ function clientIpHeaders() {
 }
 
 async function verifyHandler(deps) {
-  const module = await route('app/api/owner/verify-pin/route.ts', 'createVerifyOwnerCredentialHandler')
+  const module = await route('../../lib/owner-auth.ts', 'createVerifyOwnerCredentialHandler')
   return module.createVerifyOwnerCredentialHandler(deps)
 }
 
 async function dataHandler(deps) {
-  const module = await route('app/api/owner/data/route.ts', 'createOwnerDataHandler')
+  const module = await route('../../lib/owner-auth.ts', 'createOwnerDataHandler')
   return module.createOwnerDataHandler(deps)
 }
 
 async function statsHandler(deps) {
-  const module = await route('app/api/owner/stats/route.ts', 'createOwnerStatsHandler')
+  const module = await route('../../lib/owner-auth.ts', 'createOwnerStatsHandler')
   return module.createOwnerStatsHandler(deps)
 }
 
@@ -285,7 +285,7 @@ test('csrf_cross_origin_rejected', async () => {
   assert.equal(ownerResponse.status, 403)
   assert.equal(ownerDeps.supabase.calls.length, 0)
 
-  const login = await route('app/api/login/route.ts', 'createAdminLoginHandler')
+  const login = await route('../../lib/owner-auth.ts', 'createAdminLoginHandler')
   const adminResponse = await login.createAdminLoginHandler({
     appOrigin: APP_ORIGIN,
     adminPassword: () => 'correct-admin-password',

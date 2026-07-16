@@ -1,10 +1,6 @@
 import { createOwnerAuthSupabase, createOwnerDataHandler } from '@/lib/owner-auth'
 import { getOwnerSessionToken, verifyOwnerSession } from '@/lib/auth'
 
-// Frozen seam (admin/tests/auth/auth.contract.d.ts): the acceptance tests import this factory
-// directly and inject a mocked OwnerAuthSupabase.
-export { createOwnerDataHandler }
-
 // machineId is NOT a credential — it is embedded in the public /tv/<id> and /r/<id> URLs. This
 // route requires the signed owner session cookie minted by /api/owner/verify-pin, fails closed
 // with `setup_required` until an owner credential exists for the machine, and on a Supabase

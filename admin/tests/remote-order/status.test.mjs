@@ -26,7 +26,7 @@ function mockSupabase(rows) {
 }
 
 async function statusWith(rows) {
-  const module = await import('../../app/api/remote-order/status/route.ts')
+  const module = await import('../../app/api/remote-order/status/_handler.ts')
   assert.equal(typeof module.createRemoteOrderStatusRoute, 'function', 'status route must export createRemoteOrderStatusRoute; see remote-order.contract.d.ts')
   const supabase = mockSupabase(rows)
   return { status: module.createRemoteOrderStatusRoute({ supabase, now: () => NOW, sha256Hex: hash }), supabase }

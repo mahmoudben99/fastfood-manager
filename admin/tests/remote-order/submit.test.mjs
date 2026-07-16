@@ -116,7 +116,7 @@ function mockSupabase(seed = {}) {
 }
 
 async function routeWith(seed = {}) {
-  const module = await import('../../app/api/remote-order/route.ts')
+  const module = await import('../../app/api/remote-order/_handler.ts')
   assert.equal(typeof module.createRemoteOrderRoute, 'function', 'route must export createRemoteOrderRoute; see remote-order.contract.d.ts')
   const supabase = mockSupabase(seed)
   let randomCalls = 0

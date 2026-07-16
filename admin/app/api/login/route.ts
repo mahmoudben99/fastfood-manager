@@ -1,10 +1,6 @@
 import { createSession } from '@/lib/auth'
 import { createAdminLoginHandler } from '@/lib/owner-auth'
 
-// Frozen seam (admin/tests/auth/auth.contract.d.ts): the acceptance tests import this factory
-// directly to exercise same-origin handling for the mutating admin login route.
-export { createAdminLoginHandler }
-
 // The factory takes a static `appOrigin`, so it is (re)built per request with the origin derived
 // from the request's own URL (Next.js reconstructs this from Host/X-Forwarded-Host + protocol).
 // A same-origin fetch's `Origin` header always matches this; a cross-site page's fetch carries
