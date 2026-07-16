@@ -1,16 +1,16 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { net } from 'electron'
-
-const SUPABASE_URL = 'https://ijdiiixkemrmkhhkbcng.supabase.co'
-const SUPABASE_ANON_KEY = 'sb_publishable_xmW71xs0XzNYbTEwnmbLCA_ZmphJkIV'
-
-const TRIAL_DAYS = 7
+import { checkLicense, startLicenseTrial } from './license-service'
+import type { LicenseDecision } from './license-client'
+import { getEndpoints } from '../config/endpoints'
 
 let _client: SupabaseClient<any, any, any> | null = null
 
 export function getClient(): SupabaseClient<any, any, any> {
   if (!_client) {
-    _client = createClient<any, any, any>(SUPABASE_URL, SUPABASE_ANON_KEY)
+    // M9/§4: all endpoint values (incl. Supabase) resolve through the endpoints module (env>file>baked).
+    const { supabaseUrl, supabaseAnonKey } = getEndpoints()
+    _client = createClient<any, any, any>(supabaseUrl, supabaseAnonKey)
   }
   return _client
 }
@@ -62,39 +62,28 @@ export async function registerInstallation(
   }
 }
 
-/** Start a 7-day free trial for this machine. Fails silently if already exists. */
+function entitlementExpiresAt(decision: LicenseDecision): string | undefined {
+  return decision.entitlement ? new Date(decision.entitlement.exp * 1000).toISOString() : undefined
+}
+
+/**
+ * Start a free trial for this machine via the license server's /v1/trial/start (the ONLY path that
+ * creates a fresh trial). Delegates to the entitlement client; `restaurantName`/`phone` are optional
+ * enrollment metadata. Never downgrades an already-migrated paid row (the server enforces that).
+ */
 export async function startTrial(
-  machineId: string
+  _machineId: string,
+  info: { restaurantName?: string; phone?: string } = {}
 ): Promise<{ success: boolean; expiresAt?: string; error?: string }> {
   try {
-    const supabase = getClient()
-
-    // First ensure the installation row exists
-    await supabase.from('installations').upsert(
-      { machine_id: machineId, updated_at: new Date().toISOString() },
-      { onConflict: 'machine_id' }
-    )
-
-    const expiresAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString()
-
-    const { error } = await supabase.from('trials').insert({
-      machine_id: machineId,
-      expires_at: expiresAt,
-      status: 'active'
-    })
-
-    if (error) {
-      if (error.code === '23505') {
-        // Already has a trial — fetch existing. checkTrialStatus now throws when it can't get a
-        // definitive answer, so guard it: we still know the trial exists from the 23505 conflict.
-        let expiresAt: string | undefined
-        try { expiresAt = (await checkTrialStatus(machineId)).expiresAt } catch { /* inconclusive */ }
-        return { success: false, error: 'trial_exists', expiresAt }
-      }
-      return { success: false, error: error.message }
+    const decision = await startLicenseTrial(info)
+    if (decision.state === 'licensed' || decision.state === 'migration') {
+      return { success: true, expiresAt: entitlementExpiresAt(decision) }
     }
-
-    return { success: true, expiresAt }
+    if (decision.reason === 'inconclusive') {
+      return { success: false, error: 'Network error' }
+    }
+    return { success: false, error: decision.reason }
   } catch (err: any) {
     return { success: false, error: err?.message || 'Network error' }
   }
@@ -105,39 +94,23 @@ export async function startTrial(
  * @throws Error('NETWORK_ERROR') when the answer is inconclusive (offline / server error).
  *   Returns 'not_found' ONLY when the server confirmed there is no trial row.
  */
-export async function checkTrialStatus(machineId: string): Promise<TrialCheckResult> {
+export async function checkTrialStatus(_machineId: string): Promise<TrialCheckResult> {
   if (!net.isOnline()) throw inconclusive()
 
-  let data: any, error: any
-  try {
-    // maybeSingle(): zero rows is a real answer (data=null, error=null), not an error.
-    ;({ data, error } = await getClient()
-      .from('trials')
-      .select('status, expires_at, paused_remaining_ms')
-      .eq('machine_id', machineId)
-      .maybeSingle())
-  } catch {
-    throw inconclusive()
+  const decision = await checkLicense()
+
+  // The client already encodes the tri-state. A licensed decision — including offline-grace on a
+  // still-valid cached entitlement — keeps the machine running. A migration window also runs.
+  if (decision.state === 'licensed' || decision.state === 'migration') {
+    return { status: 'active', expiresAt: entitlementExpiresAt(decision) }
   }
 
-  // Any error at all (transport, RLS, 5xx) means we did not get a trustworthy answer.
-  if (error) throw inconclusive()
-  if (!data) return { status: 'not_found' }
+  // Locked. Only a DEFINITIVE answer may lock: an inconclusive lock (server unreachable/unverifiable
+  // AND no valid cache) must NOT be mistaken for revocation, so surface it as inconclusive → throw.
+  if (decision.reason === 'inconclusive') throw inconclusive()
 
-  // If status is 'active', double-check the expiry server-side
-  if (data.status === 'active' && data.expires_at) {
-    const expiresAt = new Date(data.expires_at)
-    if (expiresAt < new Date()) {
-      // Expired but status not yet updated — treat as expired
-      return { status: 'expired', expiresAt: data.expires_at }
-    }
-  }
-
-  return {
-    status: data.status as TrialStatus,
-    expiresAt: data.expires_at || undefined,
-    pausedRemainingMs: data.paused_remaining_ms || undefined
-  }
+  // Definitive revoked / expired / not_found / migration_expired / invalid / replay → lock.
+  return { status: 'expired', expiresAt: entitlementExpiresAt(decision) }
 }
 
 /**
@@ -145,22 +118,17 @@ export async function checkTrialStatus(machineId: string): Promise<TrialCheckRes
  * @throws Error('NETWORK_ERROR') when the answer is inconclusive.
  *   NEVER returns false because the network was down — callers revoke licenses on `false`.
  */
-export async function checkCloudActivation(machineId: string): Promise<boolean> {
+export async function checkCloudActivation(_machineId: string): Promise<boolean> {
   if (!net.isOnline()) throw inconclusive()
 
-  let data: any, error: any
-  try {
-    ;({ data, error } = await getClient()
-      .from('activations')
-      .select('machine_id')
-      .eq('machine_id', machineId)
-      .maybeSingle())
-  } catch {
-    throw inconclusive()
+  const decision = await checkLicense()
+  if (decision.state === 'licensed') {
+    // A non-trial plan is a full (admin-granted / paid) license.
+    return decision.entitlement?.plan != null && decision.entitlement.plan !== 'trial'
   }
-
-  if (error) throw inconclusive()
-  return !!data
+  if (decision.state === 'migration') return true
+  if (decision.reason === 'inconclusive') throw inconclusive()
+  return false
 }
 
 /** Record that this machine has been fully activated (fire-and-forget). */

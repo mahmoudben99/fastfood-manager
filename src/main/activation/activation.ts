@@ -45,6 +45,23 @@ export function getMachineId(): string {
   return createHash('sha256').update(raw).digest('hex').substring(0, 16).toUpperCase()
 }
 
+/**
+ * The PINNED machine identity: the persisted `machine_id` wins over a fresh recompute (hardware can
+ * change — new CPU, renamed host — without the license following it). Falls back to a recompute only
+ * when nothing is pinned yet. Licensing MUST use this so a legacy serial validates against the id the
+ * license was issued for, not a drifted host id (B3).
+ */
+export function getPinnedMachineId(): string {
+  const stored = settingsRepo.get('machine_id')
+  return stored && stored.length > 0 ? stored : getMachineId()
+}
+
+/** Validate a legacy HMAC serial against an EXPLICIT machine id (the pinned id during migration). */
+export function validateActivationForMachine(serialCode: string, machineId: string): boolean {
+  const expected = generateSerialCode(machineId)
+  return expected === serialCode.toUpperCase().trim()
+}
+
 export function generateSerialCode(machineId: string): string {
   const hmac = createHmac('sha256', SECRET_KEY).update(machineId.toUpperCase()).digest('hex')
   const code = hmac.substring(0, 20).toUpperCase()
