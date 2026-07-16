@@ -346,3 +346,20 @@ const electronAPI = {
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)
 
 export type ElectronAPI = typeof api
+
+// ═══ WP-G remote inbox bridge — appended block (EOF only, per WP-G boundaries) ═══
+const remoteInboxApi = {
+  list: () => ipcRenderer.invoke('remoteInbox:list'),
+  accept: (id: string) => ipcRenderer.invoke('remoteInbox:accept', id),
+  reject: (id: string, reason?: string) => ipcRenderer.invoke('remoteInbox:reject', id, reason),
+  getEnabled: () => ipcRenderer.invoke('remoteInbox:getEnabled'),
+  setEnabled: (enabled: boolean) => ipcRenderer.invoke('remoteInbox:setEnabled', enabled),
+  onChanged: (cb: (rows: unknown[]) => void) => {
+    const handler = (_: unknown, rows: unknown[]) => cb(rows)
+    ipcRenderer.on('remoteInbox:changed', handler)
+    return () => { ipcRenderer.removeListener('remoteInbox:changed', handler) }
+  }
+}
+contextBridge.exposeInMainWorld('remoteInbox', remoteInboxApi)
+export type RemoteInboxAPI = typeof remoteInboxApi
+// ═══ end WP-G remote inbox bridge ═══
