@@ -55,19 +55,76 @@ export interface CreatePackInput {
   items: { menu_item_id: number; quantity: number }[]
 }
 
+function assertFiniteNonNegative(value: number, label: string): void {
+  if (!Number.isFinite(value) || value < 0) throw new Error(`${label} must be a finite number of zero or more`)
+}
+
+function validatePromotion(input: CreatePromotionInput): void {
+  if (!input.name?.trim()) throw new Error('Promotion name is required')
+  if (input.type !== 'percentage' && input.type !== 'fixed') throw new Error('Invalid promotion type')
+  if (input.applies_to !== 'all' && input.applies_to !== 'specific') throw new Error('Invalid promotion scope')
+  assertFiniteNonNegative(input.discount_value, 'Discount value')
+  if (input.type === 'percentage' && input.discount_value > 100) {
+    throw new Error('Percentage discount must be between 0 and 100')
+  }
+  if (input.applies_to === 'specific') {
+    const ids = input.menu_item_ids || []
+    if (ids.length === 0) throw new Error('Select at least one item for a specific promotion')
+    if (new Set(ids).size !== ids.length || ids.some((id) => !Number.isInteger(id) || id <= 0)) {
+      throw new Error('Promotion item IDs must be unique positive integers')
+    }
+  }
+}
+
+function validatePack(input: CreatePackInput): void {
+  if (!input.name?.trim()) throw new Error('Pack name is required')
+  assertFiniteNonNegative(input.pack_price, 'Pack price')
+  if (!input.items?.length) throw new Error('A pack must contain at least one item')
+  for (const item of input.items) {
+    if (!Number.isInteger(item.menu_item_id) || item.menu_item_id <= 0) throw new Error('Invalid pack item')
+    if (!Number.isInteger(item.quantity) || item.quantity <= 0 || item.quantity > 999) {
+      throw new Error('Pack item quantity must be an integer between 1 and 999')
+    }
+  }
+}
+
 export const promotionsRepo = {
   // ── Promotions ──────────────────────────────────────────────
 
+  /**
+   * Batch-attach menu_item_ids to a list of promotions. The list queries used to return
+   * bare promotion rows with menu_item_ids undefined, so the POS cart's computeDiscount
+   * ("promo.menu_item_ids?.includes(item.menu_item_id)") matched nothing and any
+   * "specific items" promotion silently applied zero discount. This backfills them in one
+   * query. Also fixes the edit modal, which relied on the list rows carrying menu_item_ids.
+   */
+  _attachMenuItemIds(promos: Promotion[]): Promotion[] {
+    if (!promos.length) return promos
+    const rows = getDb()
+      .prepare('SELECT promotion_id, menu_item_id FROM promotion_items')
+      .all() as { promotion_id: number; menu_item_id: number }[]
+    const map = new Map<number, number[]>()
+    for (const r of rows) {
+      const arr = map.get(r.promotion_id) ?? []
+      arr.push(r.menu_item_id)
+      map.set(r.promotion_id, arr)
+    }
+    for (const p of promos) p.menu_item_ids = map.get(p.id) ?? []
+    return promos
+  },
+
   getAllPromotions(): Promotion[] {
-    return getDb()
-      .prepare('SELECT * FROM promotions ORDER BY created_at DESC')
-      .all() as Promotion[]
+    return this._attachMenuItemIds(
+      getDb().prepare('SELECT * FROM promotions ORDER BY created_at DESC').all() as Promotion[]
+    )
   },
 
   getActivePromotions(): Promotion[] {
-    return getDb()
-      .prepare('SELECT * FROM promotions WHERE is_active = 1 ORDER BY created_at DESC')
-      .all() as Promotion[]
+    return this._attachMenuItemIds(
+      getDb()
+        .prepare('SELECT * FROM promotions WHERE is_active = 1 ORDER BY created_at DESC')
+        .all() as Promotion[]
+    )
   },
 
   getPromotionById(id: number): Promotion | undefined {
@@ -86,6 +143,7 @@ export const promotionsRepo = {
   },
 
   createPromotion(input: CreatePromotionInput): Promotion {
+    validatePromotion(input)
     const transaction = getDb().transaction(() => {
       const result = getDb()
         .prepare(
@@ -122,6 +180,16 @@ export const promotionsRepo = {
   updatePromotion(id: number, input: Partial<CreatePromotionInput>): Promotion | undefined {
     const current = this.getPromotionById(id)
     if (!current) return undefined
+    const merged: CreatePromotionInput = {
+      name: input.name ?? current.name,
+      name_ar: input.name_ar ?? current.name_ar ?? undefined,
+      name_fr: input.name_fr ?? current.name_fr ?? undefined,
+      type: input.type ?? current.type,
+      discount_value: input.discount_value ?? current.discount_value,
+      applies_to: input.applies_to ?? current.applies_to,
+      menu_item_ids: input.menu_item_ids ?? current.menu_item_ids
+    }
+    validatePromotion(merged)
 
     const transaction = getDb().transaction(() => {
       getDb()
@@ -210,6 +278,7 @@ export const promotionsRepo = {
   },
 
   createPack(input: CreatePackInput): Pack {
+    validatePack(input)
     const transaction = getDb().transaction(() => {
       const result = getDb()
         .prepare(
@@ -257,6 +326,17 @@ export const promotionsRepo = {
   updatePack(id: number, input: Partial<CreatePackInput>): Pack | undefined {
     const current = this.getPackById(id)
     if (!current) return undefined
+    validatePack({
+      name: input.name ?? current.name,
+      name_ar: input.name_ar ?? current.name_ar ?? undefined,
+      name_fr: input.name_fr ?? current.name_fr ?? undefined,
+      pack_price: input.pack_price ?? current.pack_price,
+      emoji: input.emoji ?? current.emoji ?? undefined,
+      items: input.items ?? (current.items || []).map((item) => ({
+        menu_item_id: item.menu_item_id,
+        quantity: item.quantity
+      }))
+    })
 
     const transaction = getDb().transaction(() => {
       getDb()

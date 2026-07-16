@@ -7,6 +7,7 @@ import { useAppStore } from '../../store/appStore'
 interface Customer {
   id: number
   phone: string
+  phone_normalized: string
   name: string | null
   total_spent: number
   order_count: number
@@ -114,7 +115,12 @@ export function LoyaltyDashboard() {
             </div>
             <button
               onClick={() => {
-                const url = `https://wa.me/${selectedCustomer.phone.replace(/[^0-9]/g, '')}`
+                // WhatsApp requires an international number without '+' or a domestic
+                // trunk zero. Keep showing the cashier-entered form, but use the canonical
+                // identity supplied by the customer repository for the deep link.
+                const whatsappPhone = (selectedCustomer.phone_normalized || selectedCustomer.phone)
+                  .replace(/[^0-9]/g, '')
+                const url = `https://wa.me/${whatsappPhone}`
                 window.open(url, '_blank')
               }}
               className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600"

@@ -9,6 +9,7 @@ import { Card } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { formatCurrency } from '../../utils/formatCurrency'
 import { removeRepeatedPrefix } from '../../utils/removeRepeatedPrefix'
+import { localToday } from '../../utils/localDate'
 
 const COLORS = ['#f97316', '#3b82f6', '#22c55e', '#eab308', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6']
 
@@ -34,8 +35,11 @@ export function AnalyticsDashboard() {
       return [customStart, customEnd]
     }
 
+    // orders.order_date is the restaurant-LOCAL day. Using the UTC day here meant that between
+    // local midnight and 01:00 (UTC+1) "Today" showed yesterday's figures and hid the late-night
+    // orders that had already rolled over — the busiest hour of a fast-food shop.
     const today = new Date()
-    const end = today.toISOString().split('T')[0]
+    const end = localToday(today)
     let start: string
 
     if (period === 'today') {
@@ -43,15 +47,15 @@ export function AnalyticsDashboard() {
     } else if (period === 'week') {
       const weekAgo = new Date(today)
       weekAgo.setDate(weekAgo.getDate() - 7)
-      start = weekAgo.toISOString().split('T')[0]
+      start = localToday(weekAgo)
     } else if (period === '3months') {
       const threeMonthsAgo = new Date(today)
       threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3)
-      start = threeMonthsAgo.toISOString().split('T')[0]
+      start = localToday(threeMonthsAgo)
     } else {
       const monthAgo = new Date(today)
       monthAgo.setMonth(monthAgo.getMonth() - 1)
-      start = monthAgo.toISOString().split('T')[0]
+      start = localToday(monthAgo)
     }
     return [start, end]
   }

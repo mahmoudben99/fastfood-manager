@@ -28,8 +28,13 @@ exports.run = async () => {
 
     // Edit WITHOUT passing a discount (the case that used to silently wipe it to 0).
     const edited = await win.evaluate(
-      (a) => window.api.orders.updateItems(a.id, [{ menu_item_id: a.mid, quantity: 1, unit_price: 300 }]),
-      { id: created.id, mid: item.id }
+      (a) => window.api.orders.updateItems(a.id, [{
+        order_item_id: a.lineId,
+        menu_item_id: a.mid,
+        quantity: 1,
+        unit_price: 300
+      }]),
+      { id: created.id, lineId: created.items[0].id, mid: item.id }
     )
     saveText(out, '2-edited.json', JSON.stringify(edited, null, 2))
     const subtotal = Number(edited.subtotal)

@@ -1,11 +1,15 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import type { SetupImportPayload, SetupImportResult } from '../shared/excel-import'
 
 const api = {
   activation: {
     getMachineId: () => ipcRenderer.invoke('activation:getMachineId'),
     isActivated: () => ipcRenderer.invoke('activation:isActivated'),
     activate: (serialCode: string) => ipcRenderer.invoke('activation:activate', serialCode),
-    validateUnlockCode: (code: string) => ipcRenderer.invoke('activation:validateUnlockCode', code),
+    validateUnlockCode: (
+      code: string
+    ): Promise<{ valid: boolean; token?: string }> =>
+      ipcRenderer.invoke('activation:validateUnlockCode', code),
     resetPassword: (unlockCode: string, newPassword: string) =>
       ipcRenderer.invoke('activation:resetPassword', unlockCode, newPassword)
   },
@@ -23,7 +27,7 @@ const api = {
     selectFolder: () => ipcRenderer.invoke('settings:selectFolder'),
     getAutoLaunch: () => ipcRenderer.invoke('settings:getAutoLaunch'),
     setAutoLaunch: (enabled: boolean) => ipcRenderer.invoke('settings:setAutoLaunch', enabled),
-    resetAll: () => ipcRenderer.invoke('settings:resetAll')
+    logout: () => ipcRenderer.invoke('settings:logout')
   },
   categories: {
     getAll: () => ipcRenderer.invoke('categories:getAll'),
@@ -86,8 +90,19 @@ const api = {
       ipcRenderer.invoke('orders:updateStatus', id, status),
     cancel: (id: number) => ipcRenderer.invoke('orders:cancel', id),
     getToday: () => ipcRenderer.invoke('orders:getToday'),
-    updateItems: (id: number, items: any[], discountAmount?: number, discountDetails?: string) =>
-      ipcRenderer.invoke('orders:updateItems', id, items, discountAmount, discountDetails)
+    updateItems: (
+      id: number,
+      items: any[],
+      discountAmount?: number,
+      discountDetails?: string,
+      info?: {
+        order_type?: string
+        table_number?: string | null
+        customer_phone?: string | null
+        customer_name?: string | null
+        notes?: string | null
+      }
+    ) => ipcRenderer.invoke('orders:updateItems', id, items, discountAmount, discountDetails, info)
   },
   analytics: {
     getProfitSummary: (startDate: string, endDate: string) =>
@@ -133,7 +148,15 @@ const api = {
     setAssignment: (printerName: string, assignmentType: string, workerId?: number) => ipcRenderer.invoke('printer:setAssignment', printerName, assignmentType, workerId),
     deleteAssignment: (id: number) => ipcRenderer.invoke('printer:deleteAssignment', id),
     clearAssignments: () => ipcRenderer.invoke('printer:clearAssignments'),
-    saveFullConfig: (config: any) => ipcRenderer.invoke('printer:saveFullConfig', config)
+    saveFullConfig: (config: any) => ipcRenderer.invoke('printer:saveFullConfig', config),
+    getPrintJobs: () => ipcRenderer.invoke('printer:getPrintJobs'),
+    retryPrintJob: (id: number) => ipcRenderer.invoke('printer:retryPrintJob', id),
+    cancelPrintJob: (id: number) => ipcRenderer.invoke('printer:cancelPrintJob', id),
+    onPrintJobsChanged: (cb: (jobs: any[]) => void) => {
+      const handler = (_: any, jobs: any[]) => cb(jobs)
+      ipcRenderer.on('printer:jobsChanged', handler)
+      return () => { ipcRenderer.removeListener('printer:jobsChanged', handler) }
+    }
   },
   telegram: {
     getConfig: () => ipcRenderer.invoke('telegram:getConfig'),
@@ -148,7 +171,8 @@ const api = {
     status: () => ipcRenderer.invoke('telegram:status')
   },
   data: {
-    clearForImport: () => ipcRenderer.invoke('data:clearForImport'),
+    importSetup: (payload: SetupImportPayload): Promise<SetupImportResult> =>
+      ipcRenderer.invoke('data:importSetup', payload),
     saveVersion: (label: string) => ipcRenderer.invoke('data:saveVersion', label),
     listVersions: () => ipcRenderer.invoke('data:listVersions'),
     restoreVersion: (versionId: number) => ipcRenderer.invoke('data:restoreVersion', versionId),
@@ -213,10 +237,18 @@ const api = {
   },
   reset: {
     sendViaTelegram: () => ipcRenderer.invoke('reset:telegram'),
-    validateTelegram: (code: string) => ipcRenderer.invoke('reset:validateTelegram', code),
-    validateCloud: (code: string) => ipcRenderer.invoke('reset:validateCloud', code),
-    resetPassword: (code: string, newPassword: string, method: 'telegram' | 'support') =>
-      ipcRenderer.invoke('reset:resetPassword', code, newPassword, method)
+    // The validators CONSUME the single-use code and hand back a one-shot `token`.
+    // resetPassword redeems that token — it must not re-check the (already burnt) code.
+    validateTelegram: (
+      code: string
+    ): Promise<{ valid: boolean; token?: string }> =>
+      ipcRenderer.invoke('reset:validateTelegram', code),
+    validateCloud: (
+      code: string
+    ): Promise<{ valid: boolean; token?: string }> =>
+      ipcRenderer.invoke('reset:validateCloud', code),
+    resetPassword: (token: string, newPassword: string) =>
+      ipcRenderer.invoke('reset:resetPassword', token, newPassword)
   },
   installation: {
     sync: () => ipcRenderer.invoke('installation:sync')
@@ -225,7 +257,12 @@ const api = {
     selectImages: () => ipcRenderer.invoke('menu-upload:selectImages'),
     upload: (paths: string[]) => ipcRenderer.invoke('menu-upload:upload', paths),
     checkStatus: () => ipcRenderer.invoke('menu-upload:checkStatus'),
-    downloadExcel: (excelPath: string) => ipcRenderer.invoke('menu-upload:downloadExcel', excelPath)
+    downloadExcel: (
+      excelPath: string
+    ): Promise<{ ok: true; data: Uint8Array } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('menu-upload:downloadExcel', excelPath),
+    markCompleted: (): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('menu-upload:markCompleted')
   },
   customers: {
     getAll: (sortBy?: string) => ipcRenderer.invoke('customers:getAll', sortBy),

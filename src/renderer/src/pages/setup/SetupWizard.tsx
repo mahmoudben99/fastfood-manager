@@ -136,7 +136,8 @@ export function SetupWizard() {
         logo_path: data.logoPath,
         input_mode: data.inputMode,
         admin_password_hash: hash,
-        setup_complete: 'true'
+        // Commit the completion marker only after schedule/categories finish successfully.
+        setup_complete: 'false'
       })
 
       // Save schedule
@@ -144,10 +145,17 @@ export function SetupWizard() {
 
       // Save categories only if Excel wasn't used (Excel already imported them)
       if (!excelImported) {
-        await window.api.categories.createMany(
-          data.categories.map((c) => ({ name: c.name, name_ar: c.name_ar, name_fr: c.name_fr, icon: c.icon }))
-        )
+        // Logout/reactivation can reopen setup while the restaurant's operational data remains.
+        // Never append the seven starter categories on top of its existing categories.
+        const existingCategories = await window.api.categories.getAll()
+        if (existingCategories.length === 0) {
+          await window.api.categories.createMany(
+            data.categories.map((c) => ({ name: c.name, name_ar: c.name_ar, name_fr: c.name_fr, icon: c.icon }))
+          )
+        }
       }
+
+      await window.api.settings.set('setup_complete', 'true')
 
       // Sync restaurant name & version to cloud so admin dashboard shows correct data
       window.api.installation.sync().catch(() => {})

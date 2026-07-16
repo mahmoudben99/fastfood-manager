@@ -20,19 +20,38 @@ const RULE_NAME = 'Fast Food Manager Display'
  */
 export function addFirewallRule(port: number): Promise<boolean> {
   if (process.platform !== 'win32') return Promise.resolve(false)
+  if (!Number.isInteger(port) || port <= 0 || port > 65535) return Promise.resolve(false)
+
   return new Promise((resolve) => {
     try {
-      // Delete any prior rule of the same name, then add a fresh one, so re-running is clean.
-      const del = `netsh advfirewall firewall delete rule name='${RULE_NAME}'`
-      const add =
-        `netsh advfirewall firewall add rule name='${RULE_NAME}' ` +
-        `dir=in action=allow protocol=TCP localport=${port} profile=any`
-      // Start-Process … -Verb RunAs triggers one UAC prompt and runs both commands elevated.
-      const inner = `${del}; ${add}`
-      const ps =
-        `$ErrorActionPreference='SilentlyContinue'; ` +
-        `Start-Process -FilePath cmd.exe -ArgumentList '/c ${inner}' -Verb RunAs -WindowStyle Hidden -Wait`
-      const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], {
+      // The elevated script. Three things the previous version got wrong:
+      //   1. It joined the two netsh calls with `;`, which cmd.exe does NOT treat as a command
+      //      separator, so the second command was never run as a command.
+      //   2. It wrapped the rule name in SINGLE quotes. netsh doesn't accept those as quoting,
+      //      and they also terminated the enclosing PowerShell single-quoted string early.
+      //   3. `Start-Process -Wait` without -PassThru yields PowerShell's own exit code, so the
+      //      function returned `true` even when netsh failed or the user declined UAC.
+      // Passing the name via a PS variable (`name=$n`) hands netsh one correctly-quoted argv
+      // entry, and `exit $LASTEXITCODE` propagates the real result of the `add`.
+      const inner = [
+        `$ErrorActionPreference='SilentlyContinue'`,
+        `$n='${RULE_NAME.replace(/'/g, "''")}'`,
+        `netsh advfirewall firewall delete rule name=$n | Out-Null`,
+        `netsh advfirewall firewall add rule name=$n dir=in action=allow protocol=TCP localport=${port} profile=any | Out-Null`,
+        `exit $LASTEXITCODE`
+      ].join('; ')
+
+      // -EncodedCommand takes base64 UTF-16LE, so no quoting survives to be mangled.
+      const encoded = Buffer.from(inner, 'utf16le').toString('base64')
+      const outer =
+        `try { ` +
+        `$p = Start-Process powershell.exe ` +
+        `-ArgumentList '-NoProfile','-NonInteractive','-EncodedCommand','${encoded}' ` +
+        `-Verb RunAs -WindowStyle Hidden -Wait -PassThru -ErrorAction Stop; ` +
+        `exit $p.ExitCode ` +
+        `} catch { exit 1 }`
+
+      const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', outer], {
         windowsHide: true
       })
       child.on('error', () => resolve(false))

@@ -24,6 +24,22 @@ export interface CreateStockItemInput {
   alert_threshold?: number
 }
 
+const STOCK_UNITS = new Set(['kg', 'liter', 'unit'])
+
+function finiteAtLeast(value: number, minimum: number, label: string): void {
+  if (!Number.isFinite(value) || value < minimum) {
+    throw new Error(`${label} must be a finite number of at least ${minimum}`)
+  }
+}
+
+function validateStockInput(input: CreateStockItemInput): void {
+  if (!input.name?.trim()) throw new Error('Stock item name is required')
+  if (!STOCK_UNITS.has(input.unit_type)) throw new Error('Stock unit must be kg, liter or unit')
+  finiteAtLeast(input.quantity ?? 0, 0, 'Stock quantity')
+  finiteAtLeast(input.price_per_unit, 0, 'Stock price')
+  finiteAtLeast(input.alert_threshold ?? 0, 0, 'Low-stock threshold')
+}
+
 export const stockRepo = {
   getAll(): StockItem[] {
     return getDb()
@@ -55,6 +71,7 @@ export const stockRepo = {
   },
 
   create(input: CreateStockItemInput): StockItem {
+    validateStockInput(input)
     const result = getDb()
       .prepare(
         `INSERT INTO stock_items (name, name_ar, name_fr, unit_type, quantity, price_per_unit, alert_threshold)
@@ -75,6 +92,15 @@ export const stockRepo = {
   update(id: number, input: Partial<CreateStockItemInput>): StockItem | undefined {
     const current = this.getById(id)
     if (!current) return undefined
+    validateStockInput({
+      name: input.name ?? current.name,
+      name_ar: input.name_ar ?? current.name_ar ?? undefined,
+      name_fr: input.name_fr ?? current.name_fr ?? undefined,
+      unit_type: input.unit_type ?? current.unit_type,
+      quantity: current.quantity,
+      price_per_unit: input.price_per_unit ?? current.price_per_unit,
+      alert_threshold: input.alert_threshold ?? current.alert_threshold
+    })
 
     getDb()
       .prepare(
@@ -103,6 +129,7 @@ export const stockRepo = {
 
   // Fix: wrong input correction - adjusts cost
   fix(id: number, newQuantity: number, reason: string): StockItem | undefined {
+    finiteAtLeast(newQuantity, 0, 'Corrected stock quantity')
     const current = this.getById(id)
     if (!current) return undefined
 
@@ -141,6 +168,7 @@ export const stockRepo = {
 
   // Adjust: consumption/waste - no cost change
   adjust(id: number, newQuantity: number, reason: string): StockItem | undefined {
+    finiteAtLeast(newQuantity, 0, 'Adjusted stock quantity')
     const current = this.getById(id)
     if (!current) return undefined
 
@@ -168,15 +196,23 @@ export const stockRepo = {
     quantity: number,
     pricePerUnit: number
   ): StockItem | undefined {
+    finiteAtLeast(quantity, Number.MIN_VALUE, 'Purchase quantity')
+    finiteAtLeast(pricePerUnit, 0, 'Purchase price')
     const current = this.getById(id)
     if (!current) return undefined
 
     const totalCost = quantity * pricePerUnit
     const newQuantity = current.quantity + quantity
 
-    // Weighted average price
-    const totalValue = current.quantity * current.price_per_unit + totalCost
-    const newPricePerUnit = newQuantity > 0 ? totalValue / newQuantity : pricePerUnit
+    // Weighted average price. Clamp the on-hand quantity at 0 for the average: stock can go
+    // negative (deduct() doesn't floor at 0), and a negative on-hand quantity would poison
+    // the weighted average — even flipping price_per_unit negative, which then corrupts
+    // every future order's cost snapshot and the profit report. The stored quantity itself
+    // (newQuantity) still tracks the real physical count.
+    const onHand = Math.max(0, current.quantity)
+    const totalValue = onHand * current.price_per_unit + totalCost
+    const denom = onHand + quantity
+    const newPricePerUnit = denom > 0 ? Math.max(0, totalValue / denom) : pricePerUnit
 
     const transaction = getDb().transaction(() => {
       getDb()
@@ -206,6 +242,9 @@ export const stockRepo = {
 
   // Deduct stock (used by order system)
   deduct(id: number, amount: number): { success: boolean; newQuantity: number } {
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new Error('Stock deduction must be a finite number greater than zero')
+    }
     const current = this.getById(id)
     if (!current) return { success: false, newQuantity: 0 }
 

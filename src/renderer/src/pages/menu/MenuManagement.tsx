@@ -310,6 +310,7 @@ export function MenuManagement() {
                 onClick={isTouch ? () => setKeyboardTarget({ field: 'formPrice', type: 'numeric' }) : undefined}
                 onChange={isTouch ? undefined : (e) => setFormPrice(e.target.value)}
                 step="0.01"
+                min="0"
               />
             )}
             <Select
@@ -449,6 +450,8 @@ export function MenuManagement() {
                     value={ing.quantity}
                     onChange={(e) => updateIngredient(i, 'quantity', Number(e.target.value))}
                     placeholder={t('menu.quantity')}
+                    min="0.000001"
+                    step="0.001"
                     className="w-24 border rounded-lg px-2 py-1.5 text-sm"
                   />
                   <select

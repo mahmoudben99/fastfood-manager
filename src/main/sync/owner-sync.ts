@@ -1,5 +1,6 @@
 import { getClient } from '../activation/cloud'
 import { getMachineId } from '../activation/activation'
+import { localDate } from '../database/repositories/orders.repo'
 import { net } from 'electron'
 
 export async function syncOrderToCloud(order: any): Promise<void> {
@@ -12,7 +13,12 @@ export async function syncOrderToCloud(order: any): Promise<void> {
       ? order.items.map((i: any) => `${i.quantity}x ${i.menu_item_name}`).join(', ')
       : ''
 
-    const orderDate = (order.created_at || new Date().toISOString()).split('T')[0]
+    // Key on the restaurant-LOCAL order_date, not UTC(created_at). The local daily_number
+    // counter restarts by local day, and the upsert conflict key is
+    // (machine_id, order_number, order_date) — deriving the date from UTC created_at put
+    // any order placed 00:00–00:59 local onto the previous UTC day, colliding with (and
+    // overwriting) that day's real order #1 in the owner dashboard.
+    const orderDate = order.order_date || localDate()
     await supabase.from('owner_orders').upsert(
       {
         machine_id: machineId,
@@ -38,7 +44,7 @@ export async function syncOrderStatusToCloud(orderId: number, status: string): P
   try {
     const machineId = getMachineId()
     const supabase = getClient()
-    const today = new Date().toISOString().split('T')[0]
+    const today = localDate()
 
     // Get the order's daily_number from local DB
     const { ordersRepo } = await import('../database/repositories/orders.repo')

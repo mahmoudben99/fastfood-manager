@@ -66,10 +66,27 @@ export function TelegramSettings() {
     // Save config first
     await window.api.telegram.saveConfig({ token, chatId, autoStart, orderNotifications })
     const result = await window.api.telegram.start()
-    if (result.success) {
-      setIsRunning(true)
-    } else {
+    if (!result.success) {
       setStartError(result.error || 'Failed to start bot')
+      setLoading(false)
+      return
+    }
+
+    // start() only means "the bot was constructed" — grammy's connection handshake resolves
+    // later. Showing "Running" here claimed success for a revoked token or an offline machine.
+    // Poll the real status briefly and report what actually happened.
+    let connected = false
+    for (let i = 0; i < 10; i++) {
+      await new Promise((r) => setTimeout(r, 500))
+      try {
+        const status = await window.api.telegram.status()
+        if (status?.isRunning) { connected = true; break }
+      } catch { /* keep polling */ }
+    }
+
+    setIsRunning(connected)
+    if (!connected) {
+      setStartError('Could not connect to Telegram. Check the bot token and your internet connection.')
     }
     setLoading(false)
   }

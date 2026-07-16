@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { X, ShoppingCart, TrendingUp, DollarSign, Package } from 'lucide-react'
 import { formatCurrency } from '../../utils/formatCurrency'
 import { useAppStore } from '../../store/appStore'
+import { localToday } from '../../utils/localDate'
 
 interface DayRecapModalProps {
   isOpen: boolean
@@ -46,7 +47,9 @@ export function DayRecapModal({ isOpen, onClose }: DayRecapModalProps) {
 
     const loadData = async () => {
       setLoading(true)
-      const today = new Date().toISOString().split('T')[0]
+      // Restaurant-LOCAL day, matching orders.order_date. With the UTC day, between 00:00 and
+      // 01:00 local the recap showed YESTERDAY's revenue under today's heading.
+      const today = localToday()
       try {
         const [sum, top, types] = await Promise.all([
           window.api.analytics.getProfitSummary(today, today),

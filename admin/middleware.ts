@@ -2,7 +2,14 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { jwtVerify } from 'jose'
 
-const SESSION_SECRET = new TextEncoder().encode(process.env.SESSION_SECRET!)
+const ADMIN_ISSUER = 'fast-food-manager-admin'
+const ADMIN_AUDIENCE = 'fast-food-manager-admin-portal'
+
+function adminSecret(): Uint8Array {
+  const value = process.env.SESSION_SECRET
+  if (!value || value.length < 32) throw new Error('SESSION_SECRET must contain at least 32 characters')
+  return new TextEncoder().encode(value)
+}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -29,7 +36,11 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
-    await jwtVerify(token, SESSION_SECRET)
+    const { payload } = await jwtVerify(token, adminSecret(), {
+      issuer: ADMIN_ISSUER,
+      audience: ADMIN_AUDIENCE
+    })
+    if (payload.admin !== true) throw new Error('Not an administrator session')
     return NextResponse.next()
   } catch {
     return NextResponse.redirect(new URL('/login', request.url))

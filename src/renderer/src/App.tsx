@@ -28,7 +28,7 @@ export default function App() {
   const {
     activated, setupComplete, loadSettings,
     activationType, trialOfflineSecondsLeft,
-    setTrialStatus, setTrialOfflineSecondsLeft
+    setTrialStatus, setTrialOfflineSecondsLeft, setTrialExpiresAt
   } = useAppStore()
 
   useEffect(() => {
@@ -59,7 +59,11 @@ export default function App() {
       setTrialOfflineSecondsLeft(null)
       if (data.status === 'active') {
         setTrialStatus('active')
-        setLockedReason((prev) => (prev === 'offline' ? null : prev))
+        if (data.expiresAt) setTrialExpiresAt(new Date(data.expiresAt))
+        // An authoritative active response also represents admin resume/extend/reactivate.
+        // Keeping a previous 'paused' or 'expired' reason left the full-screen lock mounted until
+        // restart even though every later cloud check said the trial was active.
+        setLockedReason(null)
       } else if (data.status === 'expired' || data.status === 'paused') {
         setLockedReason(data.status)
         setTrialStatus(data.status as 'expired' | 'paused')
@@ -72,7 +76,7 @@ export default function App() {
       unsubCleared()
       unsubStatus()
     }
-  }, [setTrialStatus, setTrialOfflineSecondsLeft])
+  }, [setTrialStatus, setTrialOfflineSecondsLeft, setTrialExpiresAt])
 
   // Instant offline/online detection via browser events — triggers immediate trial check
   useEffect(() => {

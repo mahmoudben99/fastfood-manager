@@ -2,17 +2,35 @@ name: Build TV APK
 
 on:
   push:
-    branches: ["feature/ambient-tv-overhaul"]
+    branches: ["main", "feature/ambient-tv-overhaul"]
+    tags: ["tv-v*"]
     paths:
       - "tv-app/**"
       - ".github/workflows/build-tv-apk.yml"
   workflow_dispatch:
+    inputs:
+      build_release:
+        description: "Build a production-signed release APK"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tv-apk-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
+  debug:
+    name: Test and build debug APK
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Verify Android/LAN/cloud display contract
+        run: node tv-app/scripts/verify-display-contract.js
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -27,13 +45,127 @@ jobs:
         working-directory: tv-app
         run: gradle wrapper --gradle-version 8.7
 
-      - name: Build debug APK
+      - name: Run unit tests and build debug APK
         working-directory: tv-app
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        run: ./gradlew testDebugUnitTest assembleDebug --no-daemon --stacktrace
 
-      - name: Upload APK artifact
+      - name: Upload debug APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: fastfood-tv-apk
+          name: fastfood-tv-debug-apk
           path: tv-app/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+  release:
+    name: Test and build signed release APK
+    if: >-
+      startsWith(github.ref, 'refs/tags/tv-v') ||
+      (github.event_name == 'workflow_dispatch' && inputs.build_release == true &&
+      github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    environment: Production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify Android/LAN/cloud display contract
+        run: node tv-app/scripts/verify-display-contract.js
+
+      - name: Verify release source is on main
+        shell: bash
+        run: |
+          git fetch origin main:refs/remotes/origin/main --no-tags
+          main_sha="$(git rev-parse origin/main)"
+          if [[ "$GITHUB_SHA" != "$main_sha" ]]; then
+            echo "Release commit is not the current origin/main head; refusing to sign a stale build." >&2
+            exit 1
+          fi
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Validate release signing secrets
+        shell: bash
+        env:
+          FFM_TV_KEYSTORE_BASE64: ${{ secrets.FFM_TV_KEYSTORE_BASE64 }}
+          FFM_TV_KEYSTORE_PASSWORD: ${{ secrets.FFM_TV_KEYSTORE_PASSWORD }}
+          FFM_TV_KEY_ALIAS: ${{ secrets.FFM_TV_KEY_ALIAS }}
+          FFM_TV_KEY_PASSWORD: ${{ secrets.FFM_TV_KEY_PASSWORD }}
+          FFM_TV_SIGNING_CERT_SHA256: ${{ secrets.FFM_TV_SIGNING_CERT_SHA256 }}
+        run: |
+          missing=()
+          [[ -n "$FFM_TV_KEYSTORE_BASE64" ]] || missing+=(FFM_TV_KEYSTORE_BASE64)
+          [[ -n "$FFM_TV_KEYSTORE_PASSWORD" ]] || missing+=(FFM_TV_KEYSTORE_PASSWORD)
+          [[ -n "$FFM_TV_KEY_ALIAS" ]] || missing+=(FFM_TV_KEY_ALIAS)
+          [[ -n "$FFM_TV_KEY_PASSWORD" ]] || missing+=(FFM_TV_KEY_PASSWORD)
+          [[ -n "$FFM_TV_SIGNING_CERT_SHA256" ]] || missing+=(FFM_TV_SIGNING_CERT_SHA256)
+          if (( ${#missing[@]} > 0 )); then
+            echo "Release signing is unavailable. Missing GitHub secrets: ${missing[*]}" >&2
+            exit 1
+          fi
+          umask 077
+          printf '%s' "$FFM_TV_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/ffm-tv-release.jks"
+
+      - name: Set release version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/tv-v* ]]; then
+            version_name="${GITHUB_REF_NAME#tv-v}"
+          else
+            version_name="1.1.${GITHUB_RUN_NUMBER}"
+          fi
+          # Offset keeps the first CI release newer than the legacy versionCode=1 APK while
+          # retaining a monotonic value for every later workflow run.
+          echo "FFM_TV_VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
+          echo "FFM_TV_VERSION_NAME=$version_name" >> "$GITHUB_ENV"
+
+      - name: Generate Gradle wrapper (8.7)
+        working-directory: tv-app
+        run: gradle wrapper --gradle-version 8.7
+
+      - name: Run unit tests and build signed release APK
+        working-directory: tv-app
+        env:
+          FFM_TV_KEYSTORE_PATH: ${{ runner.temp }}/ffm-tv-release.jks
+          FFM_TV_KEYSTORE_PASSWORD: ${{ secrets.FFM_TV_KEYSTORE_PASSWORD }}
+          FFM_TV_KEY_ALIAS: ${{ secrets.FFM_TV_KEY_ALIAS }}
+          FFM_TV_KEY_PASSWORD: ${{ secrets.FFM_TV_KEY_PASSWORD }}
+          FFM_TV_SIGNING_CERT_SHA256: ${{ secrets.FFM_TV_SIGNING_CERT_SHA256 }}
+        run: ./gradlew testReleaseUnitTest assembleRelease --no-daemon --stacktrace
+
+      - name: Verify release signing certificate
+        shell: bash
+        env:
+          FFM_TV_SIGNING_CERT_SHA256: ${{ secrets.FFM_TV_SIGNING_CERT_SHA256 }}
+        run: |
+          apk="tv-app/app/build/outputs/apk/release/app-release.apk"
+          apksigner="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)"
+          if [[ -z "$apksigner" || ! -x "$apksigner" ]]; then
+            echo "Android apksigner was not found; refusing to publish an unverified release." >&2
+            exit 1
+          fi
+          actual="$($apksigner verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1 | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
+          expected="$(printf '%s' "$FFM_TV_SIGNING_CERT_SHA256" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
+          if [[ -z "$actual" || "$actual" != "$expected" ]]; then
+            echo "Release APK signer does not match FFM_TV_SIGNING_CERT_SHA256; refusing to publish it." >&2
+            exit 1
+          fi
+
+      - name: Upload signed release APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fastfood-tv-release-${{ github.run_number }}
+          path: tv-app/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+
+      - name: Remove temporary keystore
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/ffm-tv-release.jks"

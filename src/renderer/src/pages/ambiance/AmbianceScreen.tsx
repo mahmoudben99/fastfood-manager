@@ -80,7 +80,6 @@ interface ProfileSettings {
   textScale: 'small' | 'medium' | 'large'
   logoScale: number
   showName: boolean
-  showMenu: boolean
   panelToggles: Record<string, boolean>
   welcomeMode: 'animated' | 'static'
   welcomeText: string
@@ -97,7 +96,6 @@ const DEFAULT_PROFILE_SETTINGS: ProfileSettings = {
   textScale: 'medium',
   logoScale: 1,
   showName: true,
-  showMenu: false,
   panelToggles: { welcome: true, social: true, promos: true, slideshow: true, orders: true, menu: true },
   welcomeMode: 'animated',
   welcomeText: '',
@@ -148,6 +146,20 @@ export function AmbianceScreen() {
 
   // Build the settings key prefix for a profile
   const prefix = (profile: string) => (profile === 'default' ? 'display_' : `display_${profile}_`)
+
+  // Cloud TV link for a profile. Default = the bare /tv/<id> (picker chooses a screen);
+  // a named profile = a direct link to THAT screen (?profile=), so each tab's link opens
+  // its own display instead of every tab sharing the picker URL.
+  const buildTvUrl = (mid: string, profile: string) =>
+    !mid
+      ? ''
+      : profile === 'default'
+        ? `fastfood-manager.vercel.app/tv/${mid}`
+        : `fastfood-manager.vercel.app/tv/${mid}?profile=${encodeURIComponent(profile)}`
+
+  // The `?profile=` suffix appended to LAN/cloud targets for named profiles (empty for default).
+  const profileQuery = (profile: string) =>
+    profile === 'default' ? '' : `?profile=${encodeURIComponent(profile)}`
 
   useEffect(() => {
     loadAllProfiles()
@@ -209,7 +221,6 @@ export function AmbianceScreen() {
         textScale: (allSettings[`${p}text_scale`] as 'small' | 'medium' | 'large') || 'medium',
         logoScale: parseFloat(allSettings[`${p}logo_scale`] || '1'),
         showName: allSettings[`${p}show_name`] !== 'false',
-        showMenu: allSettings[`${p}show_menu`] === 'true',
         panelToggles: {
           welcome: allSettings[`${p}panel_welcome`] !== 'false',
           social: allSettings[`${p}panel_social`] !== 'false',
@@ -224,7 +235,7 @@ export function AmbianceScreen() {
           allSettings[`${p}youtube_url`] ||
           'https://www.youtube.com/watch?v=53nwh1aHCU8&list=RD53nwh1aHCU8&start_radio=1',
         images,
-        tvUrl: mid ? `fastfood-manager.vercel.app/tv/${mid}` : ''
+        tvUrl: buildTvUrl(mid, profile)
       }
     }
     setSettings(settingsMap)
@@ -248,7 +259,6 @@ export function AmbianceScreen() {
       textScale: `${p}text_scale`,
       logoScale: `${p}logo_scale`,
       showName: `${p}show_name`,
-      showMenu: `${p}show_menu`,
       welcomeMode: `${p}welcome_mode`,
       welcomeText: `${p}welcome_text`,
       youtubeUrl: `${p}youtube_url`
@@ -283,22 +293,27 @@ export function AmbianceScreen() {
     if (!newProfileName.trim()) return
     setCreatingProfile(true)
     try {
-      // Still create profile in cloud for sync
-      try {
-        await window.api.cloud.createDisplayProfile(newProfileName.trim())
-      } catch {
-        /* ignore */
-      }
-
       const name = newProfileName.trim()
+
+      // Persist the local profile list FIRST, before the (slow, base64-heavy) cloud create.
+      // The 5-min reconcile job deletes any cloud profile row not in this local list; doing
+      // the cloud insert first opened a window where reconcile could delete the brand-new
+      // row (and its short code) as an "orphan". Local-first closes that race.
       const updatedProfiles = [...profiles, name]
       setProfiles(updatedProfiles)
       await window.api.settings.set('display_profiles', JSON.stringify(updatedProfiles))
 
-      // Build TV URL — single URL per machine; the picker on /tv/<id> chooses profile
+      // Then create the profile in the cloud for sync
+      try {
+        await window.api.cloud.createDisplayProfile(name)
+      } catch {
+        /* ignore */
+      }
+
+      // Build this profile's direct TV link (?profile=<name>).
       let mid = ''
       try { mid = await window.api.activation.getMachineId() } catch { /* ignore */ }
-      const tvUrl = mid ? `fastfood-manager.vercel.app/tv/${mid}` : ''
+      const tvUrl = buildTvUrl(mid, name)
 
       // Initialize default settings for this profile
       const newSettings: ProfileSettings = { ...DEFAULT_PROFILE_SETTINGS, tvUrl }
@@ -328,7 +343,7 @@ export function AmbianceScreen() {
     const p = `display_${profileName}_`
     const keysToRemove = [
       'gradient_preset', 'font_family', 'text_color', 'accent_color',
-      'text_scale', 'logo_scale', 'show_name', 'show_menu',
+      'text_scale', 'logo_scale', 'show_name', 'show_menu', /* show_menu: legacy, purge stale rows */
       'panel_welcome', 'panel_social', 'panel_promos', 'panel_slideshow',
       'panel_orders', 'panel_menu', 'welcome_mode', 'welcome_text',
       'youtube_url'
@@ -457,6 +472,20 @@ export function AmbianceScreen() {
                 </div>
               )}
 
+              {/* Named profiles don't have their own pairing code (it's one code per POS,
+                  shown on Main Display). Explain how to point a TV at this specific screen. */}
+              {activeProfile !== 'default' && (
+                <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                  <p className="text-xs text-blue-800 leading-relaxed">
+                    {t('ambiance.extraScreenNote', {
+                      defaultValue:
+                        'This is an extra display screen. Pair the TV once with the 4-digit code on the “Main Display” tab, then open a link below to point a screen at “{{name}}” — or choose it from the on-screen menu on the TV.',
+                      name: getDisplayLabel(activeProfile)
+                    })}
+                  </p>
+                </div>
+              )}
+
               <h3 className="font-semibold text-sm text-gray-700">{t('ambiance.displayLink', { defaultValue: 'Display Link' })}</h3>
               {current.tvUrl ? (
                 <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
@@ -487,16 +516,16 @@ export function AmbianceScreen() {
                 <p className="text-sm text-gray-400">{t('ambiance.urlNotAvailable', { defaultValue: 'TV display URL not available. Restart the app if this persists.' })}</p>
               )}
 
-              {tabletRunning && activeProfile === 'default' && (
+              {tabletRunning && (
                 <div className="bg-green-50 rounded-lg p-3 border border-green-200">
                   <p className="text-xs font-medium text-green-700 mb-1">{t('ambiance.localNetworkUrl', { defaultValue: 'Local Network URL' })}</p>
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-mono text-green-800 flex-1">
-                      {tabletUrl.replace(/\/$/, '')}/display
+                      {tabletUrl.replace(/\/$/, '')}/display{profileQuery(activeProfile)}
                     </span>
                     <button
                       onClick={() =>
-                        copyToClipboard(tabletUrl.replace(/\/$/, '') + '/display', 'local')
+                        copyToClipboard(tabletUrl.replace(/\/$/, '') + '/display' + profileQuery(activeProfile), 'local')
                       }
                       className="flex-shrink-0 text-green-600 hover:text-green-700 p-2"
                     >
@@ -893,19 +922,6 @@ export function AmbianceScreen() {
                     ? current.welcomeText
                     : t('ambiance.welcome', { defaultValue: 'Welcome' })}
                 </div>
-                {/* Menu indicator */}
-                {current.showMenu && (
-                  <div
-                    className="mt-3 text-xs px-3 py-1 rounded-full border"
-                    style={{
-                      color: current.textColor,
-                      borderColor: current.textColor + '33',
-                      backgroundColor: current.textColor + '0a'
-                    }}
-                  >
-                    {t('ambiance.menuPanelActive', { defaultValue: 'Menu Panel Active' })}
-                  </div>
-                )}
                 {/* Thumbnail strip */}
                 {current.images.length > 0 && (
                   <div className="flex gap-1 mt-4">

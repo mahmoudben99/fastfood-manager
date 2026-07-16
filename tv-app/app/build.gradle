@@ -3,6 +3,32 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
+def rawConfigValue = { String name ->
+    providers.gradleProperty(name)
+        .orElse(providers.environmentVariable(name))
+        .getOrNull()
+}
+def configValue = { String name -> rawConfigValue(name)?.trim() }
+
+def releaseKeystorePath = configValue('FFM_TV_KEYSTORE_PATH')
+def releaseKeystorePassword = rawConfigValue('FFM_TV_KEYSTORE_PASSWORD')
+def releaseKeyAlias = rawConfigValue('FFM_TV_KEY_ALIAS')
+def releaseKeyPassword = rawConfigValue('FFM_TV_KEY_PASSWORD')
+def expectedSigningFingerprint = configValue('FFM_TV_SIGNING_CERT_SHA256')
+def releaseSigningValues = [
+    releaseKeystorePath,
+    releaseKeystorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword
+]
+def hasReleaseSigning = releaseSigningValues.every { it != null && !it.isEmpty() }
+
+def configuredVersionCode = (configValue('FFM_TV_VERSION_CODE') ?: '2').toInteger()
+def configuredVersionName = configValue('FFM_TV_VERSION_NAME') ?: '1.1.0'
+if (configuredVersionCode < 1) {
+    throw new GradleException('FFM_TV_VERSION_CODE must be a positive integer.')
+}
+
 android {
     namespace 'com.fastfood.tv'
     compileSdk 34
@@ -11,13 +37,27 @@ android {
         applicationId 'com.fastfood.tv'
         minSdk 21
         targetSdk 34
-        versionCode 1
-        versionName '1.0'
+        versionCode configuredVersionCode
+        versionName configuredVersionName
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(releaseKeystorePath)
+                storePassword releaseKeystorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
     }
 
     buildTypes {
         release {
             minifyEnabled false
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.getByName('release')
+            }
         }
     }
 
@@ -31,7 +71,70 @@ android {
     }
 }
 
-// Intentionally dependency-free: MainActivity uses only the Android framework (WebView,
-// Activity, framework widgets), so CI is fast and there's nothing to break.
 dependencies {
+    // The shipping app remains framework-only. JUnit is available only to local/CI unit tests.
+    testImplementation 'junit:junit:4.13.2'
+}
+
+def verifyReleaseSigning = tasks.register('verifyReleaseSigning') {
+    group = 'verification'
+    description = 'Fails release builds unless all production signing inputs are configured.'
+    doLast {
+        if (!hasReleaseSigning) {
+            throw new GradleException(
+                'Release signing is not configured. Set FFM_TV_KEYSTORE_PATH, ' +
+                    'FFM_TV_KEYSTORE_PASSWORD, FFM_TV_KEY_ALIAS, and FFM_TV_KEY_PASSWORD. ' +
+                    'Use assembleDebug only for local development.'
+            )
+        }
+        if (expectedSigningFingerprint == null || expectedSigningFingerprint.isEmpty()) {
+            throw new GradleException(
+                'FFM_TV_SIGNING_CERT_SHA256 is required for release builds. ' +
+                    'Use assembleDebug only for local development.'
+            )
+        }
+        if (!file(releaseKeystorePath).isFile()) {
+            throw new GradleException('FFM_TV_KEYSTORE_PATH does not point to a readable keystore file.')
+        }
+
+        def keyStore = null
+        for (def keyStoreType : ['PKCS12', 'JKS']) {
+            try {
+                def candidate = java.security.KeyStore.getInstance(keyStoreType)
+                file(releaseKeystorePath).withInputStream { stream ->
+                    candidate.load(stream, releaseKeystorePassword.toCharArray())
+                }
+                keyStore = candidate
+                break
+            } catch (Exception ignored) {
+                // Try the other common Android keystore container type.
+            }
+        }
+        if (keyStore == null) {
+            throw new GradleException('The release keystore could not be opened as PKCS12 or JKS.')
+        }
+
+        def certificate = keyStore.getCertificate(releaseKeyAlias)
+        if (certificate == null) {
+            throw new GradleException('FFM_TV_KEY_ALIAS was not found in the release keystore.')
+        }
+        def actualFingerprint = java.security.MessageDigest.getInstance('SHA-256')
+            .digest(certificate.getEncoded())
+            .collect { byteValue -> String.format('%02x', (byteValue as int) & 0xff) }
+            .join('')
+        def normalizedExpected = expectedSigningFingerprint
+            .replaceAll('[^0-9A-Fa-f]', '')
+            .toLowerCase(java.util.Locale.ROOT)
+        if (normalizedExpected.length() != 64 || actualFingerprint != normalizedExpected) {
+            throw new GradleException(
+                'The release keystore certificate does not match FFM_TV_SIGNING_CERT_SHA256.'
+            )
+        }
+    }
+}
+
+tasks.configureEach { task ->
+    if (task.name == 'preReleaseBuild') {
+        task.dependsOn(verifyReleaseSigning)
+    }
 }

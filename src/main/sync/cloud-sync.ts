@@ -73,7 +73,15 @@ export async function syncDisplaySettings(profileName: string = 'default'): Prom
 
     // TV pairing info: 4-digit code + reachable LAN IPs + port, so /api/pair can hand the
     // TV app a fast LAN target (with the cloud display as the fallback).
-    settings._pairing_code = getPairingCode()
+    //
+    // The code is machine-wide and the UI only ever shows it on the "Main Display" tab, so it
+    // belongs ONLY on the default profile's row. Stamping it into every profile made /api/pair
+    // (which picks the freshest matching row) resolve the code to whichever named profile synced
+    // last — so pairing the main TV landed it on the menu-board screen, with no way back.
+    // Named profiles are reached by their own ?profile= link instead.
+    if (profileName === 'default') {
+      settings._pairing_code = getPairingCode()
+    }
     settings._lan_ips = JSON.stringify(getLanIPs())
     settings._port = String(getCurrentPort())
 
@@ -192,6 +200,31 @@ export async function deleteDisplayProfileFromCloud(profileName: string): Promis
   }
 }
 
+/** The list of display profiles configured locally (always includes 'default'). */
+export function getLocalProfiles(): string[] {
+  const storedRaw = settingsRepo.get('display_profiles')
+  let list: string[] = ['default']
+  try {
+    if (storedRaw) {
+      const parsed = JSON.parse(storedRaw)
+      if (Array.isArray(parsed)) list = parsed
+    }
+  } catch { /* ignore */ }
+  if (!list.includes('default')) list.unshift('default')
+  return list
+}
+
+/** Push EVERY local display profile's settings to the cloud, not just 'default'. The periodic
+ * sync used to refresh only the default profile, so named-profile TV rows kept stale promos /
+ * packs / logo / LAN-IP+port forever, and profiles created while offline never got a cloud row
+ * at all. Sequential (await per profile) to avoid parallel upserts of large base64 payloads. */
+export async function syncAllDisplayProfiles(): Promise<void> {
+  if (!net.isOnline()) return
+  for (const name of getLocalProfiles()) {
+    try { await syncDisplaySettings(name) } catch { /* skip one, keep going */ }
+  }
+}
+
 /** Reconcile Supabase profiles against the local display_profiles list. Any
  * profile row in the cloud that isn't in the local list gets deleted. Runs
  * on every periodic sync so orphans from prior installs self-heal.
@@ -202,15 +235,7 @@ export async function reconcileDisplayProfiles(): Promise<void> {
     const machineId = getMachineId()
     const supabase = getClient()
 
-    const storedRaw = settingsRepo.get('display_profiles')
-    let localList: string[] = ['default']
-    try {
-      if (storedRaw) {
-        const parsed = JSON.parse(storedRaw)
-        if (Array.isArray(parsed)) localList = parsed
-      }
-    } catch { /* ignore */ }
-    if (!localList.includes('default')) localList.unshift('default')
+    const localList = getLocalProfiles()
 
     const { data } = await supabase
       .from('display_settings')
@@ -237,14 +262,14 @@ export function startCloudSync(): void {
   // Initial sync after 10 seconds
   setTimeout(() => {
     console.log('[CloudSync] Running initial sync...')
-    syncDisplaySettings().catch((e) => console.error('[CloudSync] Initial display sync failed:', e))
+    syncAllDisplayProfiles().catch((e) => console.error('[CloudSync] Initial display sync failed:', e))
     syncMenuToCloud().catch((e) => console.error('[CloudSync] Initial menu sync failed:', e))
     reconcileDisplayProfiles().catch((e) => console.error('[CloudSync] Initial reconcile failed:', e))
   }, 10000)
 
   // Sync every 5 minutes
   syncInterval = setInterval(() => {
-    syncDisplaySettings().catch((e) => console.error('[CloudSync] Periodic display sync failed:', e))
+    syncAllDisplayProfiles().catch((e) => console.error('[CloudSync] Periodic display sync failed:', e))
     syncMenuToCloud().catch(() => {})
     reconcileDisplayProfiles().catch(() => {})
   }, 5 * 60 * 1000)

@@ -5,12 +5,26 @@ interface SplashScreenProps {
   onComplete: () => void
 }
 
+/**
+ * NOTE: currently unreferenced. The splash the user actually sees is `public/splash.html`,
+ * loaded into its own BrowserWindow by src/main/splash.ts. Kept because it still compiles and
+ * renders; delete it if the in-renderer splash is never coming back.
+ */
 export function SplashScreen({ onComplete }: SplashScreenProps) {
-  const { settings } = useAppStore()
+  // Read the fields the store actually exposes. This used to destructure a `settings` object
+  // that AppState has never had, so the name always fell back and the logo never rendered.
+  const storeName = useAppStore((s) => s.restaurantName)
   const [stage, setStage] = useState(0) // 0: emoji scatter, 1: logo/name, 2: welcome text, 3: fade out
+  const [logoPath, setLogoPath] = useState<string | null>(null)
 
-  const restaurantName = settings?.restaurant_name || 'Fast Food Manager'
-  const logoPath = settings?.logo_path
+  const restaurantName = storeName || 'Fast Food Manager'
+
+  useEffect(() => {
+    window.api.settings
+      .get('logo_path')
+      .then((p: string | null) => setLogoPath(p || null))
+      .catch(() => {})
+  }, [])
 
   const foodEmojis = ['🍔', '🍕', '🍟', '🌭', '🥤', '🍗', '🌮', '🥗', '🍱', '🧆', '🥙', '🍜']
 

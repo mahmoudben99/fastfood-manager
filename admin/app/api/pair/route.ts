@@ -29,16 +29,32 @@ export async function GET(req: Request) {
 
   // Find the display_settings row whose settings._pairing_code matches. Take the freshest
   // in the rare event two restaurants share a 4-digit code.
+  //
+  // Only the 'default' profile row carries a pairing code (see cloud-sync.ts syncDisplaySettings),
+  // but older installs stamped it into every profile. Prefer 'default' explicitly so an upgraded
+  // machine that still has stale named-profile rows keeps pairing to the Main Display.
   const { data, error } = await supabase
     .from('display_settings')
     .select('machine_id, profile_name, settings, updated_at')
     .eq('settings->>_pairing_code', code)
     .order('updated_at', { ascending: false })
-    .limit(1)
+    .limit(10)
 
-  const row = (data && data[0]) as any
-  if (error || !row) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404, headers: CORS })
+  if (error) {
+    console.error('Pair resolver unavailable:', error.message)
+    return NextResponse.json(
+      { error: 'Pairing service unavailable' },
+      { status: 503, headers: { ...CORS, 'Cache-Control': 'no-store', 'Retry-After': '10' } }
+    )
+  }
+
+  const rows = (data || []) as any[]
+  const row = rows.find((r) => (r.profile_name || 'default') === 'default') || rows[0]
+  if (!row) {
+    return NextResponse.json(
+      { error: 'Not found' },
+      { status: 404, headers: { ...CORS, 'Cache-Control': 'no-store' } }
+    )
   }
 
   const settings = row.settings || {}
@@ -57,9 +73,11 @@ export async function GET(req: Request) {
       profile,
       lanIps,
       port,
-      cloudUrl: `https://fastfood-manager.vercel.app/tv/${row.machine_id}`,
+      // Include the resolved profile so the cloud fallback shows the same profile the LAN
+      // target does (the TV also appends ?profile to the LAN /display URL).
+      cloudUrl: `https://fastfood-manager.vercel.app/tv/${row.machine_id}?profile=${encodeURIComponent(profile)}`,
       updatedAt: row.updated_at || null
     },
-    { headers: CORS }
+    { headers: { ...CORS, 'Cache-Control': 'no-store' } }
   )
 }

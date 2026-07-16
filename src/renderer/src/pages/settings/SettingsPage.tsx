@@ -74,7 +74,6 @@ export function SettingsPage() {
   const [testResult, setTestResult] = useState<{ success: boolean; error?: string } | null>(null)
   const [testingPrint, setTestingPrint] = useState(false)
   const [workers, setWorkers] = useState<any[]>([])
-  const [workerPrinters, setWorkerPrinters] = useState<Record<number, string>>({})
 
   // New printer config system
   interface PrinterConfig {
@@ -206,14 +205,6 @@ export function SettingsPage() {
     try {
       const workersList = await window.api.workers.getAll()
       setWorkers(workersList)
-
-      const assignments: Record<number, string> = {}
-      for (const worker of workersList) {
-        if (worker.printer_name) {
-          assignments[worker.id] = worker.printer_name
-        }
-      }
-      setWorkerPrinters(assignments)
     } catch {
       setWorkers([])
     }
@@ -412,12 +403,6 @@ export function SettingsPage() {
     return tasks
   }
 
-  const handleWorkerPrinterChange = (workerId: number, printerName: string) => {
-    setWorkerPrinters(prev => ({
-      ...prev,
-      [workerId]: printerName || undefined
-    }))
-  }
 
   const handleTestPrint = async () => {
     setTestingPrint(true)
@@ -473,13 +458,14 @@ export function SettingsPage() {
         setLoggingOut(false)
         return
       }
-      // Factory reset: backup + wipe entire database, then go to activation
-      await window.api.settings.resetAll()
+      // Logout clears only entitlement/setup state. Operational data remains in SQLite.
+      const result = await window.api.settings.logout()
+      if (!result?.success) throw new Error(result?.error || 'Logout failed')
       setSetupComplete(false)
       setActivated(false)
-      navigate('/activation')
-    } catch {
-      setLogoutError(t('nav.wrongPassword'))
+      navigate('/activate')
+    } catch (error) {
+      setLogoutError(error instanceof Error ? error.message : t('common.error'))
     } finally {
       setLoggingOut(false)
     }

@@ -55,6 +55,20 @@ interface OrderData {
   items?: OrderItemData[]
 }
 
+interface PrintJobData {
+  id: number
+  order_id: number
+  daily_number: number
+  event_type: 'new' | 'updated' | 'cancelled' | 'restored'
+  document_type: 'receipt' | 'kitchen'
+  scope: 'all' | 'worker' | 'unassigned'
+  worker_id: number | null
+  worker_name: string | null
+  status: 'pending' | 'printing' | 'attention'
+  attempts: number
+  last_error: string | null
+}
+
 export function OrderScreen() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -69,6 +83,16 @@ export function OrderScreen() {
   const [noteModal, setNoteModal] = useState<{ index: number; notes: string } | null>(null)
   const [orderSuccess, setOrderSuccess] = useState<{ orderId: number; orderNumber: number } | null>(null)
   const [placing, setPlacing] = useState(false)
+  // Set when an edit could not be saved (order completed/cancelled elsewhere). Shown in the
+  // editing banner so the cashier keeps their cart instead of silently losing the change.
+  const [editError, setEditError] = useState('')
+  // A committed order is a high-consequence action. Keep create failures visible beside the
+  // preserved cart so staff can correct/retry instead of assuming the kitchen received it.
+  const [orderError, setOrderError] = useState('')
+  // Synchronous in-flight guard for order submit. The `placing`/`updatingOrder` state flags
+  // update a render behind the F2 keydown closure, so two fast F2 presses (or key auto-repeat)
+  // could both pass the guard and submit twice. A ref flips instantly, closing the race.
+  const submittingRef = useRef(false)
 
   // Order history state
   const [showHistory, setShowHistory] = useState(false)
@@ -104,6 +128,7 @@ export function OrderScreen() {
   // Quick print dropdown
   const [printDropdown, setPrintDropdown] = useState<number | null>(null)
   const [printDropdownWorkers, setPrintDropdownWorkers] = useState<{ id: number; name: string; itemCount: number }[]>([])
+  const [printJobs, setPrintJobs] = useState<PrintJobData[]>([])
 
   // History search
   const [historySearch, setHistorySearch] = useState('')
@@ -139,6 +164,9 @@ export function OrderScreen() {
     loadAlertSettings()
     loadNoteSuggestions()
     store.loadActivePromos()
+    window.api.printer.getPrintJobs()
+      .then((jobs) => setPrintJobs(jobs))
+      .catch(() => setPrintJobs([]))
 
     // Update current time every 30 seconds for live timer display
     const interval = setInterval(() => {
@@ -157,11 +185,15 @@ export function OrderScreen() {
         loadOngoingCount()
       })
     }
+    const unsubPrintJobs = window.api.printer.onPrintJobsChanged((jobs) => {
+      setPrintJobs(jobs)
+    })
 
     return () => {
       clearInterval(interval)
       unsubTablet()
       unsubRemote?.()
+      unsubPrintJobs()
     }
   }, [])
 
@@ -239,15 +271,27 @@ export function OrderScreen() {
     // Don't fire shortcuts when typing in input fields (except for F-keys and Escape)
     const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)
 
+    // Any modal that owns the screen. Escape must close the top-most one, and no other shortcut
+    // may act "through" it — F2 used to place the order while the price/note editor was still
+    // open, submitting the stale price and silently discarding the edit the cashier was making.
+    const modalOpen = !!(noteModal || priceModal || orderSuccess || cancelConfirm || recapPasswordModal || showRecap)
+
     if (e.key === 'Escape') {
       if (noteModal) { setNoteModal(null); return }
       if (priceModal) { setPriceModal(null); return }
       if (orderSuccess) { setOrderSuccess(null); return }
       if (cancelConfirm) { setCancelConfirm(null); return }
+      // These two used to fall through to the cart-clearing branch below, so pressing Escape to
+      // dismiss the Day Recap wiped the in-progress order.
+      if (recapPasswordModal) { setRecapPasswordModal(false); setRecapPassword(''); setRecapPasswordError(false); return }
+      if (showRecap) { setShowRecap(false); return }
       if (showHistory) { setShowHistory(false); setSelectedOrder(null); setHistorySearch(''); return }
       if (store.items.length > 0) { store.clearOrder(); pushCartToDisplay(); return }
       return
     }
+
+    // Everything below acts on the cart — never while a modal has focus.
+    if (modalOpen) return
 
     if (e.key === 'F1') {
       e.preventDefault()
@@ -259,7 +303,7 @@ export function OrderScreen() {
 
     if (e.key === 'F2') {
       e.preventDefault()
-      if (store.items.length > 0 && !placing) {
+      if (store.items.length > 0 && !placing && !updatingOrder) {
         handlePlaceOrder()
       }
       return
@@ -304,7 +348,7 @@ export function OrderScreen() {
       searchRef.current?.focus()
       return
     }
-  }, [store, noteModal, priceModal, orderSuccess, cancelConfirm, showHistory, placing, categories])
+  }, [store, noteModal, priceModal, orderSuccess, cancelConfirm, showHistory, placing, updatingOrder, recapPasswordModal, showRecap, categories])
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown)
@@ -537,30 +581,37 @@ export function OrderScreen() {
 
   const pushCartToDisplay = useCallback(() => {
     try {
-      const items = store.items.map(i => ({ name: i.name, qty: i.quantity, price: i.price }))
-      const subtotal = store.getSubtotal()
-      const discount = store.getDiscount()
-      const total = store.getTotal()
+      // Read LIVE store state, not the render-time snapshot. Every caller invokes this right
+      // after mutating the store (addItem().then, clearOrder(); push, edit setup), so the
+      // captured `store` was one step stale — the customer display always lagged the cart by
+      // one action (item missing but total updated; cleared cart showing old items at 0).
+      const s = useOrderStore.getState()
+      const items = s.items.map((i) => ({ name: i.name, qty: i.quantity, price: i.price }))
+      const subtotal = s.getSubtotal()
+      const discount = s.getDiscount()
+      const total = s.getTotal()
       if (items.length === 0) {
         window.api.tablet.pushDisplayUpdate({ type: 'idle' })
       } else {
         window.api.tablet.pushDisplayUpdate({
           type: 'cart', items, subtotal, discount, total,
-          orderType: store.orderType, tableNumber: store.tableNumber
+          orderType: s.orderType, tableNumber: s.tableNumber
         })
       }
     } catch { /* display server may not be running */ }
-  }, [store])
+  }, [])
 
   const pushQueueToDisplay = useCallback(() => {
     try {
       window.api.orders.getToday().then((orders: any[]) => {
         const preparing = orders
           .filter((o: any) => o.status === 'preparing' || o.status === 'pending')
+          .reverse()
           .map((o: any) => o.daily_number)
         const ready = orders
           .filter((o: any) => o.status === 'completed')
-          .slice(-10)
+          .slice(0, 10)
+          .reverse()
           .map((o: any) => o.daily_number)
         window.api.tablet.pushDisplayUpdate({ type: 'queue', preparing, ready })
       })
@@ -646,23 +697,51 @@ export function OrderScreen() {
       return
     }
 
+    // In-flight guard (set AFTER validation so failed validations don't need cleanup).
+    if (submittingRef.current) return
+    submittingRef.current = true
+    setOrderError('')
+
     // --- UPDATE existing order ---
     if (store.editingOrderId) {
       setUpdatingOrder(true)
       try {
-        const editDiscount = store.getDiscount()
-        await window.api.orders.updateItems(
+        const updated = await window.api.orders.updateItems(
           store.editingOrderId,
           store.items.map((item) => ({
+            order_item_id: item.order_item_id,
             menu_item_id: item.menu_item_id,
             quantity: item.quantity,
             notes: item.notes || undefined,
-            worker_id: item.worker_id || undefined,
+            worker_id: item.worker_id,
             unit_price: item.price
           })),
-          editDiscount > 0 ? editDiscount : undefined,
-          editDiscount > 0 ? store.getDiscountDetails() : undefined
+          // Legacy orders have no trustworthy promotion allocation snapshot. Preserve the
+          // stored discount instead of applying whichever promotions are active today.
+          undefined,
+          undefined,
+          // Persist header edits too (type / table / customer / notes) — previously lost.
+          {
+            order_type: store.orderType,
+            table_number: store.tableNumber || null,
+            customer_phone: store.customerPhone || null,
+            customer_name: store.customerName || null,
+            notes: store.notes || null
+          }
         )
+
+        // ordersRepo.updateItems REFUSES to edit a completed/cancelled order and returns it
+        // untouched. The old code cleared the cart regardless, so the cashier saw a "saved"
+        // screen while nothing was written. Keep their work and tell them what happened.
+        if (!updated || updated.status === 'completed' || updated.status === 'cancelled') {
+          setEditError(
+            !updated
+              ? 'That order no longer exists. Your changes were not saved.'
+              : `Order was already ${updated.status} on another screen. Your changes were not saved.`
+          )
+          return
+        }
+        setEditError('')
         store.clearOrder()
         store.loadActivePromos()
         loadOngoingCount()
@@ -674,8 +753,14 @@ export function OrderScreen() {
         } catch { /* display not running */ }
       } catch (err) {
         console.error('Failed to update order:', err)
+        setEditError(
+          err instanceof Error
+            ? err.message.replace(/^Error invoking remote method '[^']+':\s*(Error:\s*)?/, '')
+            : 'The order could not be updated. Your changes are still in the cart.'
+        )
       } finally {
         setUpdatingOrder(false)
+        submittingRef.current = false
       }
       return
     }
@@ -702,6 +787,7 @@ export function OrderScreen() {
       })
 
       setOrderSuccess({ orderId: order.id, orderNumber: order.daily_number })
+      setOrderError('')
 
       // Check for milestone
       const MILESTONES = [500, 250, 100, 50, 10]
@@ -727,8 +813,14 @@ export function OrderScreen() {
       } catch { /* display not running */ }
     } catch (err) {
       console.error('Failed to place order:', err)
+      setOrderError(
+        err instanceof Error
+          ? err.message.replace(/^Error invoking remote method '[^']+':\s*(Error:\s*)?/, '')
+          : 'The order could not be saved. Nothing was sent to the kitchen; please retry.'
+      )
     } finally {
       setPlacing(false)
+      submittingRef.current = false
     }
   }
 
@@ -814,6 +906,7 @@ export function OrderScreen() {
   }
 
   const cancelEdit = () => {
+    setEditError('')
     store.clearOrder()
     pushCartToDisplay()
   }
@@ -821,6 +914,36 @@ export function OrderScreen() {
   const subtotal = store.getSubtotal()
   const discount = store.getDiscount()
   const total = store.getTotal()
+  const attentionPrintJobs = printJobs.filter((job) => job.status === 'attention')
+  const activePrintJobs = printJobs.filter((job) => job.status === 'pending' || job.status === 'printing')
+
+  const retryPrintJob = async (id: number) => {
+    const result = await window.api.printer.retryPrintJob(id)
+    if (!result.success) setOrderError(result.error || 'The print job could not be retried.')
+  }
+
+  const cancelPrintJob = async (id: number) => {
+    const result = await window.api.printer.cancelPrintJob(id)
+    if (!result.success) setOrderError(result.error || 'The print alert could not be dismissed.')
+  }
+
+  const runManualPrint = async (
+    request: () => Promise<{ success: boolean; error?: string }>,
+    label: string
+  ) => {
+    setOrderError('')
+    try {
+      const result = await request()
+      if (!result.success) {
+        setOrderError(label + ' was not printed: ' + (result.error || 'unknown printer error'))
+      }
+    } catch (error) {
+      setOrderError(
+        label + ' was not printed: ' +
+        (error instanceof Error ? error.message : 'unexpected printer error')
+      )
+    }
+  }
 
   return (
     <div className="h-screen flex bg-gray-100">
@@ -1267,11 +1390,88 @@ export function OrderScreen() {
       {/* RIGHT: Cart */}
       <div className={`${isTouch ? 'w-96 lg:w-[28rem]' : 'w-72 md:w-80 lg:w-96'} bg-white border-s flex flex-col shrink-0`}>
         <div className={`${isTouch ? 'px-4 py-3' : 'px-2 sm:px-4 py-2 sm:py-3'} border-b`}>
+          {attentionPrintJobs.length > 0 && (() => {
+            const job = attentionPrintJobs[0]
+            const destination = job.document_type === 'receipt'
+              ? 'customer receipt'
+              : job.worker_name
+                ? 'kitchen ticket for ' + job.worker_name
+                : 'kitchen ticket'
+            return (
+              <div className="bg-amber-50 border border-amber-300 rounded-lg px-3 py-2 mb-2" role="alert">
+                <div className="flex items-start gap-2">
+                  <Printer className="h-4 w-4 text-amber-700 shrink-0 mt-0.5" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-amber-900">
+                      Check order #{job.daily_number} — {destination} not confirmed
+                    </p>
+                    <p className="text-[11px] text-amber-800 mt-0.5 break-words">
+                      {job.last_error || 'Printing needs staff attention.'}
+                    </p>
+                    {attentionPrintJobs.length > 1 && (
+                      <p className="text-[11px] font-semibold text-amber-800 mt-1">
+                        +{attentionPrintJobs.length - 1} more print alert{attentionPrintJobs.length > 2 ? 's' : ''}
+                      </p>
+                    )}
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => retryPrintJob(job.id)}
+                        className="min-h-8 px-3 rounded-md bg-amber-700 text-white text-xs font-bold hover:bg-amber-800"
+                      >
+                        Retry after checking
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => cancelPrintJob(job.id)}
+                        className="min-h-8 px-3 rounded-md border border-amber-400 text-amber-900 text-xs font-semibold hover:bg-amber-100"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
+          {attentionPrintJobs.length === 0 && activePrintJobs.length > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 mb-2 flex items-center gap-2" aria-live="polite">
+              <Printer className="h-4 w-4 text-blue-600 animate-pulse" />
+              <p className="text-xs font-medium text-blue-800">
+                Printing {activePrintJobs.length} ticket{activePrintJobs.length > 1 ? 's' : ''}…
+              </p>
+            </div>
+          )}
+          {/* Edit could not be saved (order was completed/cancelled on another screen) */}
+          {(editError || orderError) && (
+            <div
+              className="bg-red-50 border border-red-300 rounded-lg px-3 py-2 mb-2 flex items-start gap-2"
+              role="alert"
+              aria-live="assertive"
+            >
+              <AlertTriangle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold text-red-800">
+                  {store.editingOrderId ? 'Order update failed' : 'Order was not placed'}
+                </p>
+                <p className="text-xs font-medium text-red-700 mt-0.5">{editError || orderError}</p>
+                <p className="text-[11px] text-red-600 mt-1">Your cart is preserved. Check the details and press the order button to retry.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setEditError(''); setOrderError('') }}
+                className="p-1 rounded text-red-600 hover:bg-red-100"
+                aria-label="Dismiss order error"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
           {/* Editing banner */}
           {store.editingOrderId && (
             <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 mb-2">
               <span className="text-sm font-bold text-blue-700">
-                Editing Order #{store.editingOrderId}
+                Editing Order #{store.editingOrderDailyNumber ?? store.editingOrderId}
               </span>
               <button
                 onClick={cancelEdit}
@@ -1451,10 +1651,7 @@ export function OrderScreen() {
           <Button
             onClick={handlePlaceOrder}
             loading={placing || updatingOrder}
-            disabled={
-              store.items.length === 0 ||
-              (store.orderType === 'delivery' && !store.customerPhone.trim())
-            }
+            disabled={store.items.length === 0}
             className={`w-full ${isTouch ? 'text-lg py-4' : 'text-sm sm:text-base'} ${store.editingOrderId ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
             size="lg"
           >
@@ -1588,7 +1785,10 @@ export function OrderScreen() {
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => window.api.printer.printReceipt(orderSuccess.orderId)}
+                onClick={() => runManualPrint(
+                  () => window.api.printer.printReceipt(orderSuccess.orderId),
+                  'Customer receipt'
+                )}
                 className="w-full"
               >
                 <Printer className="h-4 w-4" />
@@ -1601,7 +1801,10 @@ export function OrderScreen() {
                       key={worker.id}
                       variant="secondary"
                       size="sm"
-                      onClick={() => window.api.printer.printKitchenForWorker(orderSuccess.orderId, worker.id)}
+                      onClick={() => runManualPrint(
+                        () => window.api.printer.printKitchenForWorker(orderSuccess.orderId, worker.id),
+                        'Kitchen ticket'
+                      )}
                       className="w-full"
                     >
                       <Printer className="h-4 w-4" />
@@ -1613,7 +1816,10 @@ export function OrderScreen() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => window.api.printer.printKitchen(orderSuccess.orderId)}
+                  onClick={() => runManualPrint(
+                    () => window.api.printer.printKitchen(orderSuccess.orderId),
+                    'Kitchen ticket'
+                  )}
                   className="w-full"
                 >
                   <Printer className="h-4 w-4" />
@@ -1706,7 +1912,10 @@ export function OrderScreen() {
                     <Button
                       variant="secondary"
                       size={isTouch ? 'md' : 'sm'}
-                      onClick={() => window.api.printer.printReceipt(selectedOrder.id)}
+                      onClick={() => runManualPrint(
+                        () => window.api.printer.printReceipt(selectedOrder.id),
+                        'Customer receipt'
+                      )}
                       className="w-full"
                     >
                       <Printer className="h-4 w-4" />
@@ -1721,7 +1930,10 @@ export function OrderScreen() {
                             key={worker.id}
                             variant="secondary"
                             size={isTouch ? 'md' : 'sm'}
-                            onClick={() => window.api.printer.printKitchenForWorker(selectedOrder.id, worker.id)}
+                            onClick={() => runManualPrint(
+                              () => window.api.printer.printKitchenForWorker(selectedOrder.id, worker.id),
+                              'Kitchen ticket'
+                            )}
                             className="w-full"
                           >
                             <Printer className="h-4 w-4" />
@@ -1733,7 +1945,10 @@ export function OrderScreen() {
                       <Button
                         variant="secondary"
                         size={isTouch ? 'md' : 'sm'}
-                        onClick={() => window.api.printer.printKitchen(selectedOrder.id)}
+                        onClick={() => runManualPrint(
+                          () => window.api.printer.printKitchen(selectedOrder.id),
+                          'Kitchen ticket'
+                        )}
                         className="w-full"
                       >
                         <Printer className="h-4 w-4" />
@@ -1899,7 +2114,14 @@ export function OrderScreen() {
                                   {printDropdown === order.id && (
                                     <div className="absolute bottom-full left-0 right-0 mb-1 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50">
                                       <button
-                                        onClick={(e) => { e.stopPropagation(); window.api.printer.printReceipt(order.id); setPrintDropdown(null) }}
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          void runManualPrint(
+                                            () => window.api.printer.printReceipt(order.id),
+                                            'Customer receipt'
+                                          )
+                                          setPrintDropdown(null)
+                                        }}
                                         className={`w-full text-left hover:bg-gray-100 flex items-center gap-2 ${
                                           isTouch ? 'px-4 py-3 text-sm' : 'px-3 py-2 text-xs'
                                         }`}
@@ -1911,7 +2133,14 @@ export function OrderScreen() {
                                         printDropdownWorkers.map(worker => (
                                           <button
                                             key={worker.id}
-                                            onClick={(e) => { e.stopPropagation(); window.api.printer.printKitchenForWorker(order.id, worker.id); setPrintDropdown(null) }}
+                                            onClick={(e) => {
+                                              e.stopPropagation()
+                                              void runManualPrint(
+                                                () => window.api.printer.printKitchenForWorker(order.id, worker.id),
+                                                'Kitchen ticket'
+                                              )
+                                              setPrintDropdown(null)
+                                            }}
                                             className={`w-full text-left hover:bg-gray-100 flex items-center gap-2 ${
                                               isTouch ? 'px-4 py-3 text-sm' : 'px-3 py-2 text-xs'
                                             }`}
@@ -1922,7 +2151,14 @@ export function OrderScreen() {
                                         ))
                                       ) : (
                                         <button
-                                          onClick={(e) => { e.stopPropagation(); window.api.printer.printKitchen(order.id); setPrintDropdown(null) }}
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            void runManualPrint(
+                                              () => window.api.printer.printKitchen(order.id),
+                                              'Kitchen ticket'
+                                            )
+                                            setPrintDropdown(null)
+                                          }}
                                           className={`w-full text-left hover:bg-gray-100 flex items-center gap-2 ${
                                             isTouch ? 'px-4 py-3 text-sm' : 'px-3 py-2 text-xs'
                                           }`}

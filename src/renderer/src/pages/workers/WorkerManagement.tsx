@@ -10,6 +10,7 @@ import { Badge } from '../../components/ui/Badge'
 import { Card } from '../../components/ui/Card'
 import { formatCurrency } from '../../utils/formatCurrency'
 import { VirtualKeyboard } from '../../components/VirtualKeyboard'
+import { localToday } from '../../utils/localDate'
 
 export function WorkerManagement() {
   const { t } = useTranslation()
@@ -55,7 +56,9 @@ export function WorkerManagement() {
   }
 
   // Attendance
-  const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0])
+  // Local day: with the UTC day, attendance marked between 00:00 and 01:00 local was written to
+  // (and could overwrite) the PREVIOUS day's row.
+  const [attendanceDate, setAttendanceDate] = useState(localToday())
   const [attendance, setAttendance] = useState<any[]>([])
   const [schedule, setSchedule] = useState<any[]>([])
 

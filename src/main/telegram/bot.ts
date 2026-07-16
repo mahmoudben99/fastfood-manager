@@ -6,6 +6,10 @@ import { analyticsRepo } from '../database/repositories/analytics.repo'
 
 let bot: any = null
 let isRunning = false
+// bot.start() resolves its handshake asynchronously, so isRunning stays false while connecting.
+// Guarding re-entry on isRunning alone let a second Start click build a SECOND Bot and long-poll
+// the same token — Telegram answers 409 Conflict and both pollers stall.
+let isStarting = false
 
 /**
  * Escape user/menu-derived text for Telegram HTML parse_mode.
@@ -20,6 +24,19 @@ function escapeHtml(text: unknown): string {
     .replace(/>/g, '&gt;')
 }
 
+/**
+ * Render a stored timestamp as the restaurant's local wall-clock time.
+ * orders.created_at is UTC ISO; SQLite's datetime('now') default is UTC *without* a zone marker,
+ * which JS would otherwise parse as local time. Tag it before parsing.
+ */
+function formatLocalTime(value: unknown): string {
+  const s = String(value ?? '').trim()
+  if (!s) return ''
+  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(s) ? s.replace(' ', 'T') + 'Z' : s
+  const d = new Date(normalized)
+  return Number.isNaN(d.getTime()) ? s : d.toLocaleString()
+}
+
 export function startBot(): { success: boolean; error?: string } {
   const token = settingsRepo.get('telegram_bot_token')
   const chatId = settingsRepo.get('telegram_chat_id')
@@ -28,16 +45,20 @@ export function startBot(): { success: boolean; error?: string } {
     return { success: false, error: 'Token or Chat ID not configured' }
   }
 
-  if (isRunning && bot) {
+  // A live-or-connecting bot means there's nothing to do. Checking `isRunning` alone raced the
+  // async handshake and let a second poller spawn on the same token (Telegram 409 Conflict).
+  if (bot || isStarting) {
     return { success: true }
   }
 
   try {
+    isStarting = true
     const { Bot } = require('grammy')
     bot = new Bot(token)
+    const thisBot = bot
 
     // Security: only respond to authorized chat ID
-    bot.use(async (ctx, next) => {
+    bot.use(async (ctx: any, next: any) => {
       if (ctx.chat?.id.toString() === chatId) {
         await next()
       }
@@ -45,30 +66,47 @@ export function startBot(): { success: boolean; error?: string } {
 
     registerCommands(bot)
 
-    bot.catch((err) => {
+    bot.catch((err: any) => {
       console.error('Telegram bot error:', err)
     })
 
+    // bot.start() is async (grammy calls getMe first). With a bad/revoked token or no network
+    // it rejects AFTER this function returns, so we must NOT set isRunning=true unconditionally
+    // here — otherwise the settings UI shows "running", auto-start re-arms it every launch, and
+    // every notification fails silently. Let onStart flip isRunning, and catch the rejection.
     bot.start({
       onStart: () => {
         isRunning = true
+        isStarting = false
       },
       drop_pending_updates: true
+    }).catch((err: any) => {
+      console.error('Telegram bot failed to start:', err)
+      isStarting = false
+      // Only tear down if this is still the CURRENT bot — a later startBot() may have replaced
+      // it, and nulling that one would silently kill a working connection.
+      if (bot === thisBot) {
+        isRunning = false
+        // Reset so a later Start rebuilds the bot (grammy neuters bot.use after start()).
+        bot = null
+      }
     })
 
-    isRunning = true
     return { success: true }
   } catch (err: any) {
     isRunning = false
+    isStarting = false
+    bot = null
     return { success: false, error: err.message }
   }
 }
 
 export function stopBot(): void {
   if (bot) {
-    bot.stop()
+    try { bot.stop() } catch { /* never started */ }
     bot = null
     isRunning = false
+    isStarting = false
   }
 }
 
@@ -128,7 +166,7 @@ export function sendOrderNotification(order: any): void {
 }
 
 function getCurrency(): string {
-  return settingsRepo.get('currency_symbol') || '$'
+  return settingsRepo.get('currency_symbol') || settingsRepo.get('currency') || 'DA'
 }
 
 /** Restaurant-local date (YYYY-MM-DD) — matches orders.repo so /today etc. align with stored order_date. */
@@ -138,11 +176,11 @@ function localDate(d = new Date()): string {
 }
 
 function registerCommands(bot: any): void {
-  bot.command('start', async (ctx) => {
+  bot.command('start', async (ctx: any) => {
     await ctx.reply('Welcome! Use /help to see available commands.')
   })
 
-  bot.command('help', async (ctx) => {
+  bot.command('help', async (ctx: any) => {
     const msg =
       `🤖 *Fast Food Manager Bot*\n\n` +
       `Available commands:\n\n` +
@@ -157,7 +195,7 @@ function registerCommands(bot: any): void {
     await ctx.reply(msg, { parse_mode: 'Markdown' })
   })
 
-  bot.command('today', async (ctx) => {
+  bot.command('today', async (ctx: any) => {
     try {
       const today = localDate()
       const summary = analyticsRepo.getProfitSummary(today, today)
@@ -184,7 +222,7 @@ function registerCommands(bot: any): void {
     }
   })
 
-  bot.command('stock', async (ctx) => {
+  bot.command('stock', async (ctx: any) => {
     try {
       const lowStock = stockRepo.getLowStock()
 
@@ -205,21 +243,24 @@ function registerCommands(bot: any): void {
     }
   })
 
-  bot.command('revenue', async (ctx) => {
+  bot.command('revenue', async (ctx: any) => {
     try {
       const period = ctx.match?.trim().toLowerCase() || 'today'
       const today = new Date()
       let startDate: string
-      const endDate = today.toISOString().split('T')[0]
+      // Restaurant-LOCAL dates so /revenue matches the stored order_date buckets. UTC here
+      // reported yesterday as "Today" past local midnight, and on the 1st of the month made
+      // startDate (local new month) > endDate (UTC last day of prev month) → 0 revenue.
+      const endDate = localDate(today)
       let periodLabel: string
 
       if (period === 'week') {
         const weekAgo = new Date(today)
         weekAgo.setDate(weekAgo.getDate() - 7)
-        startDate = weekAgo.toISOString().split('T')[0]
+        startDate = localDate(weekAgo)
         periodLabel = 'This Week'
       } else if (period === 'month') {
-        startDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`
+        startDate = endDate.slice(0, 8) + '01'
         periodLabel = 'This Month'
       } else {
         startDate = endDate
@@ -227,22 +268,25 @@ function registerCommands(bot: any): void {
       }
 
       const summary = analyticsRepo.getProfitSummary(startDate, endDate)
-      const c = getCurrency()
+      // HTML mode + escaped currency, matching the other commands. /revenue was the last
+      // command left on Markdown, so a currency symbol containing * _ [ or ` made the reply
+      // throw (400) and the owner saw only "Error fetching revenue data."
+      const c = escapeHtml(getCurrency())
 
-      let msg = `💰 *Revenue Report — ${periodLabel}*\n`
+      let msg = `💰 <b>Revenue Report — ${periodLabel}</b>\n`
       msg += `(${startDate} to ${endDate})\n\n`
       msg += `Revenue: ${Number(summary.total_revenue || 0).toFixed(2)} ${c}\n`
       msg += `Orders: ${summary.order_count}\n`
       msg += `Costs: ${(Number(summary.total_stock_cost || 0) + Number(summary.total_worker_cost || 0)).toFixed(2)} ${c}\n`
       msg += `Net Profit: ${Number(summary.net_profit || 0).toFixed(2)} ${c}\n`
 
-      await ctx.reply(msg, { parse_mode: 'Markdown' })
+      await ctx.reply(msg, { parse_mode: 'HTML' })
     } catch (err) {
       await ctx.reply('Error fetching revenue data.')
     }
   })
 
-  bot.command('workers', async (ctx) => {
+  bot.command('workers', async (ctx: any) => {
     try {
       const today = localDate()
       const attendance = workersRepo.getAttendance(today)
@@ -276,10 +320,12 @@ function registerCommands(bot: any): void {
     }
   })
 
-  bot.command('status', async (ctx) => {
+  bot.command('status', async (ctx: any) => {
     try {
       const today = localDate()
-      const todayOrders = ordersRepo.getTodayOrders()
+      // Exclude cancelled orders, so "Today's orders" here agrees with /today and the Day Recap.
+      // getTodayOrders() returns every order regardless of status.
+      const todayOrders = ordersRepo.getTodayOrders().filter((o: any) => o.status !== 'cancelled')
       const restaurantName = escapeHtml(settingsRepo.get('restaurant_name') || 'Restaurant')
       const lowCount = stockRepo.getLowStockCount()
 
@@ -290,7 +336,8 @@ function registerCommands(bot: any): void {
       msg += `📅 Date: ${today}\n`
       msg += `🧾 Today's orders: ${todayOrders.length}\n`
       if (lastOrder) {
-        msg += `🕐 Last order: #${lastOrder.daily_number} at ${escapeHtml(lastOrder.created_at)}\n`
+        // created_at is UTC ISO; print the restaurant's local wall-clock time instead.
+        msg += `🕐 Last order: #${lastOrder.daily_number} at ${escapeHtml(formatLocalTime(lastOrder.created_at))}\n`
       }
 
       if (lowCount > 0) {

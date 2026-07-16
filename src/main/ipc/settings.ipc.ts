@@ -4,8 +4,7 @@ import { join, extname } from 'path'
 import { randomUUID } from 'crypto'
 import bcrypt from 'bcryptjs'
 import { settingsRepo } from '../database/repositories/settings.repo'
-import { getLogoPath, resetAllData } from '../database/connection'
-import { performAutoBackup } from './backup.ipc'
+import { getLogoPath } from '../database/connection'
 import { syncAdminPassword } from '../sync/owner-sync'
 
 // Keys that can ONLY be set through proper activation/trial flows, never from renderer
@@ -45,6 +44,11 @@ export function registerSettingsHandlers(): void {
       if (!PROTECTED_KEYS.has(k)) safe[k] = v
     }
     settingsRepo.setMultiple(safe)
+    // SetupWizard creates the first admin password through this batch path. Without this sync,
+    // the owner dashboard rejects the correct password until the desktop is restarted.
+    if (Object.prototype.hasOwnProperty.call(safe, 'admin_password_hash')) {
+      syncAdminPassword().catch(() => {})
+    }
     return true
   })
 
@@ -113,14 +117,23 @@ export function registerSettingsHandlers(): void {
     return true
   })
 
-  /** Factory reset: backup → wipe entire DB → reinitialize fresh. */
-  ipcMain.handle('settings:resetAll', async () => {
-    try {
-      await performAutoBackup()
-    } catch {
-      // Backup failure should not prevent reset
-    }
-    resetAllData()
+  /**
+   * Sign out and return to activation/setup without touching restaurant data.
+   *
+   * This path previously called resetAllData(), although the Settings screen explicitly says
+   * orders, menu, stock and workers are kept. It also proceeded when the attempted backup
+   * returned `{ ok: false }`. Logout is an entitlement transition, never a factory reset.
+   */
+  ipcMain.handle('settings:logout', () => {
+    settingsRepo.setMultiple({
+      activation_type: '',
+      activation_status: '',
+      activation_code: '',
+      trial_expires_at: '',
+      trial_status: '',
+      setup_complete: 'false',
+      _integrity: ''
+    })
     return { success: true }
   })
 }

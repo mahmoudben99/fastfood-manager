@@ -10,6 +10,10 @@ export function ExcelUploadForm({ machineId, currentStatus }: { machineId: strin
 
   const handleUpload = async () => {
     if (!file) return
+    if (!file.name.toLowerCase().endsWith('.xlsx') || file.size === 0 || file.size > 10 * 1024 * 1024) {
+      setResult({ ok: false, message: 'Choose a valid .xlsx workbook no larger than 10 MB.' })
+      return
+    }
     setUploading(true)
     setResult(null)
 
@@ -60,7 +64,7 @@ export function ExcelUploadForm({ machineId, currentStatus }: { machineId: strin
       <div className="flex items-center gap-3">
         <input
           type="file"
-          accept=".xlsx,.xls"
+          accept=".xlsx"
           onChange={(e) => setFile(e.target.files?.[0] || null)}
           className="flex-1 text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-orange-50 file:text-orange-700 file:cursor-pointer hover:file:bg-orange-100"
         />
@@ -83,7 +87,7 @@ export function ExcelUploadForm({ machineId, currentStatus }: { machineId: strin
       {/* Status control */}
       <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
         <span className="text-sm text-gray-500">Status:</span>
-        {['pending', 'processing', 'ready', 'completed'].map((s) => (
+        {['pending', 'processing', 'ready'].map((s) => (
           <button
             key={s}
             onClick={() => handleStatusChange(s)}

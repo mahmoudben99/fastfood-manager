@@ -86,10 +86,10 @@ export const analyticsRepo = {
         `SELECT mi.name, mi.name_ar, mi.name_fr,
                 SUM(oi.quantity) as total_quantity,
                 SUM(oi.total_price) as total_revenue,
-                c.name as category_name
+                COALESCE(c.name, 'Uncategorized') as category_name
          FROM order_items oi
          JOIN menu_items mi ON oi.menu_item_id = mi.id
-         JOIN categories c ON mi.category_id = c.id
+         LEFT JOIN categories c ON mi.category_id = c.id
          JOIN orders o ON oi.order_id = o.id
          WHERE o.order_date BETWEEN ? AND ? AND o.status != 'cancelled'
          GROUP BY oi.menu_item_id
@@ -105,10 +105,10 @@ export const analyticsRepo = {
         `SELECT mi.name, mi.name_ar, mi.name_fr,
                 SUM(oi.quantity) as total_quantity,
                 SUM(oi.total_price) as total_revenue,
-                c.name as category_name
+                COALESCE(c.name, 'Uncategorized') as category_name
          FROM order_items oi
          JOIN menu_items mi ON oi.menu_item_id = mi.id
-         JOIN categories c ON mi.category_id = c.id
+         LEFT JOIN categories c ON mi.category_id = c.id
          JOIN orders o ON oi.order_id = o.id
          WHERE o.order_date BETWEEN ? AND ? AND o.status != 'cancelled'
          GROUP BY oi.menu_item_id
@@ -121,12 +121,12 @@ export const analyticsRepo = {
   getRevenueByCategory(startDate: string, endDate: string) {
     return getDb()
       .prepare(
-        `SELECT c.name, c.name_ar, c.name_fr,
+        `SELECT COALESCE(c.name, 'Uncategorized') as name, c.name_ar, c.name_fr,
                 SUM(oi.total_price) as total_revenue,
                 SUM(oi.quantity) as total_quantity
          FROM order_items oi
          JOIN menu_items mi ON oi.menu_item_id = mi.id
-         JOIN categories c ON mi.category_id = c.id
+         LEFT JOIN categories c ON mi.category_id = c.id
          JOIN orders o ON oi.order_id = o.id
          WHERE o.order_date BETWEEN ? AND ? AND o.status != 'cancelled'
          GROUP BY mi.category_id
@@ -140,12 +140,15 @@ export const analyticsRepo = {
       .prepare(
         `SELECT w.id, w.name, w.role,
                 COUNT(DISTINCT oi.order_id) as orders_handled,
-                SUM(oi.total_price) as total_revenue,
+                COALESCE(SUM(oi.total_price), 0) as total_revenue,
                 (SELECT COALESCE(SUM(pay_amount), 0) FROM worker_attendance
                  WHERE worker_id = w.id AND date BETWEEN ? AND ?) as total_pay
          FROM workers w
          LEFT JOIN order_items oi ON w.id = oi.worker_id
-         LEFT JOIN orders o ON oi.order_id = o.id AND o.order_date BETWEEN ? AND ? AND o.status != 'cancelled'
+           AND oi.order_id IN (
+             SELECT id FROM orders
+             WHERE order_date BETWEEN ? AND ? AND status != 'cancelled'
+           )
          WHERE w.is_active = 1
          GROUP BY w.id
          ORDER BY total_revenue DESC`

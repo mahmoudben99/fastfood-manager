@@ -399,6 +399,8 @@ export function PromotionsPage() {
               value={promoValue}
               onChange={(e) => setPromoValue(e.target.value)}
               step="0.01"
+              min="0"
+              max={promoType === 'percentage' ? '100' : undefined}
             />
           </div>
 

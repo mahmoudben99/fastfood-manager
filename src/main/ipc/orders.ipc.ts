@@ -2,8 +2,6 @@ import { ipcMain } from 'electron'
 import { ordersRepo, type CreateOrderInput } from '../database/repositories/orders.repo'
 import { performAutoBackup } from './backup.ipc'
 import { sendOrderNotification } from '../telegram/bot'
-import { printOrder } from './printer.ipc'
-import { settingsRepo } from '../database/repositories/settings.repo'
 import { syncOrderToCloud, syncOrderStatusToCloud } from '../sync/owner-sync'
 
 export function registerOrdersHandlers(): void {
@@ -15,11 +13,8 @@ export function registerOrdersHandlers(): void {
     performAutoBackup()
     // Send Telegram notification
     sendOrderNotification(order)
-    // Auto-print if enabled
-    const autoPrintReceipt = settingsRepo.get('auto_print_receipt') === 'true'
-    const autoPrintKitchen = settingsRepo.get('auto_print_kitchen') === 'true'
-    if (autoPrintReceipt) printOrder(order.id, 'receipt').catch(() => {})
-    if (autoPrintKitchen) printOrder(order.id, 'kitchen').catch(() => {})
+    // Automatic receipt/kitchen intents were inserted into durable print_jobs in the same
+    // transaction as the order. The printer worker owns delivery and visible retries.
     // Sync order to owner dashboard (fire-and-forget)
     syncOrderToCloud(order).catch(() => {})
     return order
@@ -66,9 +61,20 @@ export function registerOrdersHandlers(): void {
         unit_price?: number
       }[],
       discountAmount?: number,
-      discountDetails?: string
+      discountDetails?: string,
+      info?: {
+        order_type?: string
+        table_number?: string | null
+        customer_phone?: string | null
+        customer_name?: string | null
+        notes?: string | null
+      }
     ) => {
-      return ordersRepo.updateItems(id, items, discountAmount, discountDetails)
+      const updated = ordersRepo.updateItems(id, items, discountAmount, discountDetails, info)
+      // Re-sync the edited order to the owner dashboard so its cloud row reflects the new
+      // items/total (previously only create/status-change synced, so edits never propagated).
+      if (updated) syncOrderToCloud(updated).catch(() => {})
+      return updated
     }
   )
 }

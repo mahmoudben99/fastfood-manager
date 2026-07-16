@@ -6,13 +6,14 @@ import { Badge } from '../../components/ui/Badge'
 import { Modal } from '../../components/ui/Modal'
 import { Button } from '../../components/ui/Button'
 import { formatCurrency } from '../../utils/formatCurrency'
+import { localToday, formatDateTime } from '../../utils/localDate'
 
 export function OrdersHistory() {
   const { t } = useTranslation()
   const { language } = useAppStore()
   const [orders, setOrders] = useState<any[]>([])
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0])
-  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0])
+  const [startDate, setStartDate] = useState(localToday())
+  const [endDate, setEndDate] = useState(localToday())
   const [selectedOrder, setSelectedOrder] = useState<any>(null)
   const [cancelConfirm, setCancelConfirm] = useState<any>(null)
 
@@ -22,6 +23,7 @@ export function OrdersHistory() {
 
   // Receipt preview
   const [previewHtml, setPreviewHtml] = useState<string | null>(null)
+  const [printError, setPrintError] = useState('')
 
   // Edit state
   const [editMode, setEditMode] = useState(false)
@@ -41,6 +43,7 @@ export function OrdersHistory() {
     const order = await window.api.orders.getById(id)
     setSelectedOrder(order)
     setEditMode(false)
+    setPrintError('')
   }
 
   const markDone = async (id: number) => {
@@ -68,6 +71,7 @@ export function OrdersHistory() {
     if (!selectedOrder?.items) return
     setEditItems(
       selectedOrder.items.map((item: any) => ({
+        order_item_id: item.id,
         menu_item_id: item.menu_item_id,
         menu_item_name: item.menu_item_name,
         quantity: item.quantity,
@@ -100,6 +104,7 @@ export function OrdersHistory() {
       const updated = await window.api.orders.updateItems(
         selectedOrder.id,
         editItems.map((item: any) => ({
+          order_item_id: item.order_item_id,
           menu_item_id: item.menu_item_id,
           quantity: item.quantity,
           notes: item.notes || undefined,
@@ -107,9 +112,9 @@ export function OrdersHistory() {
           // Keep each line's recorded price (don't silently re-price to current menu)
           unit_price: item.unit_price
         })),
-        // Preserve the order's existing discount rather than wiping it on an admin edit
-        selectedOrder.discount_amount ?? undefined,
-        selectedOrder.discount_details ?? undefined
+        // Preserve the stored legacy discount; do not apply today's promotion rules.
+        undefined,
+        undefined
       )
       setSelectedOrder(updated)
       setEditMode(false)
@@ -121,7 +126,11 @@ export function OrdersHistory() {
     }
   }
 
-  const editTotal = editItems.reduce((sum: number, item: any) => sum + item.unit_price * item.quantity, 0)
+  const editSubtotal = editItems.reduce((sum: number, item: any) => sum + item.unit_price * item.quantity, 0)
+  // saveEdit preserves the order's existing discount, so the total shown while editing must
+  // subtract it too — otherwise the admin confirms one number and a smaller one gets stored.
+  const editDiscount = Math.min(Math.max(0, selectedOrder?.discount_amount ?? 0), editSubtotal)
+  const editTotal = editSubtotal - editDiscount
 
   const statusVariant = (status: string): 'success' | 'warning' | 'danger' | 'info' | 'default' => {
     const map: Record<string, any> = {
@@ -137,6 +146,24 @@ export function OrdersHistory() {
   const previewReceipt = async (orderId: number) => {
     const html = await window.api.printer.previewReceipt(orderId)
     if (html) setPreviewHtml(html)
+  }
+
+  const runPrint = async (
+    request: () => Promise<{ success: boolean; error?: string }>,
+    label: string
+  ) => {
+    setPrintError('')
+    try {
+      const result = await request()
+      if (!result.success) {
+        setPrintError(label + ' was not printed: ' + (result.error || 'unknown printer error'))
+      }
+    } catch (error) {
+      setPrintError(
+        label + ' was not printed: ' +
+        (error instanceof Error ? error.message : 'unexpected printer error')
+      )
+    }
   }
 
   const isOngoing = (status: string) => status === 'preparing' || status === 'pending'
@@ -219,7 +246,9 @@ export function OrdersHistory() {
             {filteredOrders.map((order) => (
               <tr key={order.id} className="border-b last:border-0 hover:bg-gray-50 cursor-pointer" onClick={() => viewOrder(order.id)}>
                 <td className="px-4 py-3 font-medium">#{order.daily_number}</td>
-                <td className="px-4 py-3 text-gray-500">{order.created_at}</td>
+                {/* created_at is a UTC ISO string; rendering it raw showed an unformatted
+                    timestamp an hour behind the wall clock (Algeria is UTC+1). */}
+                <td className="px-4 py-3 text-gray-500">{formatDateTime(order.created_at)}</td>
                 <td className="px-4 py-3">
                   <Badge variant={order.order_type === 'delivery' ? 'info' : 'default'}>
                     {t(`orders.${order.order_type}`)}
@@ -270,6 +299,18 @@ export function OrdersHistory() {
       {selectedOrder && (
         <Modal isOpen onClose={() => { setSelectedOrder(null); setEditMode(false) }} title={t('orders.orderNumber', { number: selectedOrder.daily_number })} size="lg">
           <div className="space-y-4">
+            {printError && (
+              <div className="flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 p-3" role="alert">
+                <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-red-800">Print failed</p>
+                  <p className="text-xs text-red-700 break-words">{printError}</p>
+                </div>
+                <button type="button" onClick={() => setPrintError('')} aria-label="Dismiss print error">
+                  <X className="h-4 w-4 text-red-600" />
+                </button>
+              </div>
+            )}
             <div className="flex gap-4 text-sm">
               <Badge variant={statusVariant(selectedOrder.status)}>
                 {t(`orders.status.${selectedOrder.status}`)}
@@ -315,6 +356,12 @@ export function OrdersHistory() {
                   ))}
                 </div>
 
+                {editDiscount > 0 && (
+                  <div className="flex justify-between text-sm text-green-600 mb-1">
+                    <span>{selectedOrder?.discount_details || 'Discount'}</span>
+                    <span>-{formatCurrency(editDiscount)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-lg font-bold mb-4">
                   <span>{t('orders.total')}</span>
                   <span className="text-orange-600">{formatCurrency(editTotal)}</span>
@@ -370,14 +417,20 @@ export function OrdersHistory() {
                   <Button
                     variant="secondary"
                     size="sm"
-                    onClick={() => window.api.printer.printReceipt(selectedOrder.id)}
+                    onClick={() => runPrint(
+                      () => window.api.printer.printReceipt(selectedOrder.id),
+                      'Customer receipt'
+                    )}
                   >
                     {t('orders.printReceipt')}
                   </Button>
                   <Button
                     variant="secondary"
                     size="sm"
-                    onClick={() => window.api.printer.printKitchen(selectedOrder.id)}
+                    onClick={() => runPrint(
+                      () => window.api.printer.printKitchen(selectedOrder.id),
+                      'Kitchen ticket'
+                    )}
                   >
                     {t('orders.printKitchen')}
                   </Button>
@@ -419,7 +472,16 @@ export function OrdersHistory() {
               {t('common.close')}
             </Button>
             {selectedOrder && (
-              <Button onClick={() => { window.api.printer.printReceipt(selectedOrder.id); setPreviewHtml(null) }} className="flex-1">
+              <Button
+                onClick={() => {
+                  void runPrint(
+                    () => window.api.printer.printReceipt(selectedOrder.id),
+                    'Customer receipt'
+                  )
+                  setPreviewHtml(null)
+                }}
+                className="flex-1"
+              >
                 {t('orders.printReceipt')}
               </Button>
             )}

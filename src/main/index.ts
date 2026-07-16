@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, protocol, dialog, ipcMain, net } from 'electron'
+import { app, BrowserWindow, shell, protocol, dialog, ipcMain, net, powerMonitor } from 'electron'
 import { join } from 'path'
 import { writeFileSync, appendFileSync } from 'fs'
 import { autoUpdater } from 'electron-updater'
@@ -11,12 +11,13 @@ import { createSplashWindow, closeSplashWindow } from './splash'
 import { getMachineId, validateActivation, verifyIntegrity } from './activation/activation'
 import { registerInstallation, checkTrialStatus, checkCloudActivation } from './activation/cloud'
 import { registerTabletHandlers } from './ipc/tablet.ipc'
-import { startTabletServer } from './tablet/server'
+import { startTabletServer, stopTabletServer } from './tablet/server'
 import { startAnalyticsSync, stopAnalyticsSync } from './sync/analytics-sync'
-import { ordersRepo } from './database/repositories/orders.repo'
+import { ordersRepo, localDate } from './database/repositories/orders.repo'
 import { syncAdminPassword } from './sync/owner-sync'
 import { startCloudSync, stopCloudSync } from './sync/cloud-sync'
 import { startRemoteOrderListener, stopRemoteOrderListener } from './sync/remote-order-listener'
+import { stopPrintJobProcessor } from './ipc/printer.ipc'
 
 // Enhanced logging function
 function log(message: string, isError = false): void {
@@ -127,6 +128,12 @@ let cumulativeOfflineSeconds = 0 // Total offline time this session (never reset
 const MAX_CUMULATIVE_OFFLINE = 5 * 60 // Lock after 5 min total offline time per session
 let lastCloudSuccessTime = Date.now() // Track when we last verified with cloud
 const CLOUD_STALE_SECONDS = 10 * 60 // If no cloud check for 10 min, lock
+// While online but stale, allow this long for a cloud re-check to succeed before locking.
+let staleGraceDeadline = 0
+const STALE_GRACE_MS = 60 * 1000
+// setupTrialWatcher() runs from app start AND the `trial:ensureWatcher` IPC; without this the
+// powerMonitor 'resume' handler would be registered twice.
+let resumeListenerAttached = false
 
 function clearOfflineCountdown(): void {
   if (offlineCountdownInterval) {
@@ -174,10 +181,26 @@ function checkOfflineInstant(): void {
   // Check if cloud verification is stale (no success for too long)
   const secondsSinceCloud = Math.floor((Date.now() - lastCloudSuccessTime) / 1000)
   if (secondsSinceCloud >= CLOUD_STALE_SECONDS) {
+    // Staleness alone isn't proof of evasion: a laptop that slept for an hour wakes up "stale"
+    // with perfectly good internet, and locking instantly is a support call. If we're online,
+    // force a cloud check and give it a bounded grace window before locking.
+    if (net.isOnline()) {
+      if (staleGraceDeadline === 0) {
+        staleGraceDeadline = Date.now() + STALE_GRACE_MS
+        log(`Trial: cloud verification stale (${secondsSinceCloud}s) but online — re-checking before locking`)
+        checkTrialCloud().catch(() => {})
+        return
+      }
+      if (Date.now() < staleGraceDeadline) {
+        checkTrialCloud().catch(() => {})
+        return
+      }
+    }
     log(`Trial: cloud verification stale (${secondsSinceCloud}s since last success) — locking`)
     mainWindow?.webContents.send('trial:locked', 'offline')
     return
   }
+  staleGraceDeadline = 0
 
   if (!net.isOnline()) {
     startOfflineCountdown()
@@ -188,8 +211,22 @@ function checkOfflineInstant(): void {
   }
 }
 
-// Cloud check — fetches Supabase for trial status (admin actions, expiry updates)
-async function checkTrialCloud(): Promise<void> {
+/**
+ * Cloud check — fetches Supabase for trial status (admin actions, expiry updates).
+ *
+ * Coalesced: checkOfflineInstant fires every 3s and can ask for a re-check, so without this a
+ * single hung 60s request would pile up ~20 concurrent checks against the same endpoint.
+ */
+let cloudCheckPromise: Promise<void> | null = null
+function checkTrialCloud(): Promise<void> {
+  if (cloudCheckPromise) return cloudCheckPromise
+  cloudCheckPromise = doCheckTrialCloud().finally(() => {
+    cloudCheckPromise = null
+  })
+  return cloudCheckPromise
+}
+
+async function doCheckTrialCloud(): Promise<void> {
   const activationType = settingsRepo.get('activation_type')
   if (activationType !== 'trial') return
 
@@ -198,12 +235,14 @@ async function checkTrialCloud(): Promise<void> {
 
   try {
     const machineId = getMachineId()
+    // Throws NETWORK_ERROR unless the server actually answered, so reaching the next line is a
+    // genuine verification — safe to reset the offline/staleness clocks.
     const result = await checkTrialStatus(machineId)
 
-    // Cloud check succeeded — reset cumulative offline counter and update timestamp
     clearOfflineCountdown()
     cumulativeOfflineSeconds = 0
     lastCloudSuccessTime = Date.now()
+    staleGraceDeadline = 0
 
     if (result.status === 'active' && result.expiresAt) {
       settingsRepo.set('trial_expires_at', result.expiresAt)
@@ -211,9 +250,21 @@ async function checkTrialCloud(): Promise<void> {
         status: 'active',
         expiresAt: result.expiresAt
       })
-    } else if (result.status === 'expired' || result.status === 'paused') {
-      // Before locking, check if admin granted a full license
-      const cloudFull = await checkCloudActivation(machineId)
+      // 'not_found' means the server DEFINITIVELY has no trial row for a machine that believes it
+      // is on a trial (row deleted by admin, or a restored/reset project). Previously it matched
+      // neither branch, so the machine ran an unlocked trial forever while the staleness clock was
+      // refreshed on every tick. Treat it like an expired trial — the full-license check below
+      // still rescues an admin-granted license.
+    } else if (result.status === 'expired' || result.status === 'paused' || result.status === 'not_found') {
+      // Before locking, check if admin granted a full license. If that check is inconclusive it
+      // throws, we skip the lock, and the next tick (30s) retries — never lock on a maybe.
+      let cloudFull = false
+      try {
+        cloudFull = await checkCloudActivation(machineId)
+      } catch {
+        log('Trial expired but cloud activation check was inconclusive — deferring lock')
+        return
+      }
       if (cloudFull) {
         log('Trial expired but cloud activation found — upgrading to full license')
         settingsRepo.set('activation_type', 'full')
@@ -228,7 +279,8 @@ async function checkTrialCloud(): Promise<void> {
         mainWindow?.webContents.reload()
         return
       }
-      mainWindow?.webContents.send('trial:locked', result.status)
+      // The renderer's lock screen understands 'expired' / 'paused'; map the missing-row case.
+      mainWindow?.webContents.send('trial:locked', result.status === 'not_found' ? 'expired' : result.status)
     }
   } catch {
     // Network error from fetch — the fast offline check handles countdown
@@ -238,6 +290,22 @@ async function checkTrialCloud(): Promise<void> {
 function setupTrialWatcher(): void {
   // Initial cloud check after 3s (window ready)
   setTimeout(() => { checkTrialCloud().catch(() => {}) }, 3000)
+
+  // Sleeping is not "using the app offline". Without this, waking a laptop after an hour makes
+  // Date.now() jump past CLOUD_STALE_SECONDS and the lock screen appears on working internet.
+  //
+  // Do NOT stamp lastCloudSuccessTime here: that would record a verification that never happened
+  // and hand an unverified machine a fresh 10-minute window. Instead open the bounded grace
+  // window and kick a real check — only its success may reset the clock.
+  // Registered once: setupTrialWatcher() also runs from the `trial:ensureWatcher` IPC.
+  if (!resumeListenerAttached) {
+    resumeListenerAttached = true
+    powerMonitor.on('resume', () => {
+      log('Trial: system resumed — re-checking with the cloud before any staleness lock')
+      staleGraceDeadline = Date.now() + STALE_GRACE_MS
+      checkTrialCloud().catch(() => {})
+    })
+  }
 
   // Fast offline detection every 3 seconds using net.isOnline()
   fastOfflineInterval = setInterval(checkOfflineInstant, FAST_OFFLINE_CHECK_MS)
@@ -252,7 +320,8 @@ function setupTrialWatcher(): void {
 function setupAutoUpdater(): void {
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = false // Must be false — setting to true causes a race condition
-  autoUpdater.verifyUpdateCodeSignature = false // We don't code-sign, skip signature verification
+  // verifyUpdateCodeSignature only exists on NsisUpdater, not the base AppUpdater type.
+  ;(autoUpdater as unknown as { verifyUpdateCodeSignature: boolean }).verifyUpdateCodeSignature = false // We don't code-sign, skip signature verification
   // with the explicit quitAndInstall() call, resulting in two NSIS instances conflicting
   // and the app not relaunching after update (the update loop bug)
 
@@ -298,6 +367,15 @@ function setupAutoUpdater(): void {
     if (offlineCountdownInterval) clearInterval(offlineCountdownInterval)
     stopBot()
     stopBackupSystem()
+    // Stop everything that can write to the DB BEFORE closing it. Otherwise the remote-order
+    // poll / tablet server could receive an order during the 2s teardown grace window, call
+    // ordersRepo.create() on the closed connection, throw, and permanently mark the customer's
+    // pending order 'failed' in Supabase — a silently-lost order with no local trace.
+    stopAnalyticsSync()
+    stopCloudSync()
+    stopRemoteOrderListener()
+    stopTabletServer()
+    stopPrintJobProcessor()
     closeDatabase()
     // Destroy all windows to release file locks on app.asar before the NSIS installer runs.
     BrowserWindow.getAllWindows().forEach((win) => {
@@ -455,12 +533,19 @@ app.whenReady().then(async () => {
       log('Full license detected — verifying integrity')
       const storedCode = settingsRepo.get('activation_code')
 
-      // Cloud-verified licenses (admin-granted) skip serial/integrity check
+      // Cloud-verified licenses (admin-granted) skip serial/integrity check.
+      // Only a DEFINITIVE "no activation row" revokes the license. checkCloudActivation throws
+      // NETWORK_ERROR when it cannot get a trustworthy answer, so an offline launch (or a
+      // Supabase hiccup) leaves the paying restaurant activated and re-checks next launch.
       if (storedCode === 'CLOUD-VERIFIED') {
         log('Cloud-verified license — re-checking with Supabase')
-        let stillValid = false
-        try { stillValid = await checkCloudActivation(machineId) } catch { stillValid = true /* offline = trust local */ }
-        if (!stillValid) {
+        let revoked = false
+        try {
+          revoked = !(await checkCloudActivation(machineId))
+        } catch {
+          log('Cloud activation check inconclusive (offline) — keeping local license')
+        }
+        if (revoked) {
           log('SECURITY: Cloud activation revoked — reverting to unactivated', true)
           settingsRepo.set('activation_type', '')
           settingsRepo.set('activation_status', '')
@@ -474,12 +559,23 @@ app.whenReady().then(async () => {
           // Local check failed — maybe admin granted license via cloud?
           log('Local verification failed, checking cloud activations...')
           let cloudActivated = false
-          try { cloudActivated = await checkCloudActivation(machineId) } catch { /* offline */ }
+          let conclusive = true
+          try {
+            cloudActivated = await checkCloudActivation(machineId)
+          } catch {
+            conclusive = false
+          }
 
           if (cloudActivated) {
             log('Cloud activation confirmed — admin-granted full license')
             settingsRepo.set('activation_status', 'activated')
             settingsRepo.set('activation_code', 'CLOUD-VERIFIED')
+          } else if (!conclusive) {
+            // Offline: we cannot tell a tampered install from a legitimate one whose cloud rescue
+            // we simply couldn't reach. Wiping here locks out anyone whose serial check trips for a
+            // benign reason (restored backup, clock skew) while their internet happens to be down.
+            // Defer — the check re-runs on every launch, and the trial watcher still locks trials.
+            log('License verification failed but cloud check was inconclusive — deferring to next launch', true)
           } else {
             log(`SECURITY: License verification failed (serial=${valid}, integrity=${integrityOk}, cloud=false) — reverting`, true)
             settingsRepo.set('activation_type', '')
@@ -508,8 +604,13 @@ app.whenReady().then(async () => {
         // Also clean up old preparing orders in Supabase
         const { getClient: getSupabase } = await import('./activation/cloud')
         const supabase = getSupabase()
-        const today = new Date().toISOString().split('T')[0]
-        supabase.from('owner_orders').update({ status: 'completed' }).eq('machine_id', machineId).eq('status', 'preparing').lt('order_date', today).then(() => {}).catch(() => {})
+        // owner_orders.order_date holds the restaurant-LOCAL day (see orders.repo localDate()).
+        // Using the UTC day here skipped local-yesterday's orders whenever the app was started
+        // between 00:00 and 00:59 local, leaving them stuck as 'preparing' on the owner dashboard.
+        const today = localDate()
+        // Fire-and-forget. The query builder is a PromiseLike (no .catch), so pass an onRejected
+        // handler to .then() — otherwise a transient failure becomes an unhandled rejection.
+        supabase.from('owner_orders').update({ status: 'completed' }).eq('machine_id', machineId).eq('status', 'preparing').lt('order_date', today).then(() => {}, () => {})
       }
     } catch { /* ignore */ }
 
@@ -560,6 +661,8 @@ app.on('window-all-closed', () => {
   stopAnalyticsSync()
   stopCloudSync()
   stopRemoteOrderListener()
+  stopTabletServer()
+  stopPrintJobProcessor()
   closeDatabase()
   app.quit()
 })

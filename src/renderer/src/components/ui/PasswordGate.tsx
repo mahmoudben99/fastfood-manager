@@ -35,8 +35,9 @@ export function PasswordGate({ onUnlock, onCancel }: PasswordGateProps) {
   // New password state
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  // Which method was used to reach newPassword step
-  const [validatedMethod, setValidatedMethod] = useState<ResetMethod>('support')
+  // One-shot ticket handed back by whichever validator accepted the code. The reset codes are
+  // single-use and are consumed at validation, so the new-password step redeems this instead.
+  const [resetToken, setResetToken] = useState('')
 
   // Virtual keyboard state
   const [keyboardTarget, setKeyboardTarget] = useState<{ field: string; type: 'numeric' | 'text' } | null>(null)
@@ -125,9 +126,11 @@ export function PasswordGate({ onUnlock, onCancel }: PasswordGateProps) {
     setError('')
     setLoading(true)
     try {
-      const valid = await window.api.reset.validateTelegram(telegramCode.trim())
-      if (valid) {
-        setValidatedMethod('telegram')
+      // Resolves to { valid, token }. The old code tested the OBJECT for truthiness — always
+      // true — so a wrong or expired Telegram code still advanced to the new-password screen.
+      const result = await window.api.reset.validateTelegram(telegramCode.trim())
+      if (result?.valid && result.token) {
+        setResetToken(result.token)
         setStep('newPassword')
         setNewPassword('')
         setConfirmPassword('')
@@ -154,20 +157,22 @@ export function PasswordGate({ onUnlock, onCancel }: PasswordGateProps) {
     setLoading(true)
 
     try {
-      // Try local HMAC code first, then cloud one-time code
-      const localValid = await window.api.activation.validateUnlockCode(unlockCode.trim())
-      let cloudValid = false
-      if (!localValid) {
+      // Try local HMAC code first, then cloud one-time code. Whichever accepts the code returns
+      // the one-shot ticket; the cloud code in particular is burnt on validation, so re-checking
+      // it on the next screen (what the old flow did) could never succeed.
+      const local = await window.api.activation.validateUnlockCode(unlockCode.trim())
+      let token = local?.valid ? local.token : undefined
+      if (!token) {
         try {
-          const result = await window.api.reset.validateCloud(unlockCode.trim())
-          cloudValid = result?.valid === true
+          const cloud = await window.api.reset.validateCloud(unlockCode.trim())
+          if (cloud?.valid) token = cloud.token
         } catch {
           // Offline — cloud check fails silently
         }
       }
 
-      if (localValid || cloudValid) {
-        setValidatedMethod('support')
+      if (token) {
+        setResetToken(token)
         setStep('newPassword')
         setNewPassword('')
         setConfirmPassword('')
@@ -197,11 +202,16 @@ export function PasswordGate({ onUnlock, onCancel }: PasswordGateProps) {
 
     setLoading(true)
     try {
-      const code = validatedMethod === 'telegram' ? telegramCode.trim() : unlockCode.trim()
-      const result = await window.api.reset.resetPassword(code, newPassword, validatedMethod)
+      // Redeem the ticket minted when the code was validated. Re-sending the code here would
+      // fail: it is single-use and was already consumed on the previous screen.
+      const result = await window.api.reset.resetPassword(resetToken, newPassword)
       if (result.success) {
+        setResetToken('')
         onUnlock()
       } else {
+        // Ticket expired / already used — send them back to request a fresh code.
+        setResetToken('')
+        setStep('forgot')
         setError(result.error || t('common.error'))
       }
     } catch {
@@ -218,6 +228,7 @@ export function PasswordGate({ onUnlock, onCancel }: PasswordGateProps) {
     setUnlockCode('')
     setTelegramCode('')
     setTelegramSent(false)
+    setResetToken('')
   }
 
   return (

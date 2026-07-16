@@ -122,15 +122,13 @@ export function TrialLockedPage({ reason, offlineSecondsLeft }: TrialLockedPageP
 
         {/* Actions */}
         <div className="space-y-3">
-          {!isOffline && (
-            <button
-              onClick={handleEnterCode}
-              className="w-full py-2.5 px-4 rounded-xl bg-orange-500 text-white text-sm font-semibold hover:bg-orange-600 transition-colors flex items-center justify-center gap-2"
-            >
-              <KeyRound className="h-4 w-4" />
-              {t('trialLock.enterCode', { defaultValue: 'Enter Activation Code' })}
-            </button>
-          )}
+          <button
+            onClick={handleEnterCode}
+            className="w-full py-2.5 px-4 rounded-xl bg-orange-600 text-white text-sm font-semibold hover:bg-orange-700 transition-colors flex items-center justify-center gap-2"
+          >
+            <KeyRound className="h-4 w-4" />
+            {t('trialLock.enterCode', { defaultValue: 'Enter Activation Code' })}
+          </button>
 
           <button
             onClick={handleShowMachineId}

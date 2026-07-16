@@ -92,9 +92,9 @@
       "or": "OU",
       "uploadOption": "Importer les photos du menu",
       "uploadOptionDesc": "Envoyez les photos de votre menu et nous préparerons les données pour vous",
-      "skipOption": "Continuer avec le menu par défaut",
-      "skipOptionDesc": "Commencez avec un menu de base et personnalisez-le plus tard depuis le panneau d'administration",
-      "skipNote": "Vous pouvez toujours importer ou modifier vos données plus tard depuis le panneau d'administration"
+      "skipOption": "Continuer sans Excel",
+      "skipOptionDesc": "Des catégories de départ seront créées. Ajoutez ensuite vos produits depuis Menu.",
+      "skipNote": "Vous pourrez modifier le menu, le stock et les employés plus tard depuis les paramètres"
     }
   },
   "nav": {
@@ -138,7 +138,7 @@
     "confirmOrder": "Confirmer la commande ?",
     "quantity": "Qte",
     "tableNumber": "Table",
-    "tableNumberPlaceholder": "Numero de table (optionnel)",
+    "tableNumberPlaceholder": "Numero de table (obligatoire)",
     "tableNumberRequired": "Le numero de table est requis",
     "today": "Commandes du jour",
     "noOrders": "Pas encore de commandes aujourd'hui",
@@ -272,7 +272,12 @@
     "apply": "Appliquer"
   },
   "excel": {
-    "title": "Import/Export Excel",
+    "updateDisabledBadge": "Suspendu par s\u00e9curit\u00e9",
+    "updateDisabledDesc": "Le remplacement Excel est temporairement d\u00e9sactiv\u00e9 car l'ancien importateur pouvait effacer les recettes et l'historique du stock. Modifiez les donn\u00e9es depuis Menu, Stock et Employ\u00e9s.",
+    "updateDisabledButton": "Mise \u00e0 jour Excel indisponible",
+    "saveRecovery": "Enregistrer un point de restauration du menu",
+    "recoverySaved": "Point de restauration du menu enregistr\u00e9.",
+    "title": "Export Excel et restauration",
     "export": "Exporter",
     "import": "Importer",
     "exportTemplate": "Telecharger le modele vide",
@@ -293,7 +298,7 @@
     "restoreSuccess": "Version restaurée avec succès !",
     "versionHistory": "Historique des versions",
     "noVersions": "Aucune version pour le moment",
-    "noVersionsHint": "Les versions sont créées automatiquement lorsque vous importez un nouveau fichier Excel.",
+    "noVersionsHint": "Enregistrez un point de restauration avant toute modification importante du menu ou du stock.",
     "countCategories": "{{count}} catégories",
     "countItems": "{{count}} éléments",
     "countStock": "{{count}} stock",

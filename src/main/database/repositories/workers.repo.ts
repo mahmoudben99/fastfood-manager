@@ -67,7 +67,8 @@ export const workersRepo = {
       .prepare(
         `SELECT w.* FROM workers w
          JOIN worker_categories wc ON w.id = wc.worker_id
-         WHERE wc.category_id = ? AND w.is_active = 1`
+         WHERE wc.category_id = ? AND w.is_active = 1
+         ORDER BY w.id ASC`
       )
       .all(categoryId) as Worker[]
     return workers
@@ -98,6 +99,26 @@ export const workersRepo = {
 
     const id = transaction()
     return this.getById(id)!
+  },
+
+  /**
+   * Clear every worker's direct printer binding.
+   *
+   * `update()` merges with `??`, so passing `printer_name: null` keeps the OLD value — there was
+   * no way to un-assign a worker's printer. printerAssignmentsRepo.getPrinterForWorker() reads
+   * workers.printer_name BEFORE the printer_assignments table, so a stale value here silently
+   * overrode the UI and kept sending that worker's kitchen tickets to a printer the owner had
+   * already removed. saveFullConfig clears, then re-applies.
+   */
+  clearAllPrinterNames(): void {
+    getDb().prepare("UPDATE workers SET printer_name = NULL, updated_at = datetime('now')").run()
+  },
+
+  /** Bind (or with null, unbind) one worker's printer. */
+  setPrinterName(id: number, printerName: string | null): void {
+    getDb()
+      .prepare("UPDATE workers SET printer_name = ?, updated_at = datetime('now') WHERE id = ?")
+      .run(printerName, id)
   },
 
   update(id: number, input: Partial<CreateWorkerInput>): Worker | undefined {

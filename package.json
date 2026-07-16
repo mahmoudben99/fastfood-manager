@@ -9,6 +9,8 @@
     "preview": "electron-vite preview",
     "postinstall": "electron-builder install-app-deps",
     "package": "electron-vite build && electron-builder --win --config",
+    "test:excel": "node --no-warnings --test test-harness/unit/excel-import-validation.test.mjs",
+    "test:excel:e2e": "node test-harness/run.js excel-safety",
     "lint": "eslint . --ext .ts,.tsx"
   },
   "keywords": [],

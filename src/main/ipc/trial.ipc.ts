@@ -6,6 +6,7 @@ import {
   checkTrialStatus,
   validateCloudResetCode
 } from '../activation/cloud'
+import { issueResetTicket } from '../activation/reset-ticket'
 
 export function registerTrialHandlers(): void {
   /** Start a 7-day free trial. Stores activation_type='trial' locally on success. */
@@ -72,9 +73,12 @@ export function registerTrialHandlers(): void {
     }
   })
 
-  /** Validate a cloud-generated reset code (from admin dashboard). */
+  /** Validate a cloud-generated reset code (from admin dashboard). The code is single-use, so on
+   *  success mint the ticket that reset:resetPassword redeems — re-checking the (now consumed)
+   *  code on the new-password screen could never succeed. */
   ipcMain.handle('reset:validateCloud', async (_, code: string) => {
     const machineId = getMachineId()
-    return await validateCloudResetCode(machineId, code)
+    const result = await validateCloudResetCode(machineId, code)
+    return result.valid ? { valid: true, token: issueResetTicket() } : { valid: false }
   })
 }

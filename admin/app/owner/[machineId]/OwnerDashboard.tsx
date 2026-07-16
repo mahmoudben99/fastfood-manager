@@ -92,6 +92,15 @@ function saveSession(machineId: string) {
   )
 }
 
+/**
+ * The real credential is now the HttpOnly cookie minted by /api/owner/verify-pin; this
+ * localStorage flag is only UI state. Clear it when the server rejects us so the PIN pad
+ * reappears instead of an empty dashboard.
+ */
+function clearSession() {
+  try { localStorage.removeItem(SESSION_KEY) } catch { /* private mode */ }
+}
+
 // ── Status Badge ───────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: string }) {
@@ -351,9 +360,23 @@ function Dashboard({
   const fetchData = useCallback(async (isManual = false) => {
     if (isManual) setRefreshing(true)
     try {
-      const res = await fetch(`/api/owner/data?machineId=${machineId}`, {
+      // Send the browser's LOCAL calendar day. The API runs on Vercel in UTC and cannot know the
+      // restaurant's timezone; owner_orders.order_date is keyed on the restaurant-local day, so
+      // without this "Today" lost every order placed between local midnight and 01:00 (UTC+1).
+      const now = new Date()
+      const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+        .toISOString()
+        .split('T')[0]
+      const res = await fetch(`/api/owner/data?machineId=${machineId}&date=${localDate}`, {
         cache: 'no-store'
       })
+      if (res.status === 401) {
+        // Owner cookie missing or expired (e.g. an older session that predates cookie auth).
+        // Drop the UI flag and reload straight into the PIN pad rather than showing a blank page.
+        clearSession()
+        window.location.reload()
+        return
+      }
       if (res.ok) {
         const json: DashboardData = await res.json()
         if ((json as any).currency) CURRENCY = (json as any).currency

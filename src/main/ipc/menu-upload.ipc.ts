@@ -2,12 +2,10 @@ import { ipcMain, dialog } from 'electron'
 import { readFileSync } from 'fs'
 import { basename, extname } from 'path'
 import { randomUUID } from 'crypto'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { writeFileSync } from 'fs'
 import { getMachineId } from '../activation/activation'
 import { settingsRepo } from '../database/repositories/settings.repo'
 import { getClient } from '../activation/cloud'
+import { SETUP_IMPORT_LIMITS } from '../../shared/excel-import'
 
 export function registerMenuUploadHandlers(): void {
   // Open file dialog for selecting multiple menu images
@@ -79,6 +77,11 @@ export function registerMenuUploadHandlers(): void {
 
   // Download the Excel file uploaded by admin
   ipcMain.handle('menu-upload:downloadExcel', async (_, excelPath: string) => {
+    const machineId = getMachineId()
+    const expectedPath = `${machineId}/excel/menu.xlsx`
+    if (excelPath !== expectedPath) {
+      return { ok: false, error: 'Invalid menu workbook path' }
+    }
     const client = getClient()
 
     const { data, error } = await client.storage
@@ -87,18 +90,32 @@ export function registerMenuUploadHandlers(): void {
 
     if (error || !data) return { ok: false, error: error?.message || 'Download failed' }
 
-    // Save to temp file
-    const tempPath = join(tmpdir(), `ffm-menu-${Date.now()}.xlsx`)
     const buffer = Buffer.from(await data.arrayBuffer())
-    writeFileSync(tempPath, buffer)
+    if (buffer.byteLength === 0 || buffer.byteLength > SETUP_IMPORT_LIMITS.fileBytes) {
+      return { ok: false, error: 'Downloaded workbook is empty or larger than the 10 MB safety limit' }
+    }
 
-    // Mark as completed
+    // Return bytes over the context-isolated IPC bridge. A file:// fetch from the renderer is
+    // unreliable in packaged Electron and exposed an unnecessary arbitrary-file read surface.
+    return { ok: true, data: new Uint8Array(buffer) }
+  })
+
+  // A workbook is completed only after the validated local database transaction succeeds.
+  ipcMain.handle('menu-upload:markCompleted', async () => {
     const machineId = getMachineId()
-    await client
+    const client = getClient()
+    const { data, error } = await client
       .from('menu_upload_requests')
       .update({ status: 'completed', updated_at: new Date().toISOString() })
       .eq('machine_id', machineId)
+      .eq('status', 'ready')
+      .eq('excel_path', `${machineId}/excel/menu.xlsx`)
+      .select('machine_id')
+      .maybeSingle()
 
-    return { ok: true, filePath: tempPath }
+    if (error) return { ok: false, error: error.message }
+    return data
+      ? { ok: true }
+      : { ok: false, error: 'Ready menu upload request was not found' }
   })
 }

@@ -5,6 +5,163 @@ import { ordersRepo } from '../database/repositories/orders.repo'
 import { printerAssignmentsRepo } from '../database/repositories/printer-assignments.repo'
 import { workersRepo } from '../database/repositories/workers.repo'
 import { receiptTemplatesRepo } from '../database/repositories/receipt-templates.repo'
+import { getDb } from '../database/connection'
+
+/**
+ * Escape a value before interpolating it into printed HTML.
+ *
+ * Every receipt and kitchen ticket is built by string-concatenating HTML and then rendered in a
+ * Chromium window. Item names come from an Excel import, and order/item notes come from customers
+ * typing on the LAN tablet or the public remote-order page. A note of
+ * `<style>body{display:none}</style>` produced a BLANK kitchen ticket — the order was charged,
+ * committed and never cooked, with no error anywhere.
+ */
+function esc(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+interface PrintJobRow {
+  id: number
+  order_id: number
+  daily_number: number
+  event_type: 'new' | 'updated' | 'cancelled' | 'restored'
+  document_type: 'receipt' | 'kitchen'
+  scope: 'all' | 'worker' | 'unassigned'
+  worker_id: number | null
+  worker_name: string | null
+  status: 'pending' | 'printing' | 'succeeded' | 'attention' | 'cancelled'
+  attempts: number
+  last_error: string | null
+  created_at: string
+}
+
+let printProcessorRunning = false
+let printProcessorTimer: NodeJS.Timeout | null = null
+
+function getOpenPrintJobs(): PrintJobRow[] {
+  return getDb()
+    .prepare(
+      'SELECT pj.*, o.daily_number, w.name AS worker_name ' +
+      'FROM print_jobs pj ' +
+      'JOIN orders o ON o.id = pj.order_id ' +
+      'LEFT JOIN workers w ON w.id = pj.worker_id ' +
+      "WHERE pj.status IN ('pending', 'printing', 'attention') " +
+      'ORDER BY CASE pj.status WHEN \'attention\' THEN 0 WHEN \'printing\' THEN 1 ELSE 2 END, pj.created_at'
+    )
+    .all() as PrintJobRow[]
+}
+
+function broadcastPrintJobs(): void {
+  const jobs = getOpenPrintJobs()
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send('printer:jobsChanged', jobs)
+  }
+}
+
+async function processPendingPrintJobs(): Promise<void> {
+  if (printProcessorRunning) return
+  printProcessorRunning = true
+  try {
+    for (let processed = 0; processed < 10; processed++) {
+      const job = getDb()
+        .prepare(
+          "SELECT * FROM print_jobs WHERE status = 'pending' " +
+          "AND (next_attempt_at IS NULL OR next_attempt_at <= datetime('now')) " +
+          'ORDER BY created_at, id LIMIT 1'
+        )
+        .get() as PrintJobRow | undefined
+      if (!job) break
+
+      const claimed = getDb()
+        .prepare(
+          "UPDATE print_jobs SET status = 'printing', attempts = attempts + 1, " +
+          "last_attempt_at = datetime('now'), updated_at = datetime('now') " +
+          "WHERE id = ? AND status = 'pending'"
+        )
+        .run(job.id)
+      if (claimed.changes !== 1) continue
+      broadcastPrintJobs()
+
+      let result: { success: boolean; error?: string }
+      try {
+        if (job.document_type === 'receipt') {
+          result = await printOrder(job.order_id, 'receipt', job.event_type)
+        } else if (job.scope === 'worker' && job.worker_id != null) {
+          result = await printOrderForWorker(job.order_id, job.worker_id, job.event_type)
+        } else {
+          result = await printKitchenScope(
+            job.order_id,
+            job.scope === 'unassigned',
+            job.event_type
+          )
+        }
+      } catch (error) {
+        result = {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unexpected print failure'
+        }
+      }
+
+      const attempts = job.attempts + 1
+      if (result.success) {
+        getDb()
+          .prepare(
+            "UPDATE print_jobs SET status = 'succeeded', last_error = NULL, " +
+            "completed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?"
+          )
+          .run(job.id)
+      } else {
+        const error = (result.error || 'Print failed').slice(0, 1000)
+        const indeterminate = /timeout|closed while printing/i.test(error)
+        const configuration = /no printer configured|no items/i.test(error)
+        if (indeterminate || configuration || attempts >= 3) {
+          getDb()
+            .prepare(
+              "UPDATE print_jobs SET status = 'attention', last_error = ?, " +
+              "next_attempt_at = NULL, updated_at = datetime('now') WHERE id = ?"
+            )
+            .run(error, job.id)
+        } else {
+          const retrySeconds = Math.min(120, attempts * 20)
+          getDb()
+            .prepare(
+              "UPDATE print_jobs SET status = 'pending', last_error = ?, " +
+              "next_attempt_at = datetime('now', '+' || ? || ' seconds'), " +
+              "updated_at = datetime('now') WHERE id = ?"
+            )
+            .run(error, retrySeconds, job.id)
+        }
+      }
+      broadcastPrintJobs()
+    }
+  } finally {
+    printProcessorRunning = false
+  }
+}
+
+export function startPrintJobProcessor(): void {
+  if (printProcessorTimer) return
+  void processPendingPrintJobs()
+  printProcessorTimer = setInterval(() => {
+    void processPendingPrintJobs()
+  }, 2000)
+}
+
+export function stopPrintJobProcessor(): void {
+  if (printProcessorTimer) {
+    clearInterval(printProcessorTimer)
+    printProcessorTimer = null
+  }
+}
+
+export function isPrintJobProcessorBusy(): boolean {
+  return printProcessorRunning
+}
 
 function getOrderTypeLabel(orderType: string, isRTL: boolean): string {
   if (orderType === 'delivery') return isRTL ? 'توصيل' : 'Delivery'
@@ -20,14 +177,14 @@ function getOrderTypeKitchen(orderType: string): string {
 
 function getLogoHTML(settings: Record<string, string>): string {
   const logoPath = settings.logo_path
-  if (!logoPath) return `<div class="center bold big">${settings.restaurant_name || 'Restaurant'}</div>`
+  if (!logoPath) return `<div class="center bold big">${esc(settings.restaurant_name || 'Restaurant')}</div>`
   try {
     const data = readFileSync(logoPath)
     const ext = logoPath.toLowerCase().endsWith('.png') ? 'png' : 'jpeg'
     const base64 = data.toString('base64')
     return `<div style="text-align:center;"><img src="data:image/${ext};base64,${base64}" style="display:block;margin:0 auto 8px auto;max-width:70%;max-height:100px;" /></div>`
   } catch {
-    return `<div class="center bold big">${settings.restaurant_name || 'Restaurant'}</div>`
+    return `<div class="center bold big">${esc(settings.restaurant_name || 'Restaurant')}</div>`
   }
 }
 
@@ -55,9 +212,9 @@ async function buildFromTemplate(template: any, order: any, settings: Record<str
           body += getLogoHTML(settings)
           break
         case 'restaurant_name':
-          body += `<div style="text-align:${align};font-size:${fontSize};${bold}">${settings.restaurant_name || 'Restaurant'}</div>`
-          if (settings.restaurant_address) body += `<div style="text-align:center;font-size:10px;color:#666;">${settings.restaurant_address}</div>`
-          if (settings.restaurant_phone) body += `<div style="text-align:center;font-size:10px;color:#666;">${settings.restaurant_phone}</div>`
+          body += `<div style="text-align:${align};font-size:${fontSize};${bold}">${esc(settings.restaurant_name || 'Restaurant')}</div>`
+          if (settings.restaurant_address) body += `<div style="text-align:center;font-size:10px;color:#666;">${esc(settings.restaurant_address)}</div>`
+          if (settings.restaurant_phone) body += `<div style="text-align:center;font-size:10px;color:#666;">${esc(settings.restaurant_phone)}</div>`
           break
         case 'order_details': {
           const time = new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -65,34 +222,39 @@ async function buildFromTemplate(template: any, order: any, settings: Record<str
           if (cfg.language === 'bilingual') {
             body += `<div style="font-size:10px;color:#888;text-align:center;margin:2px 0;">\u0637\u0644\u0628 #${order.daily_number} | ${time}</div>`
           }
-          if (order.table_number) body += `<div style="font-size:11px;">Table: ${order.table_number}</div>`
+          if (order.table_number) body += `<div style="font-size:11px;">Table: ${esc(order.table_number)}</div>`
           if (order.order_type) body += `<div style="font-size:11px;">${order.order_type === 'delivery' ? 'Delivery' : order.order_type === 'takeout' ? 'Take Out' : 'At Table'}</div>`
+          // Customer name + phone (the default receipt shows these; the custom template's
+          // order_details block was omitting them, so delivery receipts had no phone for the
+          // driver). Rendered only when present, so dine-in/takeout receipts are unaffected.
+          if (order.customer_name) body += `<div style="font-size:11px;">${isRTL ? 'الزبون' : 'Customer'}: ${esc(order.customer_name)}</div>`
+          if (order.customer_phone) body += `<div style="font-size:11px;font-weight:bold;">${isRTL ? 'هاتف' : 'Phone'}: ${esc(order.customer_phone)}</div>`
           break
         }
         case 'items_table':
           body += '<div style="margin:8px 0;">'
           for (const item of items) {
-            body += `<div style="display:flex;justify-content:space-between;font-size:${fontSize};${bold}padding:2px 0;"><span>${item.quantity}x ${item.menu_item_name}</span><span>${Number(item.total_price).toLocaleString()} ${settings.currency_symbol || 'DA'}</span></div>`
+            body += `<div style="display:flex;justify-content:space-between;font-size:${fontSize};${bold}padding:2px 0;"><span>${item.quantity}x ${esc(item.menu_item_name)}</span><span>${Number(item.total_price).toLocaleString()} ${settings.currency_symbol || settings.currency || 'DA'}</span></div>`
             if (cfg.language === 'bilingual' && item.menu_item_name_ar) {
-              body += `<div style="font-size:9px;color:#888;direction:rtl;padding:0 0 2px 0;">${item.quantity}x ${item.menu_item_name_ar}</div>`
+              body += `<div style="font-size:9px;color:#888;direction:rtl;padding:0 0 2px 0;">${item.quantity}x ${esc(item.menu_item_name_ar)}</div>`
             }
-            if (item.notes) body += `<div style="font-size:9px;color:#888;padding-left:16px;">* ${item.notes}</div>`
+            if (item.notes) body += `<div style="font-size:9px;color:#888;padding-left:16px;">* ${esc(item.notes)}</div>`
           }
           body += '</div>'
           break
         case 'total':
-          body += `<div style="display:flex;justify-content:space-between;font-size:${fontSize};${bold}margin:8px 0;border-top:1px dashed #000;padding-top:6px;"><span>Total</span><span>${Number(order.total).toLocaleString()} ${settings.currency_symbol || 'DA'}</span></div>`
+          body += `<div style="display:flex;justify-content:space-between;font-size:${fontSize};${bold}margin:8px 0;border-top:1px dashed #000;padding-top:6px;"><span>Total</span><span>${Number(order.total).toLocaleString()} ${settings.currency_symbol || settings.currency || 'DA'}</span></div>`
           if (order.discount_amount > 0) {
-            body += `<div style="font-size:10px;color:#666;">Discount: -${Number(order.discount_amount).toLocaleString()} ${settings.currency_symbol || 'DA'}</div>`
+            body += `<div style="font-size:10px;color:#666;">Discount: -${Number(order.discount_amount).toLocaleString()} ${settings.currency_symbol || settings.currency || 'DA'}</div>`
           }
           break
         case 'divider':
           body += '<hr style="border:none;border-top:1px dashed #000;margin:8px 0;">'
           break
         case 'custom_text':
-          body += `<div style="text-align:${align};font-size:${fontSize};${bold}margin:6px 0;">${cfg.text || ''}</div>`
-          if (cfg.textAr) body += `<div style="text-align:${align};font-size:${fontSize};${bold}margin:4px 0;direction:rtl;">${cfg.textAr}</div>`
-          if (cfg.textFr) body += `<div style="text-align:${align};font-size:${fontSize};${bold}margin:4px 0;">${cfg.textFr}</div>`
+          body += `<div style="text-align:${align};font-size:${fontSize};${bold}margin:6px 0;">${esc(cfg.text || '')}</div>`
+          if (cfg.textAr) body += `<div style="text-align:${align};font-size:${fontSize};${bold}margin:4px 0;direction:rtl;">${esc(cfg.textAr)}</div>`
+          if (cfg.textFr) body += `<div style="text-align:${align};font-size:${fontSize};${bold}margin:4px 0;">${esc(cfg.textFr)}</div>`
           break
         case 'social_media': {
           try {
@@ -106,7 +268,7 @@ async function buildFromTemplate(template: any, order: any, settings: Record<str
               body += '<div style="text-align:center;font-size:10px;margin:6px 0;">'
               for (const s of social) {
                 const emoji = platformEmoji[s.platform] || '🔗'
-                body += `<div>${emoji} ${s.handle}</div>`
+                body += `<div>${emoji} ${esc(s.handle)}</div>`
               }
               body += '</div>'
             }
@@ -114,7 +276,14 @@ async function buildFromTemplate(template: any, order: any, settings: Record<str
           break
         }
         case 'qr_code': {
-          const qrUrl = cfg.qrUrl || ''
+          // The 'Modern' and 'Full Featured' presets ship `qrContent: 'phone'` with no qrUrl, and
+          // nothing ever read qrContent — so those presets printed no QR at all. Honour it now by
+          // encoding the restaurant phone as a dialable tel: link.
+          const qrUrl =
+            cfg.qrUrl ||
+            (cfg.qrContent === 'phone' && settings.restaurant_phone
+              ? `tel:${settings.restaurant_phone}`
+              : '')
           const qrAlign = cfg.alignment || 'center'
           const qrPx = cfg.fontSize === 'large' ? 120 : cfg.fontSize === 'small' ? 60 : 80
           if (qrUrl) {
@@ -150,7 +319,12 @@ async function buildFromTemplate(template: any, order: any, settings: Record<str
   }
 }
 
-async function getReceiptHTML(order: any, settings: Record<string, string>, type: 'receipt' | 'kitchen'): Promise<string> {
+async function getReceiptHTML(
+  order: any,
+  settings: Record<string, string>,
+  type: 'receipt' | 'kitchen',
+  destinationPrinter?: string
+): Promise<string> {
   // Check for active custom template (only for receipts, not kitchen tickets)
   if (type === 'receipt') {
     try {
@@ -165,7 +339,16 @@ async function getReceiptHTML(order: any, settings: Record<string, string>, type
     }
   }
 
-  const paperWidth = parseInt(settings.printer_width || '80')
+  // Resolve the paper width of the printer this document is actually going to. `printer_width`
+  // is a single legacy setting that saveFullConfig copies from the RECEIPT printer, so a kitchen
+  // printer with different paper (58mm vs 80mm) was being laid out at the receipt's width —
+  // tickets printed cropped or half-empty. Per-printer settings win; the legacy key is fallback.
+  const perPrinter = destinationPrinter
+    ? printerAssignmentsRepo.getSettingsForPrinter(destinationPrinter, type)
+    : type === 'kitchen'
+      ? printerAssignmentsRepo.getKitchenSettings()
+      : printerAssignmentsRepo.getReceiptSettings()
+  const paperWidth = parseInt(perPrinter?.paper_width || settings.printer_width || '80', 10)
   const maxWidth = paperWidth === 58 ? '48mm' : '72mm'
   const lang = settings.language || 'en'
   const isRTL = lang === 'ar'
@@ -180,8 +363,11 @@ async function getReceiptHTML(order: any, settings: Record<string, string>, type
   }
 
   if (type === 'kitchen') {
-    const kitchenFontSize = settings.kitchen_font_size || 'large'
+    const kitchenSettings = perPrinter as { kitchen_font_size?: string } | null
+    const kitchenFontSize = kitchenSettings?.kitchen_font_size || settings.kitchen_font_size || 'large'
     const sizes = fontSizes[kitchenFontSize as keyof typeof fontSizes] || fontSizes.large
+    const eventType = String(order.printEventType || 'new')
+    const eventLabel = eventType === 'new' ? '' : eventType.toUpperCase()
 
     return `<!DOCTYPE html><html dir="${isRTL ? 'rtl' : 'ltr'}">
 <head><meta charset="utf-8">
@@ -199,30 +385,43 @@ async function getReceiptHTML(order: any, settings: Record<string, string>, type
   .worker-badge { background: #000; color: #fff; padding: 4px 8px; display: inline-block; margin: 4px 0; font-weight: bold; }
 </style></head>
 <body>
+  ${eventLabel ? `<div class="center bold big" style="border:3px solid #000;padding:4px;margin-bottom:4px">${esc(eventLabel)}</div>` : ''}
   <div class="center bold big">KITCHEN</div>
   <div class="center bold big">#${order.daily_number}</div>
   <div class="center">${getOrderTypeKitchen(order.order_type)}</div>
-  ${order.workerName ? `<div class="center"><div class="worker-badge">FOR: ${order.workerName.toUpperCase()}</div></div>` : ''}
+  ${order.workerName ? `<div class="center"><div class="worker-badge">FOR: ${esc(order.workerName.toUpperCase())}</div></div>` : ''}
   <div class="line"></div>
   ${items.map((item: any) => `
     <div class="item">
       <span class="qty">${item.quantity}x</span>
-      <span class="item-name">${item.menu_item_name || 'Item'}</span>
-      ${item.notes ? `<div class="item-notes">${item.notes}</div>` : ''}
+      <span class="item-name">${esc(item.menu_item_name || 'Item')}</span>
+      ${item.notes ? `<div class="item-notes">${esc(item.notes)}</div>` : ''}
     </div>
   `).join('')}
   <div class="line"></div>
-  ${order.notes ? `<div><b>Notes:</b> ${order.notes}</div><div class="line"></div>` : ''}
+  ${order.notes ? `<div><b>Notes:</b> ${esc(order.notes)}</div><div class="line"></div>` : ''}
   <div class="center" style="font-size:10px">${new Date(order.created_at).toLocaleTimeString()}</div>
   <br>
 </body></html>`
   }
 
   // Customer receipt
-  const receiptFontSize = settings.receipt_font_size || 'medium'
+  const receiptSettings = perPrinter as { receipt_font_size?: string } | null
+  const receiptFontSize = receiptSettings?.receipt_font_size || settings.receipt_font_size || 'medium'
   const sizes = fontSizes[receiptFontSize as keyof typeof fontSizes] || fontSizes.medium
-  const currencySymbol = settings.currency_symbol || '$'
+  const currencySymbol = settings.currency_symbol || settings.currency || 'DA'
   const subtotal = items.reduce((sum: number, i: any) => sum + i.total_price, 0)
+  // The receipt used to print `subtotal` under the TOTAL label, so any promo/discounted order
+  // handed the customer a receipt showing MORE than they actually paid. orders.total is already
+  // subtotal - discount_amount (see orders.repo create/updateItems); trust it, and clamp the
+  // discount to the subtotal so a stale discount can never print a negative line.
+  const discount = Math.min(Math.max(0, Number(order.discount_amount) || 0), subtotal)
+  // Guard against null/undefined explicitly: Number(null) === 0 and Number.isFinite(0) is true,
+  // so a missing total would otherwise print "TOTAL 0.00" on the customer's receipt.
+  const total =
+    order.total != null && Number.isFinite(Number(order.total))
+      ? Number(order.total)
+      : subtotal - discount
 
   return `<!DOCTYPE html><html dir="${isRTL ? 'rtl' : 'ltr'}">
 <head><meta charset="utf-8">
@@ -239,34 +438,76 @@ async function getReceiptHTML(order: any, settings: Record<string, string>, type
 </style></head>
 <body>
   ${getLogoHTML(settings)}
-  ${settings.restaurant_phone ? `<div class="center">${settings.restaurant_phone}</div>` : ''}
-  ${settings.restaurant_address ? `<div class="center" style="font-size:10px">${settings.restaurant_address}</div>` : ''}
+  ${settings.restaurant_phone ? `<div class="center">${esc(settings.restaurant_phone)}</div>` : ''}
+  ${settings.restaurant_address ? `<div class="center" style="font-size:10px">${esc(settings.restaurant_address)}</div>` : ''}
   <div class="line"></div>
   <div class="row"><span>${isRTL ? 'طلب' : 'Order'} #${order.daily_number}</span><span>${getOrderTypeLabel(order.order_type, isRTL)}</span></div>
   <div>${new Date(order.created_at).toLocaleString()}</div>
-  ${order.customer_phone ? `<div>${isRTL ? 'هاتف' : 'Phone'}: ${order.customer_phone}</div>` : ''}
+  ${order.customer_phone ? `<div>${isRTL ? 'هاتف' : 'Phone'}: ${esc(order.customer_phone)}</div>` : ''}
   <div class="line"></div>
   ${items.map((item: any) => `
     <div class="item">
       <div class="row">
-        <span>${item.quantity}x ${item.menu_item_name || 'Item'}</span>
+        <span>${item.quantity}x ${esc(item.menu_item_name || 'Item')}</span>
         <span>${(item.total_price).toFixed(2)}</span>
       </div>
     </div>
   `).join('')}
   <div class="line"></div>
-  <div class="row total-row">
-    <span>${isRTL ? 'المجموع' : 'TOTAL'}</span>
+  ${discount > 0 ? `
+  <div class="row">
+    <span>${isRTL ? 'المجموع الفرعي' : 'Subtotal'}</span>
     <span>${subtotal.toFixed(2)} ${currencySymbol}</span>
   </div>
+  <div class="row">
+    <span>${esc(order.discount_details || (isRTL ? 'تخفيض' : 'Discount'))}</span>
+    <span>-${discount.toFixed(2)} ${currencySymbol}</span>
+  </div>` : ''}
+  <div class="row total-row">
+    <span>${isRTL ? 'المجموع' : 'TOTAL'}</span>
+    <span>${total.toFixed(2)} ${currencySymbol}</span>
+  </div>
   <div class="line"></div>
-  ${order.notes ? `<div>${order.notes}</div><div class="line"></div>` : ''}
+  ${order.notes ? `<div>${esc(order.notes)}</div><div class="line"></div>` : ''}
   <div class="center" style="margin-top:4px; font-size:10px">${isRTL ? 'شكرا لزيارتكم' : 'Thank you for your visit!'}</div>
   <br><br>
 </body></html>`
 }
 
 export function registerPrinterHandlers(): void {
+  startPrintJobProcessor()
+
+  ipcMain.handle('printer:getPrintJobs', () => getOpenPrintJobs())
+
+  ipcMain.handle('printer:retryPrintJob', async (_, id: number) => {
+    if (!Number.isInteger(id) || id <= 0) return { success: false, error: 'Invalid print job' }
+    const result = getDb()
+      .prepare(
+        "UPDATE print_jobs SET status = 'pending', attempts = 0, next_attempt_at = NULL, " +
+        "last_error = NULL, updated_at = datetime('now') " +
+        "WHERE id = ? AND status = 'attention'"
+      )
+      .run(id)
+    if (result.changes !== 1) return { success: false, error: 'Print job is not awaiting attention' }
+    broadcastPrintJobs()
+    void processPendingPrintJobs()
+    return { success: true }
+  })
+
+  ipcMain.handle('printer:cancelPrintJob', (_, id: number) => {
+    if (!Number.isInteger(id) || id <= 0) return { success: false, error: 'Invalid print job' }
+    const result = getDb()
+      .prepare(
+        "UPDATE print_jobs SET status = 'cancelled', updated_at = datetime('now') " +
+        "WHERE id = ? AND status IN ('pending', 'attention')"
+      )
+      .run(id)
+    broadcastPrintJobs()
+    return result.changes === 1
+      ? { success: true }
+      : { success: false, error: 'Print job can no longer be cancelled' }
+  })
+
   ipcMain.handle('printer:getPrinters', async () => {
     const wins = BrowserWindow.getAllWindows()
     if (wins.length === 0) return []
@@ -355,12 +596,16 @@ export function registerPrinterHandlers(): void {
       split_kitchen_tickets: config.assignments.some(p => p.tasks.some(t => t.startsWith('worker_'))) ? 'true' : 'false'
     })
 
-    // Update worker printer assignments in workers table
+    // Update worker printer assignments in workers table. Clear first: this used to only ever
+    // SET printer_name, so un-assigning a worker in the UI left the old value behind — and
+    // getPrinterForWorker() prefers workers.printer_name, so tickets kept going to the removed
+    // printer forever.
+    workersRepo.clearAllPrinterNames()
     for (const printer of config.assignments) {
       for (const task of printer.tasks) {
         if (task.startsWith('worker_')) {
-          const workerId = parseInt(task.replace('worker_', ''))
-          workersRepo.update(workerId, { printer_name: printer.printerName } as any)
+          const workerId = parseInt(task.replace('worker_', ''), 10)
+          if (Number.isInteger(workerId)) workersRepo.setPrinterName(workerId, printer.printerName)
         }
       }
     }
@@ -382,7 +627,7 @@ export function registerPrinterHandlers(): void {
 <body>
   <div style="font-size:16px; font-weight:bold;">TEST PRINT</div>
   <div class="line"></div>
-  <div>${settings.restaurant_name || 'Fast Food Manager'}</div>
+  <div>${esc(settings.restaurant_name || 'Fast Food Manager')}</div>
   <div class="line"></div>
   <div>Printer: ${printerName}</div>
   <div>Width: ${paperWidth}mm</div>
@@ -412,7 +657,7 @@ export function registerPrinterHandlers(): void {
 <body>
   <div style="font-size:16px; font-weight:bold;">TEST PRINT</div>
   <div class="line"></div>
-  <div>${settings.restaurant_name || 'Fast Food Manager'}</div>
+  <div>${esc(settings.restaurant_name || 'Fast Food Manager')}</div>
   <div class="line"></div>
   <div>Printer: ${printerName}</div>
   <div>Width: ${paperWidth}mm</div>
@@ -426,7 +671,11 @@ export function registerPrinterHandlers(): void {
   })
 }
 
-export async function printOrder(orderId: number, type: 'receipt' | 'kitchen'): Promise<{ success: boolean; error?: string }> {
+export async function printOrder(
+  orderId: number,
+  type: 'receipt' | 'kitchen',
+  eventType: 'new' | 'updated' | 'cancelled' | 'restored' = 'new'
+): Promise<{ success: boolean; error?: string }> {
   const settings = settingsRepo.getAll()
   const order = ordersRepo.getById(orderId)
   if (!order) return { success: false, error: 'Order not found' }
@@ -435,7 +684,7 @@ export async function printOrder(orderId: number, type: 'receipt' | 'kitchen'): 
   if (type === 'receipt') {
     const printerName = printerAssignmentsRepo.getReceiptPrinter() || settings.printer_name
     if (!printerName) return { success: false, error: 'No printer configured' }
-    const html = await getReceiptHTML(order, settings, type)
+    const html = await getReceiptHTML({ ...order, printEventType: eventType }, settings, type, printerName)
     return doPrint(html, printerName)
   }
 
@@ -446,7 +695,7 @@ export async function printOrder(orderId: number, type: 'receipt' | 'kitchen'): 
     // Print single kitchen ticket to kitchen printer
     const printerName = printerAssignmentsRepo.getKitchenAllPrinter() || settings.kitchen_printer_name || settings.printer_name
     if (!printerName) return { success: false, error: 'No printer configured' }
-    const html = await getReceiptHTML(order, settings, type)
+    const html = await getReceiptHTML({ ...order, printEventType: eventType }, settings, type, printerName)
     return doPrint(html, printerName)
   }
 
@@ -470,16 +719,19 @@ export async function printOrder(orderId: number, type: 'receipt' | 'kitchen'): 
       workerName = worker?.name || null
     }
 
-    const workerOrder = { ...order, items, workerName, workerId }
+    const workerOrder = { ...order, items, workerName, workerId, printEventType: eventType }
     const printerName = workerId
       ? printerAssignmentsRepo.getPrinterForWorker(workerId)
       : printerAssignmentsRepo.getKitchenAllPrinter()
 
     // Fallback to default if no printer found
     const finalPrinter = printerName || settings.kitchen_printer_name || settings.printer_name
-    if (!finalPrinter) continue
+    if (!finalPrinter) {
+      allSuccess = false
+      continue
+    }
 
-    const html = await getReceiptHTML(workerOrder, settings, type)
+    const html = await getReceiptHTML(workerOrder, settings, type, finalPrinter)
     const result = await doPrint(html, finalPrinter)
     if (!result.success) allSuccess = false
   }
@@ -487,7 +739,11 @@ export async function printOrder(orderId: number, type: 'receipt' | 'kitchen'): 
   return { success: allSuccess }
 }
 
-export async function printOrderForWorker(orderId: number, workerId: number): Promise<{ success: boolean; error?: string }> {
+export async function printOrderForWorker(
+  orderId: number,
+  workerId: number,
+  eventType: 'new' | 'updated' | 'cancelled' | 'restored' = 'new'
+): Promise<{ success: boolean; error?: string }> {
   const settings = settingsRepo.getAll()
   const order = ordersRepo.getById(orderId)
   if (!order) return { success: false, error: 'Order not found' }
@@ -503,13 +759,47 @@ export async function printOrderForWorker(orderId: number, workerId: number): Pr
   const workerName = worker?.name || null
 
   // Create order with only this worker's items
-  const workerOrder = { ...order, items: workerItems, workerName, workerId }
+  const workerOrder = { ...order, items: workerItems, workerName, workerId, printEventType: eventType }
 
   // Get printer for this worker
   const printerName = printerAssignmentsRepo.getPrinterForWorker(workerId) || settings.kitchen_printer_name || settings.printer_name
   if (!printerName) return { success: false, error: 'No printer configured' }
 
-  const html = await getReceiptHTML(workerOrder, settings, 'kitchen')
+  const html = await getReceiptHTML(workerOrder, settings, 'kitchen', printerName)
+  return doPrint(html, printerName)
+}
+
+async function printKitchenScope(
+  orderId: number,
+  unassignedOnly: boolean,
+  eventType: 'new' | 'updated' | 'cancelled' | 'restored' = 'new'
+): Promise<{ success: boolean; error?: string }> {
+  const settings = settingsRepo.getAll()
+  const order = ordersRepo.getById(orderId)
+  if (!order) return { success: false, error: 'Order not found' }
+
+  const items = unassignedOnly
+    ? (order.items || []).filter((item) => item.worker_id == null)
+    : (order.items || [])
+  if (items.length === 0) return { success: false, error: 'No items for this kitchen ticket' }
+
+  const printerName =
+    printerAssignmentsRepo.getKitchenAllPrinter() ||
+    settings.kitchen_printer_name ||
+    settings.printer_name
+  if (!printerName) return { success: false, error: 'No printer configured' }
+
+  const html = await getReceiptHTML(
+    {
+      ...order,
+      items,
+      workerName: unassignedOnly ? 'Unassigned' : null,
+      printEventType: eventType
+    },
+    settings,
+    'kitchen',
+    printerName
+  )
   return doPrint(html, printerName)
 }
 

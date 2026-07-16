@@ -3,10 +3,13 @@ import { InputHTMLAttributes, forwardRef } from 'react'
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string
   error?: string
+  /** Hint shown under the field. Callers already passed this; it used to be spread onto the
+   *  DOM <input> as an unknown attribute, so the hint never rendered. */
+  helperText?: string
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, className = '', ...props }, ref) => {
+  ({ label, error, helperText, className = '', ...props }, ref) => {
     return (
       <div className="w-full">
         {label && (
@@ -22,6 +25,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           {...props}
         />
         {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+        {!error && helperText && <p className="mt-1 text-xs text-gray-400">{helperText}</p>}
       </div>
     )
   }

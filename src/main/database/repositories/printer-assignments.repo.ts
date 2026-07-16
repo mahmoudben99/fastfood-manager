@@ -58,6 +58,32 @@ export const printerAssignmentsRepo = {
     return assignment || null
   },
 
+  getSettingsForPrinter(
+    printerName: string,
+    type: 'receipt' | 'kitchen'
+  ): { paper_width: string; receipt_font_size: string; kitchen_font_size: string } | null {
+    const preferredTypes = type === 'receipt'
+      ? "('receipt', 'default')"
+      : "('worker', 'kitchen_all', 'default')"
+    const assignment = getDb()
+      .prepare(
+        `SELECT paper_width, receipt_font_size, kitchen_font_size
+         FROM printer_assignments
+         WHERE printer_name = ? AND assignment_type IN ${preferredTypes} AND is_active = 1
+         ORDER BY CASE assignment_type
+           WHEN 'receipt' THEN 0
+           WHEN 'worker' THEN 0
+           WHEN 'kitchen_all' THEN 1
+           ELSE 2
+         END
+         LIMIT 1`
+      )
+      .get(printerName) as
+      | { paper_width: string; receipt_font_size: string; kitchen_font_size: string }
+      | undefined
+    return assignment || null
+  },
+
   // Get printer for kitchen (all workers) - fallback to default
   getKitchenAllPrinter(): string | null {
     const assignment = getDb()

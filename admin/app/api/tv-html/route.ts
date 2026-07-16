@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { getDisplayHTML } from '@/lib/display-ui'
+import { formatAlgiersDate } from '@/lib/dates'
 
 export const dynamic = 'force-dynamic'
 
 function todayStr(): string {
-  return new Date().toISOString().split('T')[0]
+  return formatAlgiersDate()
 }
 
 /**
@@ -51,8 +52,7 @@ function buildInfo(raw: Record<string, any>, p: string, menuItems: any[], prepar
     panelPromos: raw[p + 'panel_promos'] !== 'false',
     panelSlideshow: raw[p + 'panel_slideshow'] !== 'false',
     panelOrders: raw[p + 'panel_orders'] !== 'false',
-    panelMenu: panelMenuEnabled,
-    queue: { preparing }
+    panelMenu: panelMenuEnabled
   }
 }
 
@@ -75,20 +75,38 @@ export async function GET(req: Request) {
     supabase.from('owner_orders').select('order_number').eq('machine_id', machineId).eq('status', 'preparing').gte('order_date', todayStr())
   ])
 
+  // Settings and menu form the durable visual state. Returning an empty 200 on a transient
+  // Supabase error made the 30-second poll erase a working TV's name, logo, menu and slideshow.
+  if (dsResult.error || menuResult.error) {
+    const message = 'Display data is temporarily unavailable; keeping the last known screen.'
+    if (url.searchParams.get('json') === '1') {
+      return NextResponse.json({ error: message }, { status: 503 })
+    }
+    return new NextResponse(`<h1>${message}</h1>`, {
+      status: 503,
+      headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }
+    })
+  }
+
   const raw = (dsResult.data?.settings || {}) as Record<string, any>
   const menuItems = menuResult.data?.items || []
-  const preparing = (ordersResult.data || []).map((o: any) => o.order_number)
+  const preparing = ordersResult.error
+    ? null
+    : (ordersResult.data || []).map((o: any) => o.order_number)
 
-  const infoObj = buildInfo(raw, p, menuItems, preparing)
+  const infoObj = buildInfo(raw, p, menuItems, preparing || [])
 
   // JSON mode for polling updates — return the SAME full info object so the poll never
   // wipes logo/menu/panels back to defaults.
   if (url.searchParams.get('json') === '1') {
-    return NextResponse.json({ info: infoObj, queue: { type: 'queue', preparing } })
+    return NextResponse.json({
+      info: infoObj,
+      ...(preparing ? { queue: { type: 'queue', preparing } } : {})
+    })
   }
 
   const info = JSON.stringify(infoObj)
-  const queue = JSON.stringify({ type: 'queue', preparing })
+  const queue = preparing ? JSON.stringify({ type: 'queue', preparing }) : 'null'
   const lang = raw.language || 'en'
 
   // Get the EXACT same HTML as the local display
@@ -101,11 +119,11 @@ export async function GET(req: Request) {
     var __cloudInfo = ${info};
     var __cloudQueue = ${queue};
     handleSSE(__cloudInfo);
-    handleSSE(__cloudQueue);
+    if (__cloudQueue) handleSSE(__cloudQueue);
     // Poll for updates every 30s
     setInterval(function() {
       fetch('/api/tv-html?machineId=' + encodeURIComponent(${JSON.stringify(machineId)}) + '&profile=' + encodeURIComponent(${JSON.stringify(profile)}) + '&json=1')
-        .then(function(r) { return r.json(); })
+        .then(function(r) { if (!r.ok) throw new Error('Display refresh unavailable'); return r.json(); })
         .then(function(d) { if (d && d.info) { handleSSE(d.info); if (d.queue) handleSSE(d.queue); } })
         .catch(function() {});
     }, 30000);`

@@ -18,6 +18,8 @@ interface BlockConfig {
   textFr?: string
   decorationType?: string
   qrContent?: string
+  /** URL encoded into the QR block. Read by printer.ipc.ts `case 'qr_code'`. */
+  qrUrl?: string
   customValue?: string
   language?: string
 }
@@ -405,8 +407,9 @@ export function ReceiptEditor() {
                 <div key={block.id} className="py-1" style={{ fontSize: '11px' }}>
                   <div>Order #1 | 10:30 AM</div>
                   {block.config.language === 'bilingual' && <div dir="rtl" style={{ color: '#888' }}>{'طلب #1 | 10:30 ص'}</div>}
-                  <div>Table: 3</div>
-                  <div>At Table</div>
+                  <div>Delivery</div>
+                  <div>Customer: Ahmed</div>
+                  <div style={{ fontWeight: 'bold' }}>Phone: 0551 234 567</div>
                 </div>
               )
 

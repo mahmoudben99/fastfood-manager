@@ -823,7 +823,7 @@ export function getDisplayHTML(lang: string): string {
               var pr = allPromos[i];
               html += '<div class="promo-card" style="transition-delay:' + (i * 120) + 'ms">';
               if (pr.badge) html += '<div class="promo-badge">' + esc(pr.badge) + '</div>';
-              if (pr.emoji) html += '<div class="promo-emoji">' + pr.emoji + '</div>';
+              if (pr.emoji) html += '<div class="promo-emoji">' + esc(pr.emoji) + '</div>';
               html += '<div class="promo-name">' + esc(pr.name) + '</div>';
               html += '<div class="promo-value">' + esc(pr.value) + '</div>';
               if (pr.items && pr.items.length > 0) {
@@ -970,7 +970,7 @@ export function getDisplayHTML(lang: string): string {
                   for (var j = 0; j < items.length; j++) {
                     html += '<div class="menu-item-row">';
                     html += '<span class="menu-item-name">';
-                    if (items[j].emoji) html += '<span class="menu-item-emoji">' + items[j].emoji + '</span>';
+                    if (items[j].emoji) html += '<span class="menu-item-emoji">' + esc(items[j].emoji) + '</span>';
                     html += esc(items[j].name) + '</span>';
                     html += '<span class="menu-item-dots"></span>';
                     html += '<span class="menu-item-price">' + fmtPrice(items[j].price) + '</span>';
@@ -1112,7 +1112,9 @@ export function getDisplayHTML(lang: string): string {
     }
 
     function connect() {
-      var es = new EventSource('/api/display-events');
+      /* Forward this page's ?profile query onto the SSE URL so a named-profile TV receives
+         that profile's settings (the LAN /display?profile=X target set by the TV app). */
+      var es = new EventSource('/api/display-events' + (location.search || ''));
       es.onmessage = function(e) {
         try { handleSSE(JSON.parse(e.data)); }
         catch(err) { console.error('SSE parse:', err); }

@@ -415,6 +415,7 @@ function applyTranslations() {
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let menu = { categories: [], items: [] };
+let currencySymbol = 'DA';
 let cart = []; // { menu_item_id, name, price, quantity }
 let currentCategoryId = null;
 let orderType = 'local';
@@ -473,6 +474,7 @@ async function bootApp() {
   try {
     const r = await fetch('/api/menu');
     menu = await r.json();
+    currencySymbol = menu.currency || 'DA';
   } catch { menu = { categories: [], items: [] }; }
   showCategories();
 }
@@ -505,6 +507,15 @@ function getName(item) {
   return item.name;
 }
 
+function esc(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ── Render categories ─────────────────────────────────────────────────────────
 function renderCats() {
   const view = document.getElementById('categoryView');
@@ -514,8 +525,8 @@ function renderCats() {
     card.className = 'cat-card';
     card.onclick = () => showItems(c.id);
     card.innerHTML = \`
-      <div class="cat-icon">\${c.icon || '🍽'}</div>
-      <div class="cat-name">\${getName(c)}</div>
+      <div class="cat-icon">\${esc(c.icon || '🍽')}</div>
+      <div class="cat-name">\${esc(getName(c))}</div>
     \`;
     view.appendChild(card);
   });
@@ -534,10 +545,10 @@ function renderItems(catId) {
     row.id = 'item-' + item.id;
     const emojiChar = item.emoji || '';
     row.innerHTML = \`
-      <div class="item-emoji-sm">\${emojiChar || '·'}</div>
+      <div class="item-emoji-sm">\${esc(emojiChar || '·')}</div>
       <div class="item-info">
-        <div class="item-name-text">\${getName(item)}</div>
-        <div class="item-price-text">\${item.price.toFixed(2)} DA</div>
+        <div class="item-name-text">\${esc(getName(item))}</div>
+        <div class="item-price-text">\${esc(item.price.toFixed(2))} \${esc(currencySymbol)}</div>
       </div>
       <div class="item-actions">
         <span class="item-qty-label" id="qty-\${item.id}">\${qty > 0 ? qty + '×' : ''}</span>
@@ -624,7 +635,7 @@ function renderCartContents() {
     const row = document.createElement('div');
     row.className = 'cart-item-row';
     row.innerHTML = \`
-      <span class="cart-item-name">\${c.name}</span>
+      <span class="cart-item-name">\${esc(c.name)}</span>
       <div class="qty-ctrl">
         <button class="qty-btn minus" onclick="updateCartQty(\${c.menu_item_id},-1)">−</button>
         <span class="qty-num">\${c.quantity}</span>
@@ -637,7 +648,7 @@ function renderCartContents() {
   const grandTotal = cart.reduce((s, c) => s + c.price * c.quantity, 0);
   const totalRow = document.createElement('div');
   totalRow.className = 'cart-total-row';
-  totalRow.textContent = t.total + ': ' + grandTotal.toFixed(2) + ' DA';
+  totalRow.textContent = t.total + ': ' + grandTotal.toFixed(2) + ' ' + currencySymbol;
   container.appendChild(totalRow);
   checkout.style.display = '';
   updateSubmitBtn();

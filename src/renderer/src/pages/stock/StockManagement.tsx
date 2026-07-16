@@ -333,6 +333,7 @@ export function StockManagement() {
               onClick={isTouch ? () => setKeyboardTarget({ field: 'adjQuantity', type: 'numeric' }) : undefined}
               onChange={isTouch ? undefined : (e) => setAdjQuantity(e.target.value)}
               step="0.01"
+              min="0"
             />
             {adjustModal.type === 'purchase' && (
               <>
@@ -345,6 +346,7 @@ export function StockManagement() {
                   onClick={isTouch ? () => setKeyboardTarget({ field: 'adjPrice', type: 'numeric' }) : undefined}
                   onChange={isTouch ? undefined : (e) => setAdjPrice(e.target.value)}
                   step="0.01"
+                  min="0"
                 />
                 {adjQuantity && adjPrice && (
                   <p className="text-sm font-medium">

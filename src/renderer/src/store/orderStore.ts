@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 
 export interface CartItem {
+  /** Present for a line loaded from an existing order; absent for a newly added line. */
+  order_item_id?: number
   menu_item_id: number
   name: string
   name_ar: string | null
@@ -33,6 +35,7 @@ interface OrderState {
   discountAmount: number
   discountDetails: string
   editingOrderId: number | null
+  editingOrderDailyNumber: number | null
 
   addItem: (item: Omit<CartItem, 'quantity' | 'notes' | 'worker_id'>) => Promise<void>
   removeItem: (index: number) => void
@@ -63,30 +66,34 @@ function computeDiscount(
   if (activePromos.length === 0 || items.length === 0) return { amount: 0, details: '' }
 
   let totalDiscount = 0
-  const details: string[] = []
+  const amountsByPromo = new Map<number, number>()
 
-  for (const promo of activePromos) {
-    let promoDiscount = 0
-    for (const item of items) {
+  for (const item of items) {
+    const itemTotal = item.price * item.quantity
+    let remaining = itemTotal
+    for (const promo of activePromos) {
       const applies =
         promo.applies_to === 'all' ||
         (promo.menu_item_ids && promo.menu_item_ids.includes(item.menu_item_id))
       if (!applies) continue
 
-      const itemTotal = item.price * item.quantity
-      if (promo.type === 'percentage') {
-        promoDiscount += itemTotal * (promo.discount_value / 100)
-      } else {
-        promoDiscount += Math.min(promo.discount_value * item.quantity, itemTotal)
-      }
-    }
-    if (promoDiscount > 0) {
-      totalDiscount += promoDiscount
-      details.push(`${promo.name}: -${Math.round(promoDiscount)}`)
+      const requested = promo.type === 'percentage'
+        ? itemTotal * (promo.discount_value / 100)
+        : promo.discount_value * item.quantity
+      const applied = Math.min(Math.max(0, requested), remaining)
+      if (applied <= 0) continue
+      totalDiscount += applied
+      remaining -= applied
+      amountsByPromo.set(promo.id, (amountsByPromo.get(promo.id) || 0) + applied)
+      if (remaining <= 0) break
     }
   }
 
-  return { amount: Math.round(totalDiscount * 100) / 100, details: details.join(', ') }
+  const amount = Math.round(totalDiscount * 100) / 100
+  const details = activePromos
+    .filter((promo) => (amountsByPromo.get(promo.id) || 0) > 0)
+    .map((promo) => `${promo.name}: -${Math.round(amountsByPromo.get(promo.id) || 0)}`)
+  return { amount, details: details.join(', ') }
 }
 
 export const useOrderStore = create<OrderState>((set, get) => ({
@@ -100,10 +107,16 @@ export const useOrderStore = create<OrderState>((set, get) => ({
   discountAmount: 0,
   discountDetails: '',
   editingOrderId: null,
+  editingOrderDailyNumber: null,
 
   addItem: async (item) => {
+    // Merge into an existing line only when it's the SAME product at the SAME (menu) price
+    // with no per-item note. Merging by menu_item_id alone made a new full-price tap bump a
+    // line that had a one-off price override or a note ("no onions"), charging/annotating both
+    // units wrong. A freshly-appended line always has the menu price and empty notes, so rapid
+    // double-taps still merge correctly.
     const existingIndex = get().items.findIndex(
-      (i) => i.menu_item_id === item.menu_item_id
+      (i) => i.menu_item_id === item.menu_item_id && i.price === item.price && i.notes === ''
     )
 
     if (existingIndex >= 0) {
@@ -171,10 +184,14 @@ export const useOrderStore = create<OrderState>((set, get) => ({
 
   loadOrderForEdit: (order) => {
     const items: CartItem[] = (order.items || []).map((item: any) => ({
+      order_item_id: item.id,
       menu_item_id: item.menu_item_id,
       name: item.menu_item_name || item.name || '',
-      name_ar: item.name_ar || null,
-      name_fr: item.name_fr || null,
+      // getOrderItems aliases the localized names as menu_item_name_ar/_fr, so reading only
+      // name_ar/name_fr left them null and edited cart lines fell back to English on an RTL
+      // Arabic POS. Accept either alias.
+      name_ar: item.name_ar ?? item.menu_item_name_ar ?? null,
+      name_fr: item.name_fr ?? item.menu_item_name_fr ?? null,
       price: item.unit_price ?? item.price ?? 0,
       quantity: item.quantity,
       notes: item.notes || '',
@@ -185,11 +202,16 @@ export const useOrderStore = create<OrderState>((set, get) => ({
     set({
       items,
       editingOrderId: order.id,
+      editingOrderDailyNumber: order.daily_number ?? null,
       orderType: (order.order_type as 'local' | 'takeout' | 'delivery') || 'local',
       tableNumber: order.table_number || '',
       customerPhone: order.customer_phone || '',
       customerName: order.customer_name || '',
-      notes: order.notes || ''
+      notes: order.notes || '',
+      // Editing a historical order must not silently apply promotions that happen to be
+      // active today. Preserve the stored flat discount until an explicit reprice exists.
+      discountAmount: Number(order.discount_amount) || 0,
+      discountDetails: order.discount_details || ''
     })
   },
 
@@ -206,9 +228,19 @@ export const useOrderStore = create<OrderState>((set, get) => ({
     return get().items.reduce((sum, item) => sum + item.price * item.quantity, 0)
   },
 
-  getDiscount: () => computeDiscount(get().items, get().activePromos).amount,
+  getDiscount: () => {
+    const state = get()
+    if (state.editingOrderId) {
+      return Math.min(Math.max(0, state.discountAmount), state.getSubtotal())
+    }
+    return computeDiscount(state.items, state.activePromos).amount
+  },
 
-  getDiscountDetails: () => computeDiscount(get().items, get().activePromos).details,
+  getDiscountDetails: () => {
+    const state = get()
+    if (state.editingOrderId) return state.discountDetails
+    return computeDiscount(state.items, state.activePromos).details
+  },
 
   getTotal: () => {
     return Math.max(0, get().getSubtotal() - get().getDiscount())
@@ -224,6 +256,7 @@ export const useOrderStore = create<OrderState>((set, get) => ({
       notes: '',
       discountAmount: 0,
       discountDetails: '',
-      editingOrderId: null
+      editingOrderId: null,
+      editingOrderDailyNumber: null
     })
 }))

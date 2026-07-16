@@ -145,7 +145,10 @@ export function RemoteOrder({ machineId }: { machineId: string }) {
         body: JSON.stringify({
           machineId,
           items: cart.map(ci => ({ id: ci.item.id, name: ci.item.name, price: ci.item.price, quantity: ci.quantity, emoji: ci.item.emoji })),
-          orderType,
+          // Map this page's labels onto the POS vocabulary ('local' | 'takeout' | 'delivery').
+          // Sending 'dine-in'/'takeaway' stored an order_type the receipt, analytics and TV
+          // display code don't recognise, so those orders rendered with a blank type.
+          orderType: orderType === 'dine-in' ? 'local' : 'takeout',
           tableNumber: orderType === 'dine-in' ? tableNumber : undefined,
           customerPhone: customerPhone || undefined,
           customerName: customerName || undefined,

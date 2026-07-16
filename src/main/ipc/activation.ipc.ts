@@ -9,9 +9,11 @@ import {
   validateTelegramResetCode,
   saveIntegrityChecksum
 } from '../activation/activation'
+import { issueResetTicket, redeemResetTicket } from '../activation/reset-ticket'
 import { settingsRepo } from '../database/repositories/settings.repo'
 import { recordActivation } from '../activation/cloud'
 import { sendMessageToChat } from '../telegram/bot'
+import { syncAdminPassword } from '../sync/owner-sync'
 
 export function registerActivationHandlers(): void {
   ipcMain.handle('activation:getMachineId', () => {
@@ -33,8 +35,10 @@ export function registerActivationHandlers(): void {
     return result
   })
 
+  /** Validate an 8-char HMAC support unlock code. Mints the ticket reset:resetPassword redeems. */
   ipcMain.handle('activation:validateUnlockCode', (_, code: string) => {
-    return validateUnlockCode(code)
+    const valid = validateUnlockCode(code)
+    return valid ? { valid: true, token: issueResetTicket() } : { valid: false }
   })
 
   ipcMain.handle('activation:resetPassword', (_, unlockCode: string, newPassword: string) => {
@@ -43,6 +47,7 @@ export function registerActivationHandlers(): void {
     }
     const hash = bcrypt.hashSync(newPassword, 10)
     settingsRepo.set('admin_password_hash', hash)
+    syncAdminPassword().catch(() => {})
     return { success: true }
   })
 
@@ -60,28 +65,27 @@ export function registerActivationHandlers(): void {
     return { sent }
   })
 
-  /** Validate a 6-digit Telegram reset code (stored locally). */
+  /** Validate a 6-digit Telegram reset code (stored locally). Consumes the code and, on success,
+   *  mints the one-shot ticket that reset:resetPassword redeems. */
   ipcMain.handle('reset:validateTelegram', (_, code: string) => {
-    return { valid: validateTelegramResetCode(code) }
+    const valid = validateTelegramResetCode(code)
+    return valid ? { valid: true, token: issueResetTicket() } : { valid: false }
   })
 
   /**
-   * Reset password after validation.
-   * method='telegram': validate with local 6-digit code (already validated in renderer, just hash+save)
-   * method='support': validate with 8-char HMAC unlock code
+   * Set the new password. Authorised by the ticket minted when the reset code was validated —
+   * NOT by re-checking the code, which is single-use and already consumed by then.
    */
-  ipcMain.handle('reset:resetPassword', (_, code: string, newPassword: string, method: 'telegram' | 'support') => {
-    let valid = false
-    if (method === 'telegram') {
-      valid = validateTelegramResetCode(code)
-    } else {
-      valid = validateUnlockCode(code)
+  ipcMain.handle('reset:resetPassword', (_, token: string, newPassword: string) => {
+    if (!redeemResetTicket(token)) {
+      return { success: false, error: 'Reset session expired. Request a new code.' }
     }
-    if (!valid) {
-      return { success: false, error: 'Invalid or expired code' }
+    if (typeof newPassword !== 'string' || newPassword.length < 4) {
+      return { success: false, error: 'Password too short' }
     }
     const hash = bcrypt.hashSync(newPassword, 10)
     settingsRepo.set('admin_password_hash', hash)
+    syncAdminPassword().catch(() => {})
     return { success: true }
   })
 }

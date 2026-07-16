@@ -2,8 +2,10 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, unlinkSync, statSync 
 import { join } from 'path'
 import { app } from 'electron'
 import { getDb, getDbPath } from './connection'
+import { localDate } from './repositories/orders.repo'
 
 let backupInterval: NodeJS.Timeout | null = null
+let changeBackupTimeout: NodeJS.Timeout | null = null
 let lastBackupDate: string | null = null
 
 export function getBackupDir(): string {
@@ -16,7 +18,7 @@ export function getBackupDir(): string {
 }
 
 export function getTodayBackupPath(): string {
-  const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
+  const today = localDate()
   const backupDir = getBackupDir()
   return join(backupDir, `fastfood-manager-backup-${today}.db`)
 }
@@ -27,18 +29,20 @@ export function createBackup(): void {
     const dbPath = getDbPath()
     const backupPath = getTodayBackupPath()
 
-    // Checkpoint WAL to ensure all data is in the main database file
-    db.pragma('wal_checkpoint(FULL)')
+    // Checkpoint WAL to ensure all committed frames are in the main file. If a reader keeps the
+    // checkpoint busy, retain the previous known-good backup rather than overwriting it with a
+    // file that silently omits the newest orders.
+    const checkpoint = (db.pragma('wal_checkpoint(FULL)') as Array<{
+      busy?: number
+      log?: number
+      checkpointed?: number
+    }>)[0] || {}
+    if (Number(checkpoint.busy || 0) !== 0 || Number(checkpoint.checkpointed || 0) < Number(checkpoint.log || 0)) {
+      throw new Error(`WAL checkpoint incomplete (${checkpoint.checkpointed || 0}/${checkpoint.log || 0})`)
+    }
 
     // Copy database file to backup
     copyFileSync(dbPath, backupPath)
-
-    // Also backup WAL file if it exists (for extra safety)
-    const walPath = `${dbPath}-wal`
-    const walBackupPath = `${backupPath}-wal`
-    if (existsSync(walPath)) {
-      copyFileSync(walPath, walBackupPath)
-    }
 
     console.log(`[Backup] Created backup: ${backupPath}`)
   } catch (error) {
@@ -76,7 +80,7 @@ export function cleanOldBackups(daysToKeep = 7): void {
 }
 
 export function checkAndBackup(): void {
-  const today = new Date().toISOString().split('T')[0]
+  const today = localDate()
 
   // Always create/update today's backup (continuous live backup)
   // This overwrites the backup file every minute with latest data
@@ -119,11 +123,9 @@ export function stopBackupSystem(): void {
 export function triggerBackupAfterChange(): void {
   // Debounce: backup after 30 seconds of last change
   // This prevents excessive backups on rapid operations
-  if (backupInterval) {
-    clearTimeout(backupInterval)
-  }
-
-  setTimeout(() => {
+  if (changeBackupTimeout) clearTimeout(changeBackupTimeout)
+  changeBackupTimeout = setTimeout(() => {
+    changeBackupTimeout = null
     checkAndBackup()
   }, 30000) // 30 seconds
 }

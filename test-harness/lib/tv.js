@@ -30,6 +30,16 @@ module.exports = {
   screenshot: (path) => { fs.writeFileSync(path, adb(['exec-out', 'screencap', '-p'])); return path },
   clearLog: () => { try { adb(['logcat', '-c']) } catch (e) {} },
   dumpLog: () => { try { return adb(['logcat', '-d', '-t', '400']).toString() } catch (e) { return '' } },
+  /** Dump the current accessibility hierarchy for assertions (not just screenshots). */
+  uiXml: () => {
+    const remote = '/sdcard/ffm-tv-window.xml'
+    try {
+      adb(['shell', 'uiautomator', 'dump', remote])
+      return adb(['exec-out', 'cat', remote]).toString()
+    } finally {
+      try { adb(['shell', 'rm', '-f', remote]) } catch (e) {}
+    }
+  },
   focus: () => {
     const m = adb(['shell', 'dumpsys', 'window']).toString().match(/mCurrentFocus=.*/)
     return m ? m[0] : ''

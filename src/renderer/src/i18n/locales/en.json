@@ -92,9 +92,9 @@
       "or": "OR",
       "uploadOption": "Upload Menu Images",
       "uploadOptionDesc": "Send photos of your menu and we'll prepare the data for you",
-      "skipOption": "Continue with default menu",
-      "skipOptionDesc": "Start with a basic menu and customize it later from the admin panel",
-      "skipNote": "You can always import or edit your data later from the admin panel"
+      "skipOption": "Continue without Excel",
+      "skipOptionDesc": "Starter categories will be created. Add your products later from Menu.",
+      "skipNote": "You can edit your menu, stock, and workers later from Settings"
     }
   },
   "nav": {
@@ -138,7 +138,7 @@
     "confirmOrder": "Confirm Order?",
     "quantity": "Qty",
     "tableNumber": "Table",
-    "tableNumberPlaceholder": "Table number (optional)",
+    "tableNumberPlaceholder": "Table number (required)",
     "tableNumberRequired": "Table number is required",
     "today": "Today's Orders",
     "noOrders": "No orders yet today",
@@ -272,7 +272,12 @@
     "apply": "Apply"
   },
   "excel": {
-    "title": "Excel Import/Export",
+    "updateDisabledBadge": "Safety hold",
+    "updateDisabledDesc": "Excel replacement is temporarily disabled because the old importer could erase recipes and stock history. Edit live data from Menu, Stock, and Workers.",
+    "updateDisabledButton": "Excel update unavailable",
+    "saveRecovery": "Save menu recovery point",
+    "recoverySaved": "Menu recovery point saved.",
+    "title": "Excel Export & Recovery",
     "export": "Export",
     "import": "Import",
     "exportTemplate": "Download Empty Template",
@@ -293,7 +298,7 @@
     "restoreSuccess": "Version restored successfully!",
     "versionHistory": "Version History",
     "noVersions": "No versions yet",
-    "noVersionsHint": "Versions are created automatically when you import a new Excel file.",
+    "noVersionsHint": "Save a recovery point before making major menu or stock changes.",
     "countCategories": "{{count}} categories",
     "countItems": "{{count}} items",
     "countStock": "{{count}} stock",
