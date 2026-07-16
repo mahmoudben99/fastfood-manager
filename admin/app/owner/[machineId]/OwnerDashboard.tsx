@@ -144,9 +144,17 @@ function OrderTypeBadge({ type }: { type: string }) {
   )
 }
 
-// ── Password Login ────────────────────────────────────────────
+// ── Credential Login ───────────────────────────────────────────
+//
+// This used to be a bare 4-digit tablet PIN pad (`owner_pins`), gating only the React screen.
+// machineId is public (it's embedded in every /tv/<id> and /r/<id> link), so the PIN was the
+// only thing standing between anyone with that link and the restaurant's live revenue. It is now
+// a longer, admin-provisioned credential (`owner_credentials`) checked server-side by
+// /api/owner/verify-pin (see admin/lib/owner-auth.ts), with durable brute-force throttling and no
+// fallback to the retired PIN — so failures need their own messaging instead of one generic
+// "wrong password".
 
-function PasswordLogin({
+function CredentialLogin({
   restaurantName,
   machineId,
   onSuccess
@@ -155,28 +163,42 @@ function PasswordLogin({
   machineId: string
   onSuccess: () => void
 }) {
-  const [password, setPassword] = useState('')
+  const [credential, setCredential] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault()
-    if (!password.trim()) return
+    if (!credential.trim()) return
     setLoading(true)
     setError('')
     try {
       const res = await fetch('/api/owner/verify-pin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ machineId, pin: password })
+        body: JSON.stringify({ machineId, credential })
       })
       if (res.ok) {
         saveSession(machineId)
         onSuccess()
-      } else {
-        setError('Wrong password. Try again.')
-        setPassword('')
+        return
       }
+      if (res.status === 429) {
+        const retryAfter = Number(res.headers.get('retry-after')) || 60
+        setError(`Too many attempts. Try again in ${retryAfter}s.`)
+      } else if (res.status === 403) {
+        const body = await res.json().catch(() => ({} as { error?: string }))
+        setError(
+          body.error === 'setup_required'
+            ? 'Remote owner login is not set up yet for this location. Ask an admin to configure it.'
+            : 'This session is not valid for this location.'
+        )
+      } else if (res.status === 400) {
+        setError('Credential must be at least 8 characters.')
+      } else {
+        setError('Wrong credential. Try again.')
+      }
+      setCredential('')
     } catch {
       setError('Connection error. Try again.')
     } finally {
@@ -195,16 +217,16 @@ function PasswordLogin({
             </svg>
           </div>
           <h1 className="text-lg font-bold">{restaurantName}</h1>
-          <p className="text-gray-400 text-sm mt-1">Enter admin password</p>
+          <p className="text-gray-400 text-sm mt-1">Enter owner credential</p>
         </div>
 
-        {/* Password form */}
+        {/* Credential form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
             type="password"
-            value={password}
-            onChange={(e) => { setPassword(e.target.value); setError('') }}
-            placeholder="Admin password"
+            value={credential}
+            onChange={(e) => { setCredential(e.target.value); setError('') }}
+            placeholder="Owner credential"
             autoFocus
             className="w-full h-12 rounded-xl bg-gray-800 border border-gray-700 px-4 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
           />
@@ -216,7 +238,7 @@ function PasswordLogin({
 
           <button
             type="submit"
-            disabled={loading || !password.trim()}
+            disabled={loading || !credential.trim()}
             className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Verifying...' : 'Login'}
@@ -356,6 +378,12 @@ function Dashboard({
   const [refreshing, setRefreshing] = useState(false)
   const prevOrderIdsRef = useRef<Set<string>>(new Set())
   const [newOrderIds, setNewOrderIds] = useState<Set<string>>(new Set())
+  // Outage honesty: a 503 from /api/owner/data must never blank the dashboard into a fake
+  // "0 orders" day. `stale` just means "keep showing `data`/`lastUpdated`, but say so."
+  const [stale, setStale] = useState(false)
+  // A permanent condition (no such machine, or no owner credential provisioned yet) is NOT the
+  // same as a transient 503 — it replaces the dashboard instead of just annotating it.
+  const [fatalError, setFatalError] = useState<'not_found' | 'setup_required' | null>(null)
 
   const fetchData = useCallback(async (isManual = false) => {
     if (isManual) setRefreshing(true)
@@ -372,9 +400,33 @@ function Dashboard({
       })
       if (res.status === 401) {
         // Owner cookie missing or expired (e.g. an older session that predates cookie auth).
-        // Drop the UI flag and reload straight into the PIN pad rather than showing a blank page.
+        // Drop the UI flag and reload straight into the credential prompt rather than showing a
+        // blank page.
         clearSession()
         window.location.reload()
+        return
+      }
+      if (res.status === 403) {
+        const body = await res.json().catch(() => ({} as { error?: string }))
+        if (body.error === 'setup_required') {
+          setFatalError('setup_required')
+          return
+        }
+        // e.g. a session cookie bound to a different machineId — not a valid login here.
+        clearSession()
+        window.location.reload()
+        return
+      }
+      if (res.status === 404) {
+        // Distinct from 503: the restaurant/machine itself is gone, not just momentarily
+        // unreachable, so retrying on a timer would never recover.
+        setFatalError('not_found')
+        return
+      }
+      if (res.status === 503) {
+        // Supabase is down: keep whatever snapshot `data`/`lastUpdated` already hold and just
+        // flag it stale, instead of overwriting a real last-known day with a fabricated zero.
+        setStale(true)
         return
       }
       if (res.ok) {
@@ -394,11 +446,15 @@ function Dashboard({
         }
         prevOrderIdsRef.current = currentIds
         setData(json)
+        setStale(false)
+        setFatalError(null)
         setLastUpdated(new Date())
         setSecondsAgo(0)
       }
     } catch {
-      // Silent fail on refresh
+      // Network-level failure on a background refresh: treat the same as a 503 rather than
+      // silently doing nothing, so the owner sees their data may be out of date.
+      if (!isManual) setStale(true)
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -433,6 +489,33 @@ function Dashboard({
         <div className="text-center">
           <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="text-gray-400 text-sm">Loading dashboard...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // A 404/setup_required is a permanent condition, not a transient outage — show it instead of
+  // the dashboard rather than annotating a (nonexistent) last-known snapshot as merely "stale".
+  if (fatalError === 'not_found') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white px-6">
+        <div className="text-center">
+          <p className="text-6xl mb-4">&#x1F354;</p>
+          <h1 className="text-xl font-bold">Restaurant Not Found</h1>
+          <p className="text-gray-400 mt-2">This dashboard link is invalid.</p>
+        </div>
+      </div>
+    )
+  }
+  if (fatalError === 'setup_required') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white px-6">
+        <div className="text-center max-w-xs">
+          <p className="text-6xl mb-4">&#x1F511;</p>
+          <h1 className="text-xl font-bold">Owner Login Not Set Up</h1>
+          <p className="text-gray-400 mt-2 text-sm">
+            Remote owner access has not been configured for this location yet. Ask an admin to set it up.
+          </p>
         </div>
       </div>
     )
@@ -506,6 +589,15 @@ function Dashboard({
           ))}
         </div>
       </div>
+
+      {stale && (
+        <div className="max-w-lg mx-auto px-4 pt-3">
+          <div className="bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs rounded-lg px-3 py-2">
+            Showing data from {secondsAgo < 5 ? 'just now' : timeAgo(lastUpdated.toISOString())} — live updates
+            are temporarily unavailable. Retrying...
+          </div>
+        </div>
+      )}
 
       <div className="max-w-lg mx-auto px-4 pt-4 space-y-5">
         {/* Today Tab */}
@@ -647,7 +739,7 @@ export function OwnerDashboard({
 
   if (!authenticated) {
     return (
-      <PasswordLogin
+      <CredentialLogin
         restaurantName={restaurantName}
         machineId={machineId}
         onSuccess={() => setAuthenticated(true)}
