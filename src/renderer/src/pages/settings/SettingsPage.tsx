@@ -134,6 +134,12 @@ export function SettingsPage() {
 
   // Remote order QR
   const [remoteOrderQr, setRemoteOrderQr] = useState('')
+  // WP-G: per-restaurant remote-ordering flag (cloud, DEFAULT OFF). null = loading.
+  const [remoteOrderingEnabled, setRemoteOrderingEnabled] = useState<boolean | null>(null)
+  const [remoteToggleBusy, setRemoteToggleBusy] = useState(false)
+  // True while the secure device-token path (WP-D) is not integrated: the toggle
+  // is locked and the cloud flag stays at its default (OFF).
+  const [remoteTogglePending, setRemoteTogglePending] = useState(false)
 
   const getKeyboardValue = (): string => {
     if (!keyboardTarget) return ''
@@ -267,6 +273,34 @@ export function SettingsPage() {
         setRemoteOrderQr(qrDataUrl)
       }
     } catch { /* ignore */ }
+
+    // WP-G: load the cloud remote-ordering flag (defaults to OFF when unreachable).
+    // Fails closed until the WP-D device-token path is integrated.
+    try {
+      const status = await (window as any).remoteInbox?.getEnabled?.()
+      if (status && typeof status === 'object') {
+        setRemoteOrderingEnabled(status.ok ? status.enabled === true : false)
+        setRemoteTogglePending(!status.ok)
+      } else {
+        setRemoteOrderingEnabled(false)
+        setRemoteTogglePending(true)
+      }
+    } catch {
+      setRemoteOrderingEnabled(false)
+      setRemoteTogglePending(true)
+    }
+  }
+
+  // WP-G: toggle the per-restaurant remote-ordering flag in the cloud
+  const handleRemoteOrderingToggle = async (enabled: boolean) => {
+    if (remoteToggleBusy || remoteTogglePending) return
+    setRemoteToggleBusy(true)
+    try {
+      const result = await (window as any).remoteInbox?.setEnabled?.(enabled)
+      if (result?.ok) setRemoteOrderingEnabled(enabled)
+      else if (result?.pendingIntegration) setRemoteTogglePending(true)
+    } catch { /* keep previous state */ }
+    finally { setRemoteToggleBusy(false) }
   }
 
   const saveGeneral = async () => {
@@ -1251,6 +1285,35 @@ export function SettingsPage() {
               <h3 className="text-lg font-semibold mb-1">{t('settings.remoteOrdering', { defaultValue: 'Remote Ordering' })}</h3>
               <p className="text-sm text-gray-500">{t('settings.remoteOrderingDesc', { defaultValue: 'Let customers order from their phone by scanning a QR code.' })}</p>
             </div>
+
+            {/* WP-G: enable/disable flag (cloud, DEFAULT OFF — new orders are staff-approved requests) */}
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={remoteOrderingEnabled === true}
+                disabled={remoteOrderingEnabled === null || remoteToggleBusy || remoteTogglePending}
+                onChange={(e) => { void handleRemoteOrderingToggle(e.target.checked) }}
+                className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+              />
+              <div>
+                <span className="text-sm font-medium text-gray-700">{t('settings.remoteOrderingEnable', { defaultValue: 'Enable remote ordering for this restaurant' })}</span>
+                <p className="text-xs text-gray-400">
+                  {remoteOrderingEnabled === null
+                    ? t('settings.remoteOrderingLoading', { defaultValue: 'Checking current status…' })
+                    : t('settings.remoteOrderingEnableDesc', { defaultValue: 'OFF by default. When enabled, customer requests appear in the POS inbox and are only prepared after you accept them.' })}
+                </p>
+              </div>
+            </label>
+            {remoteTogglePending && (
+              <div className="flex items-center gap-2 p-3 bg-orange-50 rounded-lg border border-orange-200">
+                <p className="text-xs text-orange-700">{t('settings.remoteOrderingPendingHint', { defaultValue: 'Remote ordering stays OFF until this app can securely prove its identity to the cloud (arrives with the next update).' })}</p>
+              </div>
+            )}
+            {remoteOrderingEnabled === false && (
+              <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <p className="text-xs text-gray-500">{t('settings.remoteOrderingOffHint', { defaultValue: 'The ordering link and QR code below stay inactive until you enable remote ordering.' })}</p>
+              </div>
+            )}
 
             {/* Cloud ordering link */}
             {machineId ? (

@@ -5,6 +5,7 @@ import { menuRepo } from '../database/repositories/menu.repo'
 import { categoriesRepo } from '../database/repositories/categories.repo'
 import { promotionsRepo } from '../database/repositories/promotions.repo'
 import { nativeImage, net } from 'electron'
+import { readFileSync } from 'fs'
 import { createHash } from 'crypto'
 import { getLanIPs } from '../tablet/network'
 import { getCurrentPort } from '../tablet/server'
@@ -186,7 +187,33 @@ export async function syncDisplaySettings(profileName: string = 'default'): Prom
   } catch (err) { console.error('[CloudSync] Display sync error:', err) }
 }
 
-/** Sync menu data to Supabase for remote ordering + display */
+/** Local mirror of the cloud catalog quote_revision (written after each
+ *  successful push; read by the remote-order listener's accept-time check). */
+const MENU_QUOTE_REVISION_KEY = 'menu_quote_revision'
+
+/**
+ * Fingerprint over the CUSTOMER-VISIBLE catalog payload. When this changes, the
+ * cloud quote_revision MUST be bumped (WP-G red-team finding #1) or the remote
+ * order stale-quote check is blind to price changes — a customer could confirm
+ * 500 and be charged 650.
+ */
+function catalogFingerprint(categories: any[], items: any[]): string {
+  const visible = {
+    categories: (categories || []).map((c: any) => ({ id: c.id, name: c.name, emoji: c.emoji })),
+    items: (items || []).map((i: any) => ({
+      id: i.id,
+      name: i.name,
+      price: i.price,
+      active: i.is_active,
+      cat: i.category_id,
+      emoji: i.emoji
+    }))
+  }
+  return createHash('sha256').update(JSON.stringify(visible)).digest('hex')
+}
+
+/** Sync menu data to Supabase for remote ordering + display.
+ *  Bumps quote_revision whenever the customer-visible payload changed. */
 export async function syncMenuToCloud(): Promise<void> {
   if (!net.isOnline()) return
   try {
@@ -195,14 +222,46 @@ export async function syncMenuToCloud(): Promise<void> {
 
     const categories = categoriesRepo.getAll()
     const items = menuRepo.getAll()
+    const fingerprint = catalogFingerprint(categories as any[], items as any[])
 
-    await supabase.from('menu_sync').upsert({
+    // Preferred: atomic RPC (migration 0007) — upsert + conditional revision bump
+    // in one statement. Returns the (possibly bumped) quote_revision.
+    try {
+      const { data, error } = await supabase.rpc('menu_sync_push', {
+        p_machine_id: machineId,
+        p_categories: categories,
+        p_items: items,
+        p_fingerprint: fingerprint
+      })
+      if (!error && data != null && Number.isFinite(Number(data))) {
+        settingsRepo.set(MENU_QUOTE_REVISION_KEY, String(Number(data)))
+        return
+      }
+    } catch { /* RPC unavailable — fall back below */ }
+
+    // Fallback (RPC not deployed yet): read-compare-bump. The POS is the single
+    // writer for its own machine_id, so the read-then-write race is theoretical.
+    const { data: existing } = await supabase
+      .from('menu_sync')
+      .select('quote_revision, catalog_fingerprint')
+      .eq('machine_id', machineId)
+      .maybeSingle()
+    const changed = !existing || existing.catalog_fingerprint !== fingerprint
+    const revision = Number(existing?.quote_revision ?? 0) + (changed ? 1 : 0)
+
+    const { error: upsertError } = await supabase.from('menu_sync').upsert({
       machine_id: machineId,
       categories: categories,
       items: items,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
+      quote_revision: revision,
+      catalog_fingerprint: fingerprint
     }, { onConflict: 'machine_id' })
-  } catch { /* silent */ }
+    if (!upsertError) {
+      settingsRepo.set(MENU_QUOTE_REVISION_KEY, String(revision))
+    }
+  } catch { /* offline/transient — the local revision mirror stays at the last
+               successfully pushed value, matching what customers can quote */ }
 }
 
 /** Get or create short codes for all link types */

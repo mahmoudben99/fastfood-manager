@@ -483,7 +483,12 @@
     "orderingQrHint": "Customers scan this QR code to order from their phone.",
     "remoteOrderQrAlt": "Remote Order QR",
     "orderQrPrintHint": "Print or display this QR code at your tables.",
-    "tabletServerNote": "The tablet server still runs in the background for local network access."
+    "tabletServerNote": "The tablet server still runs in the background for local network access.",
+    "remoteOrderingEnable": "Enable remote ordering for this restaurant",
+    "remoteOrderingEnableDesc": "OFF by default. When enabled, customer requests appear in the POS inbox and are only prepared after you accept them.",
+    "remoteOrderingLoading": "Checking current status…",
+    "remoteOrderingOffHint": "The ordering link and QR code below stay inactive until you enable remote ordering.",
+    "remoteOrderingPendingHint": "Remote ordering stays OFF until this app can securely prove its identity to the cloud (arrives with the next update)."
   },
   "common": {
     "save": "Save",
@@ -659,5 +664,28 @@
     "enterCode": "Enter Activation Code",
     "showMachineId": "Show Machine ID (for support)",
     "sendIdHint": "Send this ID to support to get an activation code:"
+  },
+  "remoteInbox": {
+    "title": "Remote Orders",
+    "empty": "No pending remote orders",
+    "accept": "Accept",
+    "reject": "Reject",
+    "cancel": "Cancel",
+    "confirmReject": "Reject Order",
+    "rejectTitle": "Reject this order?",
+    "rejectDesc": "The request from {{name}} will be declined. Nothing is prepared or charged.",
+    "rejectReasonPlaceholder": "Reason (shown to the customer, optional)",
+    "total": "Total",
+    "note": "Note",
+    "table": "Table",
+    "dineIn": "Dine-in",
+    "takeout": "Takeaway",
+    "delivery": "Delivery",
+    "expiresIn": "expires in {{minutes}} min",
+    "acceptedToast": "Order accepted — daily number #{{number}}",
+    "alreadyDecided": "This request was already handled.",
+    "expiredToast": "This request expired (or the menu changed) — nothing was created.",
+    "rejectedToast": "Request rejected.",
+    "acceptFailed": "Could not accept: {{message}}"
   }
 }

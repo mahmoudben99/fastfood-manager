@@ -272,11 +272,11 @@
     "apply": "Appliquer"
   },
   "excel": {
-    "updateDisabledBadge": "Suspendu par s\u00e9curit\u00e9",
-    "updateDisabledDesc": "Le remplacement Excel est temporairement d\u00e9sactiv\u00e9 car l'ancien importateur pouvait effacer les recettes et l'historique du stock. Modifiez les donn\u00e9es depuis Menu, Stock et Employ\u00e9s.",
-    "updateDisabledButton": "Mise \u00e0 jour Excel indisponible",
+    "updateDisabledBadge": "Suspendu par sécurité",
+    "updateDisabledDesc": "Le remplacement Excel est temporairement désactivé car l'ancien importateur pouvait effacer les recettes et l'historique du stock. Modifiez les données depuis Menu, Stock et Employés.",
+    "updateDisabledButton": "Mise à jour Excel indisponible",
     "saveRecovery": "Enregistrer un point de restauration du menu",
-    "recoverySaved": "Point de restauration du menu enregistr\u00e9.",
+    "recoverySaved": "Point de restauration du menu enregistré.",
     "title": "Export Excel et restauration",
     "export": "Exporter",
     "import": "Importer",
@@ -483,7 +483,12 @@
     "orderingQrHint": "Les clients scannent ce QR code pour commander depuis leur téléphone.",
     "remoteOrderQrAlt": "QR de commande à distance",
     "orderQrPrintHint": "Imprimez ou affichez ce QR code sur vos tables.",
-    "tabletServerNote": "Le serveur tablette continue de fonctionner en arrière-plan pour l'accès au réseau local."
+    "tabletServerNote": "Le serveur tablette continue de fonctionner en arrière-plan pour l'accès au réseau local.",
+    "remoteOrderingEnable": "Activer la commande à distance pour ce restaurant",
+    "remoteOrderingEnableDesc": "Désactivé par défaut. Une fois activé, les demandes des clients arrivent dans la boîte de réception du POS et ne sont préparées qu'après votre acceptation.",
+    "remoteOrderingLoading": "Vérification du statut…",
+    "remoteOrderingOffHint": "Le lien de commande et le QR code ci-dessous restent inactifs tant que la commande à distance n'est pas activée.",
+    "remoteOrderingPendingHint": "La commande à distance reste désactivée tant que l'application ne peut pas prouver son identité au cloud de façon sécurisée (disponible avec la prochaine mise à jour)."
   },
   "common": {
     "save": "Enregistrer",
@@ -659,5 +664,28 @@
     "enterCode": "Saisir le code d'activation",
     "showMachineId": "Afficher l'ID machine (pour le support)",
     "sendIdHint": "Envoyez cet ID au support pour obtenir un code d'activation :"
+  },
+  "remoteInbox": {
+    "title": "Commandes à distance",
+    "empty": "Aucune commande à distance en attente",
+    "accept": "Accepter",
+    "reject": "Refuser",
+    "cancel": "Annuler",
+    "confirmReject": "Refuser la commande",
+    "rejectTitle": "Refuser cette commande ?",
+    "rejectDesc": "La demande de {{name}} sera refusée. Rien n'est préparé ni facturé.",
+    "rejectReasonPlaceholder": "Motif (visible par le client, optionnel)",
+    "total": "Total",
+    "note": "Note",
+    "table": "Table",
+    "dineIn": "Sur place",
+    "takeout": "À emporter",
+    "delivery": "Livraison",
+    "expiresIn": "expire dans {{minutes}} min",
+    "acceptedToast": "Commande acceptée — numéro du jour #{{number}}",
+    "alreadyDecided": "Cette demande a déjà été traitée.",
+    "expiredToast": "Cette demande a expiré (ou le menu a changé) — rien n'a été créé.",
+    "rejectedToast": "Demande refusée.",
+    "acceptFailed": "Acceptation impossible : {{message}}"
   }
 }

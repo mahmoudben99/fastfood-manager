@@ -10,6 +10,7 @@ import { Modal } from '../../components/ui/Modal'
 import { VirtualKeyboard } from '../../components/VirtualKeyboard'
 import { formatCurrency } from '../../utils/formatCurrency'
 import { removeRepeatedPrefix } from '../../utils/removeRepeatedPrefix'
+import { RemoteOrderInbox } from '../../components/RemoteOrderInbox' // WP-G remote inbox mount (import)
 
 interface MenuItemData {
   id: number
@@ -993,6 +994,7 @@ export function OrderScreen() {
 
   return (
     <div className="h-screen flex bg-gray-100">
+      {/* WP-G remote inbox mount */}<RemoteOrderInbox />
       {/* LEFT: Menu Grid */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
