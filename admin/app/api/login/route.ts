@@ -1,39 +1,25 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createSession, COOKIE_NAME } from '@/lib/auth'
-import { timingSafeEqual } from 'crypto'
+import { createSession } from '@/lib/auth'
+import { createAdminLoginHandler } from '@/lib/owner-auth'
 
-export async function POST(request: NextRequest) {
-  const expected = process.env.ADMIN_PASSWORD
-  if (!expected || expected.length < 8) {
-    console.error('ADMIN_PASSWORD is missing or too short')
-    return NextResponse.json({ error: 'Admin portal is not configured' }, { status: 503 })
-  }
+// Frozen seam (admin/tests/auth/auth.contract.d.ts): the acceptance tests import this factory
+// directly to exercise same-origin handling for the mutating admin login route.
+export { createAdminLoginHandler }
 
-  let password: unknown
-  try {
-    ;({ password } = await request.json())
-  } catch {
-    return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
-  }
-  if (typeof password !== 'string' || password.length === 0 || password.length > 256) {
-    return NextResponse.json({ error: 'Invalid password' }, { status: 401 })
-  }
-
-  const suppliedBytes = Buffer.from(password)
-  const expectedBytes = Buffer.from(expected)
-  if (suppliedBytes.length !== expectedBytes.length || !timingSafeEqual(suppliedBytes, expectedBytes)) {
-    return NextResponse.json({ error: 'Invalid password' }, { status: 401 })
-  }
-
-  const token = await createSession()
-
-  const response = NextResponse.json({ ok: true })
-  response.cookies.set(COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 60 * 60 * 24 * 7 // 7 days
+// The factory takes a static `appOrigin`, so it is (re)built per request with the origin derived
+// from the request's own URL (Next.js reconstructs this from Host/X-Forwarded-Host + protocol).
+// A same-origin fetch's `Origin` header always matches this; a cross-site page's fetch carries
+// its OWN page origin in `Origin` while the request URL is still this app's host, so the
+// mismatch is caught without needing a separately configured "trusted origin" env var — one
+// fewer thing to misconfigure per deployment/preview URL.
+//
+// adminPassword() and createSession are likewise invoked per request (not captured once at
+// import time) so a live ADMIN_PASSWORD/SESSION_SECRET misconfiguration always fails closed with
+// 503, per-request, rather than only at cold start.
+export async function POST(request: Request): Promise<Response> {
+  const handler = createAdminLoginHandler({
+    appOrigin: new URL(request.url).origin,
+    adminPassword: () => process.env.ADMIN_PASSWORD,
+    createSession
   })
-
-  return response
+  return handler(request)
 }

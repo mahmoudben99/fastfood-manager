@@ -18,8 +18,10 @@ export async function middleware(request: NextRequest) {
   if (
     pathname === '/login' ||
     pathname.startsWith('/api/login') ||
-    pathname.startsWith('/owner') ||
-    pathname.startsWith('/api/owner') ||
+    pathname === '/owner' ||
+    pathname.startsWith('/owner/') ||
+    pathname === '/api/owner' ||
+    pathname.startsWith('/api/owner/') ||
     pathname.startsWith('/tv/') ||
     pathname.startsWith('/api/tv-') ||
     pathname.startsWith('/r/') ||
@@ -27,6 +29,9 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/remote-order') ||
     pathname.startsWith('/api/pair')
   ) {
+    // NOTE: `/api/owner-credential` deliberately does NOT match here (unlike a bare
+    // `startsWith('/api/owner')` would) — it is an admin-session-gated endpoint, not part of the
+    // owner (restaurant) dashboard's own credential auth.
     return NextResponse.next()
   }
 
