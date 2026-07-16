@@ -3,6 +3,30 @@ import { getMachineId } from '../activation/activation'
 import { localDate } from '../database/repositories/orders.repo'
 import { net } from 'electron'
 
+/** Strict, retryable owner-order upsert for the durable outbox consumer. */
+export async function syncOrderToCloudStrict(order: any): Promise<void> {
+  if (!net.isOnline()) throw new Error('Owner sync is offline')
+  const itemsSummary = order.items
+    ? order.items.map((item: any) => `${item.quantity}x ${item.menu_item_name}`).join(', ')
+    : ''
+  const { error } = await getClient().from('owner_orders').upsert(
+    {
+      machine_id: getMachineId(),
+      order_number: order.daily_number,
+      order_type: order.order_type,
+      total: order.total,
+      item_count: order.items?.length || 0,
+      items_summary: itemsSummary,
+      status: order.status || 'preparing',
+      discount_amount: order.discount_amount || 0,
+      order_date: order.order_date || localDate(),
+      created_at: order.created_at || new Date().toISOString()
+    },
+    { onConflict: 'machine_id,order_number,order_date' }
+  )
+  if (error) throw new Error(`Owner sync failed: ${error.message}`)
+}
+
 export async function syncOrderToCloud(order: any): Promise<void> {
   if (!net.isOnline()) return
   try {

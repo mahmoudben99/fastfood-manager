@@ -11,17 +11,47 @@ import { promotionsRepo } from '../database/repositories/promotions.repo'
 import { getTabletHTML } from './tablet-ui'
 import { getDisplayHTML } from './display-ui'
 import { getBestLanIP } from './network'
-import { sendOrderNotification } from '../telegram/bot'
 import { performAutoBackup } from '../ipc/backup.ipc'
-import { syncOrderToCloud } from '../sync/owner-sync'
 import { computeAutoDiscount, sanitizeOrderItems } from '../services/order-promotions'
 
 let server: http.Server | null = null
 let currentPort = 3333
 let mainWin: BrowserWindow | null = null
+let stopping = false
 
 // SSE clients connected to /api/display-events
 const displayClients = new Set<http.ServerResponse>()
+
+function duplicateMatchesTabletPayload(
+  order: any,
+  input: {
+    orderType: string
+    tableNumber?: string
+    customerPhone?: string
+    customerName?: string
+    notes?: string
+    items: { menu_item_id: number; quantity: number; notes?: string }[]
+    discountAmount: number
+  }
+): boolean {
+  const text = (value: unknown): string | null => {
+    const normalized = typeof value === 'string' ? value.trim() : ''
+    return normalized || null
+  }
+  if (order.order_type !== input.orderType ||
+      text(order.table_number) !== text(input.tableNumber) ||
+      text(order.customer_phone) !== text(input.customerPhone) ||
+      text(order.customer_name) !== text(input.customerName) ||
+      text(order.notes) !== text(input.notes) ||
+      Number(order.discount_amount) !== Math.round(input.discountAmount)) return false
+  const stored = Array.isArray(order.items) ? order.items : []
+  if (stored.length !== input.items.length) return false
+  return input.items.every((item, index) => {
+    const existing = stored[index]
+    return existing && Number(existing.menu_item_id) === item.menu_item_id &&
+      Number(existing.quantity) === item.quantity && text(existing.notes) === text(item.notes)
+  })
+}
 
 function getDisplayInfoPayload(profile: string = 'default'): Record<string, unknown> {
   // Per-profile key prefix. Default profile uses the bare `display_` keys (legacy); named
@@ -162,8 +192,13 @@ export function pushDisplayUpdate(data: any): void {
 /** Recompute and push the "Now Preparing / Ready" queue to every connected TV display. */
 export function broadcastQueue(): void {
   try {
-    pushDisplayUpdate(getQueuePayload())
+    broadcastQueueStrict()
   } catch { /* display server may be shutting down */ }
+}
+
+/** Strict/idempotent queue recomputation for the durable outbox consumer. */
+export function broadcastQueueStrict(): void {
+  pushDisplayUpdate(getQueuePayload())
 }
 
 export function getLocalIP(): string {
@@ -241,6 +276,10 @@ function readJsonBody(
 }
 
 function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): void {
+  if (stopping) {
+    sendJSON(res, 503, { error: 'Tablet server is shutting down; retry shortly' })
+    return
+  }
   const url = new URL(req.url ?? '/', `http://localhost`)
   const method = req.method ?? 'GET'
 
@@ -309,29 +348,59 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
           sendJSON(res, 400, { error: 'No valid items' })
           return
         }
+        const sourceRequestId = typeof raw?.source_request_id === 'string'
+          ? raw.source_request_id.trim()
+          : ''
+        if (!sourceRequestId) {
+          sendJSON(res, 400, { error: 'source_request_id is required' })
+          return
+        }
         // Apply the same active promotions the POS cart applies, so a tablet customer isn't
         // charged full price for a promoted item.
         const discount = computeAutoDiscount(items)
+        const orderType = ['local', 'takeout', 'delivery'].includes(raw?.order_type) ? raw.order_type : 'takeout'
+        const tableNumber = raw?.table_number ? String(raw.table_number).slice(0, 50) : undefined
+        const customerPhone = raw?.customer_phone ? String(raw.customer_phone).slice(0, 50) : undefined
+        const customerName = raw?.customer_name ? String(raw.customer_name).slice(0, 100) : undefined
+        const notes = raw?.notes ? String(raw.notes).slice(0, 500) : undefined
         const order = ordersRepo.create({
-          order_type: ['local', 'takeout', 'delivery'].includes(raw?.order_type) ? raw.order_type : 'takeout',
-          table_number: raw?.table_number ? String(raw.table_number).slice(0, 50) : undefined,
-          customer_phone: raw?.customer_phone ? String(raw.customer_phone).slice(0, 50) : undefined,
-          customer_name: raw?.customer_name ? String(raw.customer_name).slice(0, 100) : undefined,
-          notes: raw?.notes ? String(raw.notes).slice(0, 500) : undefined,
+          source: 'tablet',
+          source_request_id: sourceRequestId,
+          order_type: orderType,
+          table_number: tableNumber,
+          customer_phone: customerPhone,
+          customer_name: customerName,
+          notes,
           forceMenuPrice: true,
           discount_amount: discount.amount || undefined,
           discount_details: discount.details || undefined,
           items
         })
-        mainWin?.webContents.send('tablet:new-order', order)
-        // Same side-effects as a POS order. Previously the owner dashboard never saw tablet
-        // orders (revenue undercounted by the whole channel) and the TV queue never showed them.
-        syncOrderToCloud(order).catch(() => {})
-        broadcastQueue()
-        performAutoBackup()
-        sendOrderNotification(order)
-        // Durable automatic print jobs were committed by ordersRepo.create().
-        sendJSON(res, 200, { ok: true, order_number: order.daily_number, id: order.id })
+        if (order.duplicate && !duplicateMatchesTabletPayload(order, {
+          orderType,
+          tableNumber,
+          customerPhone,
+          customerName,
+          notes,
+          items,
+          discountAmount: discount.amount
+        })) {
+          sendJSON(res, 409, {
+            error: `Order #${order.daily_number} already exists for this request id, but the cart changed. Reset the cart to start a new order.`
+          })
+          return
+        }
+        if (!order.duplicate) {
+          mainWin?.webContents.send('tablet:new-order', order)
+          performAutoBackup()
+        }
+        // All externally visible effects are delivered from durable print/outbox rows.
+        sendJSON(res, 200, {
+          ok: true,
+          duplicate: order.duplicate === true,
+          order_number: order.daily_number,
+          id: order.id
+        })
       } catch (e) {
         sendJSON(res, 500, { error: String(e) })
       }
@@ -398,6 +467,7 @@ function tryListen(port: number): Promise<void> {
 }
 
 export async function startTabletServer(win: BrowserWindow): Promise<{ port: number; url: string; qrDataUrl: string }> {
+  if (stopping) throw new Error('Tablet server is still shutting down')
   if (server) {
     const ip = getLocalIP()
     const url = `http://${ip}:${currentPort}`
@@ -434,7 +504,8 @@ export async function startTabletServer(win: BrowserWindow): Promise<{ port: num
   return { port: currentPort, url, qrDataUrl }
 }
 
-export function stopTabletServer(): void {
+export async function stopTabletServer(): Promise<void> {
+  stopping = true
   // server.close() only stops NEW connections; the open SSE streams stay alive and keep the
   // process (and the TVs) attached to a "stopped" server. End them explicitly first, otherwise
   // close() never fires its callback and shutdown hangs.
@@ -442,9 +513,13 @@ export function stopTabletServer(): void {
     try { client.end() } catch { /* already gone */ }
   }
   displayClients.clear()
-  server?.close()
+  const closingServer = server
   server = null
   mainWin = null
+  if (closingServer) {
+    await new Promise<void>((resolve) => closingServer.close(() => resolve()))
+  }
+  stopping = false
 }
 
 export function isTabletServerRunning(): boolean {

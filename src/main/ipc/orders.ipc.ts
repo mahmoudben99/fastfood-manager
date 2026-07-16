@@ -1,22 +1,24 @@
 import { ipcMain } from 'electron'
 import { ordersRepo, type CreateOrderInput } from '../database/repositories/orders.repo'
 import { performAutoBackup } from './backup.ipc'
-import { sendOrderNotification } from '../telegram/bot'
-import { syncOrderToCloud, syncOrderStatusToCloud } from '../sync/owner-sync'
+import { getDb } from '../database/connection'
+import { createOrderService } from '../services/order-service'
 
 export function registerOrdersHandlers(): void {
   ipcMain.handle('orders:create', (_, input: CreateOrderInput) => {
     // Loyalty tracking + customer_id linkage now happen atomically inside ordersRepo.create()
     // (so tablet & remote orders are covered too); don't upsert again here or totals double-count.
-    const order = ordersRepo.create(input)
+    const sourceRequestId = input.source_request_id?.trim()
+    if (!sourceRequestId) throw new Error('source_request_id is required; retry the same checkout with the same id')
+    const order = ordersRepo.create({
+      ...input,
+      source: 'pos',
+      source_request_id: sourceRequestId
+    })
     // Auto-backup after each order (overwrites today's file)
-    performAutoBackup()
-    // Send Telegram notification
-    sendOrderNotification(order)
-    // Automatic receipt/kitchen intents were inserted into durable print_jobs in the same
-    // transaction as the order. The printer worker owns delivery and visible retries.
-    // Sync order to owner dashboard (fire-and-forget)
-    syncOrderToCloud(order).catch(() => {})
+    if (!order.duplicate) performAutoBackup()
+    // Owner sync, Telegram, analytics, queue broadcast, and printing are durable rows created
+    // by the shared order transaction and delivered by the background workers.
     return order
   })
 
@@ -33,15 +35,11 @@ export function registerOrdersHandlers(): void {
   })
 
   ipcMain.handle('orders:updateStatus', (_, id: number, status: string) => {
-    const result = ordersRepo.updateStatus(id, status)
-    syncOrderStatusToCloud(id, status).catch(() => {})
-    return result
+    return ordersRepo.updateStatus(id, status)
   })
 
   ipcMain.handle('orders:cancel', (_, id: number) => {
-    const result = ordersRepo.cancelOrder(id)
-    syncOrderStatusToCloud(id, 'cancelled').catch(() => {})
-    return result
+    return ordersRepo.cancelOrder(id)
   })
 
   ipcMain.handle('orders:getToday', () => {
@@ -70,11 +68,19 @@ export function registerOrdersHandlers(): void {
         notes?: string | null
       }
     ) => {
-      const updated = ordersRepo.updateItems(id, items, discountAmount, discountDetails, info)
-      // Re-sync the edited order to the owner dashboard so its cloud row reflects the new
-      // items/total (previously only create/status-change synced, so edits never propagated).
-      if (updated) syncOrderToCloud(updated).catch(() => {})
-      return updated
+      return ordersRepo.updateItems(id, items, discountAmount, discountDetails, info)
     }
+  )
+
+  // WP-F tested edit/status surface. These handlers call the same injected core used by
+  // ordersRepo's legacy adapters, so renderer and non-renderer mutations cannot diverge.
+  ipcMain.handle('orders:effects:updateHeader', (_, input) =>
+    createOrderService({ db: getDb() }).updateOrderHeader(input)
+  )
+  ipcMain.handle('orders:effects:updateLines', (_, input) =>
+    createOrderService({ db: getDb() }).updateOrderLines(input)
+  )
+  ipcMain.handle('orders:effects:updateStatus', (_, orderId: number, status) =>
+    createOrderService({ db: getDb() }).updateOrderStatus(orderId, status)
   )
 }

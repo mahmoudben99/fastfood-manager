@@ -13,11 +13,12 @@ import { registerInstallation, checkTrialStatus, checkCloudActivation } from './
 import { registerTabletHandlers } from './ipc/tablet.ipc'
 import { startTabletServer, stopTabletServer } from './tablet/server'
 import { startAnalyticsSync, stopAnalyticsSync } from './sync/analytics-sync'
-import { ordersRepo, localDate } from './database/repositories/orders.repo'
+import { ordersRepo } from './database/repositories/orders.repo'
 import { syncAdminPassword } from './sync/owner-sync'
 import { startCloudSync, stopCloudSync } from './sync/cloud-sync'
 import { startRemoteOrderListener, stopRemoteOrderListener } from './sync/remote-order-listener'
 import { stopPrintJobProcessor } from './ipc/printer.ipc'
+import { startOrderEffectsRuntime, stopOrderEffectsRuntime } from './services/order-effects-runtime'
 
 // Enhanced logging function
 function log(message: string, isError = false): void {
@@ -358,7 +359,7 @@ function setupAutoUpdater(): void {
     autoUpdater.downloadUpdate()
   })
 
-  ipcMain.handle('updater:install', () => {
+  ipcMain.handle('updater:install', async () => {
     // Set flag so window-all-closed doesn't call app.quit() and kill us before quitAndInstall runs.
     isInstallingUpdate = true
     // Manual cleanup first — stop all background tasks
@@ -374,8 +375,9 @@ function setupAutoUpdater(): void {
     stopAnalyticsSync()
     stopCloudSync()
     stopRemoteOrderListener()
-    stopTabletServer()
-    stopPrintJobProcessor()
+    await stopTabletServer()
+    await stopPrintJobProcessor()
+    await stopOrderEffectsRuntime()
     closeDatabase()
     // Destroy all windows to release file locks on app.asar before the NSIS installer runs.
     BrowserWindow.getAllWindows().forEach((win) => {
@@ -428,6 +430,7 @@ app.whenReady().then(async () => {
     log('Registering IPC handlers')
     registerAllHandlers()
     registerTabletHandlers(() => mainWindow)
+    startOrderEffectsRuntime()
 
     // Allow trial activation page to start the watcher mid-session (after factory reset)
     ipcMain.handle('trial:ensureWatcher', () => {
@@ -601,16 +604,8 @@ app.whenReady().then(async () => {
       const completed = ordersRepo.autoCompletePreviousDays()
       if (completed > 0) {
         log(`Auto-completed ${completed} orders from previous days`)
-        // Also clean up old preparing orders in Supabase
-        const { getClient: getSupabase } = await import('./activation/cloud')
-        const supabase = getSupabase()
-        // owner_orders.order_date holds the restaurant-LOCAL day (see orders.repo localDate()).
-        // Using the UTC day here skipped local-yesterday's orders whenever the app was started
-        // between 00:00 and 00:59 local, leaving them stuck as 'preparing' on the owner dashboard.
-        const today = localDate()
-        // Fire-and-forget. The query builder is a PromiseLike (no .catch), so pass an onRejected
-        // handler to .then() — otherwise a transient failure becomes an unhandled rejection.
-        supabase.from('owner_orders').update({ status: 'completed' }).eq('machine_id', machineId).eq('status', 'preparing').lt('order_date', today).then(() => {}, () => {})
+        // updateOrderStatus emitted durable owner-sync/analytics/queue events per order;
+        // the outbox runtime delivers them without a parallel best-effort cloud write.
       }
     } catch { /* ignore */ }
 
@@ -649,7 +644,7 @@ app.whenReady().then(async () => {
   app.exit(1)
 })
 
-app.on('window-all-closed', () => {
+app.on('window-all-closed', async () => {
   // Skip if quitAndInstall is about to run — it handles process exit itself.
   if (isInstallingUpdate) return
   log('App closing - cleaning up')
@@ -661,8 +656,9 @@ app.on('window-all-closed', () => {
   stopAnalyticsSync()
   stopCloudSync()
   stopRemoteOrderListener()
-  stopTabletServer()
-  stopPrintJobProcessor()
+  await stopTabletServer()
+  await stopPrintJobProcessor()
+  await stopOrderEffectsRuntime()
   closeDatabase()
   app.quit()
 })

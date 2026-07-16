@@ -6,6 +6,7 @@ import { printerAssignmentsRepo } from '../database/repositories/printer-assignm
 import { workersRepo } from '../database/repositories/workers.repo'
 import { receiptTemplatesRepo } from '../database/repositories/receipt-templates.repo'
 import { getDb } from '../database/connection'
+import { createPrintQueueWorker } from '../services/print-queue'
 
 /**
  * Escape a value before interpolating it into printed HTML.
@@ -42,6 +43,8 @@ interface PrintJobRow {
 
 let printProcessorRunning = false
 let printProcessorTimer: NodeJS.Timeout | null = null
+let productionPrintWorker: ReturnType<typeof createPrintQueueWorker> | null = null
+let activePrintRun: Promise<void> | null = null
 
 function getOpenPrintJobs(): PrintJobRow[] {
   return getDb()
@@ -63,100 +66,69 @@ function broadcastPrintJobs(): void {
   }
 }
 
-async function processPendingPrintJobs(): Promise<void> {
-  if (printProcessorRunning) return
+async function runPendingPrintJobs(): Promise<void> {
   printProcessorRunning = true
   try {
-    for (let processed = 0; processed < 10; processed++) {
-      const job = getDb()
-        .prepare(
-          "SELECT * FROM print_jobs WHERE status = 'pending' " +
-          "AND (next_attempt_at IS NULL OR next_attempt_at <= datetime('now')) " +
-          'ORDER BY created_at, id LIMIT 1'
-        )
-        .get() as PrintJobRow | undefined
-      if (!job) break
-
-      const claimed = getDb()
-        .prepare(
-          "UPDATE print_jobs SET status = 'printing', attempts = attempts + 1, " +
-          "last_attempt_at = datetime('now'), updated_at = datetime('now') " +
-          "WHERE id = ? AND status = 'pending'"
-        )
-        .run(job.id)
-      if (claimed.changes !== 1) continue
-      broadcastPrintJobs()
-
-      let result: { success: boolean; error?: string }
-      try {
-        if (job.document_type === 'receipt') {
-          result = await printOrder(job.order_id, 'receipt', job.event_type)
-        } else if (job.scope === 'worker' && job.worker_id != null) {
-          result = await printOrderForWorker(job.order_id, job.worker_id, job.event_type)
-        } else {
-          result = await printKitchenScope(
+    if (!productionPrintWorker) {
+      productionPrintWorker = createPrintQueueWorker({
+        db: getDb(),
+        attemptPrint: async (job) => {
+          if (job.document_type === 'receipt') {
+            return printOrder(job.order_id, 'receipt', job.event_type)
+          }
+          if (job.scope === 'worker' && job.worker_id != null) {
+            return printOrderForWorker(job.order_id, job.worker_id, job.event_type)
+          }
+          return printKitchenScope(
             job.order_id,
             job.scope === 'unassigned',
             job.event_type
           )
         }
-      } catch (error) {
-        result = {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unexpected print failure'
-        }
-      }
-
-      const attempts = job.attempts + 1
-      if (result.success) {
-        getDb()
-          .prepare(
-            "UPDATE print_jobs SET status = 'succeeded', last_error = NULL, " +
-            "completed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?"
-          )
-          .run(job.id)
-      } else {
-        const error = (result.error || 'Print failed').slice(0, 1000)
-        const indeterminate = /timeout|closed while printing/i.test(error)
-        const configuration = /no printer configured|no items/i.test(error)
-        if (indeterminate || configuration || attempts >= 3) {
-          getDb()
-            .prepare(
-              "UPDATE print_jobs SET status = 'attention', last_error = ?, " +
-              "next_attempt_at = NULL, updated_at = datetime('now') WHERE id = ?"
-            )
-            .run(error, job.id)
-        } else {
-          const retrySeconds = Math.min(120, attempts * 20)
-          getDb()
-            .prepare(
-              "UPDATE print_jobs SET status = 'pending', last_error = ?, " +
-              "next_attempt_at = datetime('now', '+' || ? || ' seconds'), " +
-              "updated_at = datetime('now') WHERE id = ?"
-            )
-            .run(error, retrySeconds, job.id)
-        }
-      }
-      broadcastPrintJobs()
+      })
     }
+    await productionPrintWorker.processOnce(10)
+    broadcastPrintJobs()
   } finally {
     printProcessorRunning = false
   }
 }
 
+function processPendingPrintJobs(): Promise<void> {
+  if (activePrintRun) return activePrintRun
+  activePrintRun = runPendingPrintJobs().finally(() => { activePrintRun = null })
+  return activePrintRun
+}
+
+function logPrintProcessorFailure(error: unknown): void {
+  console.error('[Printer] Durable print queue failed:', error)
+  try { broadcastPrintJobs() } catch { /* the next scheduled run/startup recovery remains durable */ }
+}
+
 export function startPrintJobProcessor(): void {
   if (printProcessorTimer) return
-  void processPendingPrintJobs()
+  // A previous process dying after handing a document to the OS leaves an ambiguous physical
+  // outcome. Escalate on every startup (not only when migration 015 first runs).
+  getDb().prepare(
+    `UPDATE print_jobs SET status = 'attention',
+     last_error = COALESCE(last_error, 'Application closed while printing; verify before retrying'),
+     updated_at = datetime('now') WHERE status = 'printing'`
+  ).run()
+  void processPendingPrintJobs().catch(logPrintProcessorFailure)
   printProcessorTimer = setInterval(() => {
-    void processPendingPrintJobs()
+    void processPendingPrintJobs().catch(logPrintProcessorFailure)
   }, 2000)
 }
 
-export function stopPrintJobProcessor(): void {
+export async function stopPrintJobProcessor(): Promise<void> {
   if (printProcessorTimer) {
     clearInterval(printProcessorTimer)
     printProcessorTimer = null
   }
+  if (activePrintRun) {
+    try { await activePrintRun } catch { /* pending/attention state records the print failure */ }
+  }
+  productionPrintWorker = null
 }
 
 export function isPrintJobProcessorBusy(): boolean {
@@ -410,7 +382,10 @@ async function getReceiptHTML(
   const receiptFontSize = receiptSettings?.receipt_font_size || settings.receipt_font_size || 'medium'
   const sizes = fontSizes[receiptFontSize as keyof typeof fontSizes] || fontSizes.medium
   const currencySymbol = settings.currency_symbol || settings.currency || 'DA'
-  const subtotal = items.reduce((sum: number, i: any) => sum + i.total_price, 0)
+  const itemSubtotal = items.reduce((sum: number, i: any) => sum + Number(i.total_price || 0), 0)
+  const subtotal = order.subtotal != null && Number.isFinite(Number(order.subtotal))
+    ? Number(order.subtotal)
+    : Math.round(itemSubtotal)
   // The receipt used to print `subtotal` under the TOTAL label, so any promo/discounted order
   // handed the customer a receipt showing MORE than they actually paid. orders.total is already
   // subtotal - discount_amount (see orders.repo create/updateItems); trust it, and clamp the
@@ -490,7 +465,7 @@ export function registerPrinterHandlers(): void {
       .run(id)
     if (result.changes !== 1) return { success: false, error: 'Print job is not awaiting attention' }
     broadcastPrintJobs()
-    void processPendingPrintJobs()
+    void processPendingPrintJobs().catch(logPrintProcessorFailure)
     return { success: true }
   })
 

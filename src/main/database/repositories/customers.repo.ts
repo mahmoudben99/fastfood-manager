@@ -1,5 +1,6 @@
 import { getDb } from '../connection'
 import { normalizeAlgerianPhone } from '../../domain/customer-phone'
+import { getFavoriteItems as getFavoriteItemsForDb } from '../../services/customer-favorites'
 
 export interface Customer {
   id: number
@@ -62,19 +63,7 @@ export function createCustomersRepository(database: typeof getDb = getDb) {
   },
 
   getFavoriteItems(customerId: number) {
-    const db = database()
-    return db
-      .prepare(
-        `SELECT oi.menu_item_id, SUM(oi.quantity) as total
-         FROM order_items oi
-         JOIN orders o ON o.id = oi.order_id
-         WHERE o.customer_id = ?
-           AND o.status != 'cancelled'
-         GROUP BY oi.menu_item_id
-         ORDER BY total DESC
-         LIMIT 5`
-      )
-      .all(customerId)
+    return getFavoriteItemsForDb(database(), customerId)
   },
 
   upsertFromOrder(phone: string, orderTotal: number, name?: string): number {

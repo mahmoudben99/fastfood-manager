@@ -69,6 +69,32 @@ interface PrintJobData {
   last_error: string | null
 }
 
+function duplicateMatchesCheckout(order: any, input: any, expectedDiscount: number): boolean {
+  const text = (value: unknown): string | null => {
+    const normalized = typeof value === 'string' ? value.trim() : ''
+    return normalized || null
+  }
+  if (order.order_type !== input.order_type ||
+      text(order.table_number) !== text(input.table_number) ||
+      text(order.customer_phone) !== text(input.customer_phone) ||
+      text(order.customer_name) !== text(input.customer_name) ||
+      text(order.notes) !== text(input.notes)) return false
+  if (Number(order.discount_amount) !== Math.round(expectedDiscount)) {
+    return false
+  }
+  const stored = Array.isArray(order.items) ? order.items : []
+  if (stored.length !== input.items.length) return false
+  return input.items.every((item: any, index: number) => {
+    const existing = stored[index]
+    return existing &&
+      Number(existing.menu_item_id) === Number(item.menu_item_id) &&
+      Number(existing.quantity) === Number(item.quantity) &&
+      text(existing.notes) === text(item.notes) &&
+      (item.unit_price === undefined || Number(existing.unit_price) === Number(item.unit_price)) &&
+      (item.worker_id === undefined || Number(existing.worker_id) === Number(item.worker_id))
+  })
+}
+
 export function OrderScreen() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -93,6 +119,13 @@ export function OrderScreen() {
   // update a render behind the F2 keydown closure, so two fast F2 presses (or key auto-repeat)
   // could both pass the guard and submit twice. A ref flips instantly, closing the race.
   const submittingRef = useRef(false)
+  const checkoutRequestIdRef = useRef<string | null>(null)
+
+  // Explicitly abandoning/clearing a failed cart starts a new idempotency scope. Retrying the
+  // preserved cart keeps the token, including the commit-succeeded/response-lost case.
+  useEffect(() => {
+    if (store.items.length === 0) checkoutRequestIdRef.current = null
+  }, [store.items.length])
 
   // Order history state
   const [showHistory, setShowHistory] = useState(false)
@@ -768,8 +801,11 @@ export function OrderScreen() {
     // --- CREATE new order ---
     setPlacing(true)
     try {
+      const sourceRequestId = checkoutRequestIdRef.current ?? crypto.randomUUID()
+      checkoutRequestIdRef.current = sourceRequestId
       const currentDiscount = store.getDiscount()
-      const order = await window.api.orders.create({
+      const checkoutInput = {
+        source_request_id: sourceRequestId,
         order_type: store.orderType,
         table_number: store.tableNumber || undefined,
         customer_phone: store.customerPhone || undefined,
@@ -784,7 +820,16 @@ export function OrderScreen() {
           worker_id: item.worker_id || undefined,
           unit_price: item.price
         }))
-      })
+      }
+      const order = await window.api.orders.create(checkoutInput)
+
+      if (order.duplicate && !duplicateMatchesCheckout(order, checkoutInput, currentDiscount)) {
+        setOrderError(
+          `Order #${order.daily_number} was already saved for this checkout, but the cart now differs. ` +
+          'The changed cart was preserved. Review the saved order, then clear the cart to start a new checkout.'
+        )
+        return
+      }
 
       setOrderSuccess({ orderId: order.id, orderNumber: order.daily_number })
       setOrderError('')
@@ -803,6 +848,7 @@ export function OrderScreen() {
         setSuccessOrderWorkers(workers)
       } catch { setSuccessOrderWorkers([]) }
       store.clearOrder()
+      checkoutRequestIdRef.current = null
       // Refresh promos so the next order reflects any admin toggle (on/off) since mount
       store.loadActivePromos()
       loadOngoingCount()

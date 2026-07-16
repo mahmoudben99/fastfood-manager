@@ -100,6 +100,14 @@ async function syncOneDay(machineId: string, day: string): Promise<boolean> {
   return true
 }
 
+/** Strict single-day entry point used by the transactional outbox consumer. */
+export async function syncAnalyticsDateStrict(day: string): Promise<void> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error('Invalid analytics date')
+  if (!net.isOnline()) throw new Error('Analytics sync is offline')
+  const ok = await syncOneDay(getMachineId(), day)
+  if (!ok) throw new Error(`Analytics sync failed for ${day}`)
+}
+
 /**
  * Sync completed days' aggregated analytics to Supabase. Runs hourly, silently.
  *
