@@ -12,6 +12,11 @@ require.extensions['.ts'] = function compileTypeScript(mod, filename) {
 }
 
 const originalLoad = Module._load
+const originalResolveFilename = Module._resolveFilename
+Module._resolveFilename = function resolveAdminAlias(request, parent, isMain, options) {
+  if (request.startsWith('@/')) request = path.join(root, 'admin', request.slice(2))
+  return originalResolveFilename.call(this, request, parent, isMain, options)
+}
 let auth
 Module._load = function patchedLoad(request, parent, isMain) {
   if (request === 'next/headers') return { cookies: async () => ({ get: () => undefined }) }
@@ -38,7 +43,11 @@ Module._load = function patchedLoad(request, parent, isMain) {
   for (const password of [undefined, 'short']) {
     if (password === undefined) delete process.env.ADMIN_PASSWORD
     else process.env.ADMIN_PASSWORD = password
-    const response = await route.POST({ json: async () => ({ password: 'anything' }) })
+    const response = await route.POST(new Request('https://admin.test/api/login', {
+      method: 'POST',
+      body: JSON.stringify({ password: 'anything' }),
+      headers: { 'content-type': 'application/json' }
+    }))
     assert.equal(response.status, 503)
   }
   console.log('admin auth checks passed')

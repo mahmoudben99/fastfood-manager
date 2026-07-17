@@ -1,67 +1,85 @@
 /* Runs SQLite-backed IPC checks under Electron's Node ABI in an isolated temporary userData dir. */
-const assert = require('node:assert/strict')
-const { createHash } = require('node:crypto')
-const fs = require('node:fs')
-const os = require('node:os')
-const path = require('node:path')
-const Module = require('node:module')
-const ts = require('typescript')
+import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { createRequire, register } from 'node:module'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { getHandler, setDialogPath } from './electron-safety-mock.mjs'
+import { setFailRename } from './electron-safety-fs.mjs'
 
-const root = path.resolve(__dirname, '..', '..')
+const here = path.dirname(fileURLToPath(import.meta.url))
+const root = path.resolve(here, '..', '..')
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'ffm-safety-'))
-const handlers = new Map()
-let dialogPath = null
-let failRename = false
+globalThis.__ffmSafetyScratch = scratch
 
-const electron = {
-  app: {
-    isPackaged: true,
-    getPath: () => scratch,
-    setLoginItemSettings: () => {}
-  },
-  ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
-  dialog: { showOpenDialog: async () => ({ canceled: !dialogPath, filePaths: dialogPath ? [dialogPath] : [] }) },
-  BrowserWindow: class {},
-  shell: { openPath: async () => '' }
+const require = createRequire(import.meta.url)
+const appRequire = createRequire(pathToFileURL(path.join(root, 'package.json')))
+const esbuildEntry = pathToFileURL(require.resolve('esbuild')).href
+const electronMock = pathToFileURL(path.join(here, 'electron-safety-mock.mjs')).href
+const fsMock = pathToFileURL(path.join(here, 'electron-safety-fs.mjs')).href
+const betterSqlite = pathToFileURL(appRequire.resolve('better-sqlite3')).href
+const loaderSrc = `
+import { existsSync, statSync, readFileSync } from 'node:fs'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import path from 'node:path'
+let esbuild
+let electronMock
+let fsMock
+let betterSqlite
+export async function initialize(data) {
+  esbuild = await import(data.esbuildEntry)
+  electronMock = data.electronMock
+  fsMock = data.fsMock
+  betterSqlite = data.betterSqlite
 }
-
-const originalLoad = Module._load
-Module._load = function patchedLoad(request, parent, isMain) {
-  if (request === 'electron') return electron
-  if (request === 'fs') {
-    return new Proxy(fs, {
-      get(target, key) {
-        if (key === 'renameSync') return (...args) => {
-          if (failRename) throw new Error('forced replacement failure')
-          return target.renameSync(...args)
-        }
-        return target[key]
-      }
-    })
+export async function resolve(specifier, context, nextResolve) {
+  if (specifier === 'electron') return { url: electronMock, shortCircuit: true }
+  if (specifier === 'better-sqlite3') return { url: betterSqlite, shortCircuit: true }
+  if (specifier === 'fs' && context.parentURL.endsWith('/src/main/ipc/backup.ipc.ts')) {
+    return { url: fsMock, shortCircuit: true }
   }
-  return originalLoad.call(this, request, parent, isMain)
+  if (specifier.startsWith('.') && context.parentURL) {
+    try { return await nextResolve(specifier, context) }
+    catch (err) {
+      const parentDir = path.dirname(fileURLToPath(context.parentURL))
+      const base = path.resolve(parentDir, specifier)
+      const candidates = [base + '.ts', path.join(base, 'index.ts')]
+      for (const candidate of candidates) {
+        if (existsSync(candidate) && statSync(candidate).isFile()) return nextResolve(pathToFileURL(candidate).href, context)
+      }
+      throw err
+    }
+  }
+  return nextResolve(specifier, context)
 }
-require.extensions['.ts'] = function compileTypeScript(mod, filename) {
-  const source = fs.readFileSync(filename, 'utf8')
-  const output = ts.transpileModule(source, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true }
-  }).outputText
-  mod._compile(output, filename)
+export async function load(url, context, nextLoad) {
+  if (url.endsWith('.ts')) {
+    const source = readFileSync(fileURLToPath(url), 'utf8')
+    const result = esbuild.transformSync(source, { loader: 'ts', format: 'esm', target: 'node20' })
+    return { format: 'module', source: result.code, shortCircuit: true }
+  }
+  return nextLoad(url, context)
 }
+`
+register('data:text/javascript,' + encodeURIComponent(loaderSrc), import.meta.url, {
+  data: { esbuildEntry, electronMock, fsMock, betterSqlite }
+})
 
-const load = (relative) => require(path.join(root, relative))
+const load = (relative) => import(pathToFileURL(path.join(root, relative)).href)
 const hash = (file) => createHash('sha256').update(fs.readFileSync(file)).digest('hex')
 
-;(async () => {
-  const { initDatabase, getDb, getDbPath } = load('src/main/database/connection.ts')
+try {
+  const { initDatabase, getDb, getDbPath } = await load('src/main/database/connection.ts')
   initDatabase()
   const db = getDb()
-  const { registerSettingsHandlers } = load('src/main/ipc/settings.ipc.ts')
-  const { registerDataHandlers } = load('src/main/ipc/data.ipc.ts')
-  const { registerBackupHandlers } = load('src/main/ipc/backup.ipc.ts')
-  const { promotionsRepo } = load('src/main/database/repositories/promotions.repo.ts')
-  const { computeAutoDiscount } = load('src/main/services/order-promotions.ts')
-  const { recipeQuantityInStockUnits } = load('src/main/services/stock-units.ts')
+  const { registerSettingsHandlers } = await load('src/main/ipc/settings.ipc.ts')
+  const { registerDataHandlers } = await load('src/main/ipc/data.ipc.ts')
+  const { registerBackupHandlers } = await load('src/main/ipc/backup.ipc.ts')
+  const { promotionsRepo } = await load('src/main/database/repositories/promotions.repo.ts')
+  const { computeAutoDiscount } = await load('src/main/services/order-promotions.ts')
+  const { recipeQuantityInStockUnits } = await load('src/main/services/stock-units.ts')
 
   registerSettingsHandlers()
   registerDataHandlers()
@@ -75,7 +93,7 @@ const hash = (file) => createHash('sha256').update(fs.readFileSync(file)).digest
   db.prepare("INSERT INTO menu_items (name, price, category_id) VALUES ('Classic', 500, ?)").run(categoryId)
   db.prepare("INSERT INTO workers (name, role, pay_full_day, pay_half_day) VALUES ('Cook', 'cook', 1, 1)").run()
   db.prepare("INSERT INTO orders (daily_number, order_date, order_type, subtotal, total, discount_amount, status, created_at) VALUES (1, '2026-07-10', 'local', 500, 500, 0, 'completed', datetime('now'))").run()
-  await handlers.get('settings:logout')()
+  await getHandler('settings:logout')()
   for (const table of ['orders', 'menu_items', 'stock_items', 'workers']) {
     assert.equal(db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count, 1, `${table} was altered by logout`)
   }
@@ -102,10 +120,10 @@ const hash = (file) => createHash('sha256').update(fs.readFileSync(file)).digest
   assert.equal(500 + 300 - discount.amount, 300, 'oversized promotion leaked into the untouched line')
 
   // Old renderer calls are refused in the main process, even when the UI is bypassed.
-  assert.throws(() => handlers.get('data:clearForImport')(), (error) => error?.code === 'FFM_DESTRUCTIVE_IMPORT_DISABLED')
-  assert.throws(() => handlers.get('data:restoreVersion')(1), (error) => error?.code === 'FFM_DESTRUCTIVE_IMPORT_DISABLED')
+  assert.throws(() => getHandler('data:clearForImport')(), (error) => error?.code === 'FFM_DESTRUCTIVE_IMPORT_DISABLED')
+  assert.throws(() => getHandler('data:restoreVersion')(1), (error) => error?.code === 'FFM_DESTRUCTIVE_IMPORT_DISABLED')
   process.env.FFM_ALLOW_DESTRUCTIVE_IMPORT = '1'
-  assert.deepEqual(handlers.get('data:clearForImport')(), { success: false, error: 'Destructive Excel replacement is disabled. No data was changed.' })
+  assert.deepEqual(getHandler('data:clearForImport')(), { success: false, error: 'Destructive Excel replacement is disabled. No data was changed.' })
   delete process.env.FFM_ALLOW_DESTRUCTIVE_IMPORT
 
   // A corrupt or unrelated SQLite file is rejected before the live file changes.
@@ -114,37 +132,37 @@ const hash = (file) => createHash('sha256').update(fs.readFileSync(file)).digest
   const before = hash(livePath)
   const corrupt = path.join(scratch, 'corrupt.db')
   fs.writeFileSync(corrupt, 'not sqlite')
-  dialogPath = corrupt
-  const corruptResult = await handlers.get('backup:restore')()
+  setDialogPath(corrupt)
+  const corruptResult = await getHandler('backup:restore')()
   assert.equal(corruptResult.success, false)
   assert.equal(hash(livePath), before)
 
   const unrelated = path.join(scratch, 'unrelated.db')
-  const BetterSqlite = require('better-sqlite3')
+  const BetterSqlite = appRequire('better-sqlite3')
   const unrelatedDb = new BetterSqlite(unrelated)
   unrelatedDb.exec('CREATE TABLE unrelated (id INTEGER PRIMARY KEY)')
   unrelatedDb.close()
-  dialogPath = unrelated
-  const unrelatedResult = await handlers.get('backup:restore')()
+  setDialogPath(unrelated)
+  const unrelatedResult = await getHandler('backup:restore')()
   assert.equal(unrelatedResult.success, false)
   assert.equal(hash(livePath), before)
 
   // If replacement fails after the live DB is closed and removed, the verified rollback reopens service.
   const candidate = path.join(scratch, 'candidate.db')
   fs.copyFileSync(livePath, candidate)
-  dialogPath = candidate
-  failRename = true
-  const rollbackResult = await handlers.get('backup:restore')()
-  failRename = false
+  setDialogPath(candidate)
+  setFailRename(true)
+  const rollbackResult = await getHandler('backup:restore')()
+  setFailRename(false)
   assert.equal(rollbackResult.success, false)
   assert.equal(getDb().prepare("SELECT COUNT(*) AS count FROM orders").get().count, 1)
   console.log('electron safety IPC checks passed')
-})().catch((error) => {
+} catch (error) {
   console.error(error.stack || error)
   process.exitCode = 1
-}).finally(() => {
-  try { load('src/main/ipc/printer.ipc.ts').stopPrintJobProcessor() } catch { /* not loaded */ }
-  try { load('src/main/database/connection.ts').closeDatabase() } catch { /* not open */ }
+} finally {
+  try { (await load('src/main/ipc/printer.ipc.ts')).stopPrintJobProcessor() } catch { /* not loaded */ }
+  try { (await load('src/main/database/connection.ts')).closeDatabase() } catch { /* not open */ }
   try { fs.rmSync(scratch, { recursive: true, force: true }) } catch { /* best effort */ }
   process.exit(process.exitCode || 0)
-})
+}

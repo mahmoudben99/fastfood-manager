@@ -19,7 +19,7 @@ test('legacy ratio conversion returns a deduction without rewriting the input re
 
 test('SQLite-backed IPC safety regressions run against an isolated Electron userData directory', () => {
   const electron = require('electron')
-  const runner = join(here, 'electron-safety-runner.cjs')
+  const runner = join(here, 'electron-safety-runner.mjs')
   const output = execFileSync(electron, [runner], {
     cwd: os.tmpdir(),
     env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
