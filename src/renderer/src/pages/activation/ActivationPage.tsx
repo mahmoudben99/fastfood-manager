@@ -174,7 +174,7 @@ export function ActivationPage() {
           <div className="flex items-start gap-2 bg-blue-50 rounded-lg px-3 py-2 mb-4">
             <Wifi className="h-3.5 w-3.5 text-blue-500 flex-shrink-0 mt-0.5" />
             <p className="text-xs text-blue-700">
-              {t('activation.trialInternetNote', { defaultValue: 'Requires internet. App will show a warning if offline, and lock after 5 minutes without connection.' })}
+              {t('activation.trialInternetNote', { defaultValue: 'Requires internet. Keeps working offline for up to 7 days between checks.' })}
             </p>
           </div>
 

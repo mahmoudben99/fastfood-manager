@@ -346,7 +346,7 @@
     "or": "OR",
     "startFreeTrial": "Start Free Trial",
     "trialSubtitle": "7 days, full features — no credit card",
-    "trialInternetNote": "Requires internet. App will show a warning if offline, and lock after 5 minutes without connection.",
+    "trialInternetNote": "Requires internet to start and to verify periodically. Keeps working offline for up to 7 days between checks.",
     "startTrialButton": "Start 7-Day Free Trial",
     "needLicense": "Need a license? Contact us to purchase.",
     "trialExpired": "Your free trial has expired. Please purchase a license to continue.",
