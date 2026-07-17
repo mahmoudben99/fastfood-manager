@@ -120,8 +120,9 @@ export function SetupWizard() {
   const handleFinish = async () => {
     setSaving(true)
     try {
-      // Hash password
-      const hash = await window.api.settings.hashPassword(data.password)
+      // Store the admin password AND provision the remote owner-dashboard credential (owner_credentials)
+      // via the device-token-authed admin endpoint, so a NEW customer's owner dashboard is reachable.
+      await window.api.settings.setAdminPassword(data.password)
 
       // Save all settings
       await window.api.settings.setMultiple({
@@ -135,7 +136,7 @@ export function SetupWizard() {
         currency_symbol: data.currencySymbol,
         logo_path: data.logoPath,
         input_mode: data.inputMode,
-        admin_password_hash: hash,
+        // admin_password_hash is stored by setAdminPassword above (which also provisions owner_credentials).
         // Commit the completion marker only after schedule/categories finish successfully.
         setup_complete: 'false'
       })

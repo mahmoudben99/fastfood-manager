@@ -9,9 +9,12 @@
  * must never gate a mutation by themselves. Access here requires the WP-D device
  * access token bound to the SAME machineId.
  *
- * FAIL CLOSED: until WP-D integration wires real Ed25519 verification below, every
- * request is denied with 401. Never allow-by-default.
+ * FAIL CLOSED: verification runs through the shared Ed25519 helper in admin/lib/device-token.ts;
+ * any request without a currently-valid k1 access token bound to THIS machineId is denied with 401.
+ * Never allow-by-default.
  */
+
+import { verifyDeviceAccessToken as verifyToken } from '@/lib/device-token'
 
 interface DeviceAuthResult {
   ok: boolean
@@ -28,16 +31,15 @@ function jsonResponse(body: unknown, status: number): Response {
 }
 
 /**
- * TODO(WP-D integration): verify device access token.
- * Required checks when wiring (CONTRACT §1.3):
+ * Verify the WP-D device access token (CONTRACT §1.3) via the shared helper:
  *   - `Authorization: Bearer <payload.sig>` present
- *   - Ed25519 signature valid against the baked [current, previous] pubkeys (kid select)
- *   - claims: typ === 'access', exp > now, mid === machineId (uppercased)
- *   - st ∈ {active, trial}
- * Until then this DENIES EVERYTHING — the endpoint fails closed by design.
+ *   - Ed25519 signature valid against the baked k1 pubkey (kid select)
+ *   - claims: typ === 'access', exp > now (small skew), mid === machineId (uppercased)
+ * Fails closed with a clear reason otherwise — machineId alone never authorises a mutation.
  */
-function verifyDeviceAccessToken(_request: Request, _machineId: string): DeviceAuthResult {
-  return { ok: false, reason: 'device_token_verification_not_integrated' }
+function verifyDeviceAccessToken(request: Request, machineId: string): DeviceAuthResult {
+  const result = verifyToken(request.headers.get('authorization'), machineId)
+  return result.ok ? { ok: true, reason: 'ok' } : { ok: false, reason: result.reason }
 }
 
 async function getServiceClient(): Promise<any | null> {

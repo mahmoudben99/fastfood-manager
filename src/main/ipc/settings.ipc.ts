@@ -5,7 +5,7 @@ import { randomUUID } from 'crypto'
 import bcrypt from 'bcryptjs'
 import { settingsRepo } from '../database/repositories/settings.repo'
 import { getLogoPath } from '../database/connection'
-import { syncAdminPassword } from '../sync/owner-sync'
+import { syncAdminPassword, provisionOwnerCredential } from '../sync/owner-sync'
 
 // Keys that can ONLY be set through proper activation/trial flows, never from renderer
 const PROTECTED_KEYS = new Set([
@@ -63,6 +63,24 @@ export function registerSettingsHandlers(): void {
 
   ipcMain.handle('settings:hashPassword', (_, password: string) => {
     return bcrypt.hashSync(password, 10)
+  })
+
+  /**
+   * Set/change the admin password AND provision the remote owner-dashboard credential in one step.
+   * The plaintext is available here (unlike the hash-only `settings:set` path), so this is the site
+   * that can bcrypt-hash it server-side into `owner_credentials` (via the device-token-authed admin
+   * endpoint) — the bridge that makes the owner dashboard reachable. The plaintext is never logged.
+   * `ownerDashboard` lets the renderer surface an i18n hint (e.g. 'too_short' → remote dashboard
+   * needs a >= 8-char credential); a non-'provisioned' result never weakens local admin auth.
+   */
+  ipcMain.handle('settings:setAdminPassword', async (_, newPassword: string) => {
+    if (typeof newPassword !== 'string' || newPassword.length < 4) {
+      return { ok: false as const, error: 'too_short_local' as const }
+    }
+    const hash = bcrypt.hashSync(newPassword, 10)
+    settingsRepo.set('admin_password_hash', hash)
+    const provision = await provisionOwnerCredential(newPassword)
+    return { ok: true as const, ownerDashboard: provision.ok ? ('provisioned' as const) : provision.reason }
   })
 
   ipcMain.handle('settings:verifyPassword', (_, password: string) => {

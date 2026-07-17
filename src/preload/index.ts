@@ -22,6 +22,12 @@ const api = {
     getSchedule: () => ipcRenderer.invoke('settings:getSchedule'),
     setSchedule: (schedule: any[]) => ipcRenderer.invoke('settings:setSchedule', schedule),
     hashPassword: (password: string) => ipcRenderer.invoke('settings:hashPassword', password),
+    setAdminPassword: (
+      newPassword: string
+    ): Promise<
+      | { ok: false; error: 'too_short_local' }
+      | { ok: true; ownerDashboard: 'provisioned' | 'offline' | 'too_short' | 'unlicensed' | 'failed' }
+    > => ipcRenderer.invoke('settings:setAdminPassword', newPassword),
     verifyPassword: (password: string) => ipcRenderer.invoke('settings:verifyPassword', password),
     uploadLogo: () => ipcRenderer.invoke('settings:uploadLogo'),
     selectFolder: () => ipcRenderer.invoke('settings:selectFolder'),

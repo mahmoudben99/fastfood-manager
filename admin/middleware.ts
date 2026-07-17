@@ -27,11 +27,13 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/r/') ||
     pathname.startsWith('/o/') ||
     pathname.startsWith('/api/remote-order') ||
+    pathname === '/api/owner-credential/provision' ||
     pathname.startsWith('/api/pair')
   ) {
-    // NOTE: `/api/owner-credential` deliberately does NOT match here (unlike a bare
-    // `startsWith('/api/owner')` would) — it is an admin-session-gated endpoint, not part of the
-    // owner (restaurant) dashboard's own credential auth.
+    // NOTE: the bare `/api/owner-credential` reset endpoint deliberately does NOT match here — it is
+    // ADMIN-SESSION gated. Only its `/provision` sub-path is bypassed: that one carries its own
+    // WP-D device-access-token auth (verified inside the route), exactly like /api/remote-order and
+    // the owner dashboard's own credential auth, so it must not be forced through the admin login.
     return NextResponse.next()
   }
 

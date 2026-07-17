@@ -90,6 +90,13 @@ export interface LicenseClient {
   check(): Promise<LicenseDecision>
   startTrial(input: { restaurantName?: string; phone?: string }): Promise<LicenseDecision>
   diagnostics(): Pick<LicenseDecision, 'machineIdMismatch' | 'deviceSecretStorageFallback'>
+  /**
+   * The short-lived (~1h) device ACCESS token (typ 'access') minted by the server on the last
+   * successful /check or /trial/start. Returns the cached token when still fresh; otherwise runs a
+   * /check to refresh it. Returns null when the device is genuinely unlicensed / never checked, or
+   * when a refresh could not obtain a fresh token (offline with nothing cached). Never logged.
+   */
+  getAccessToken(): Promise<string | null>
 }
 
 // Storage keys (all namespaced under license_*; activation_* are pre-existing legacy keys).
@@ -386,6 +393,11 @@ export function createLicenseClient(options: LicenseClientOptions): LicenseClien
     storage.set(K_CACHED_ENTITLEMENT, String(body.entitlement))
     advanceFloor(claims)
     anchorServerTime(claims.iat) // M7: monotonic grace anchor for subsequent offline checks
+    // Capture the co-issued device ACCESS token (typ 'access') for desktop→admin calls. Only after
+    // the ENTITLEMENT verified and licensed, so a malformed 2xx can never poison the cached token.
+    if (typeof body.accessToken === 'string' && body.accessToken.length > 0) {
+      cachedAccessToken = body.accessToken
+    }
     return decision('licensed', 'valid_entitlement', claims)
   }
 
@@ -518,22 +530,57 @@ export function createLicenseClient(options: LicenseClientOptions): LicenseClien
     }
   }
 
+  // ── Device ACCESS token cache (typ 'access'): in-memory only, never persisted or logged. ──
+  let cachedAccessToken: string | null = null
+  const ACCESS_TOKEN_SKEW_SECONDS = 60
+
+  function accessTokenExpSeconds(token: string): number | null {
+    try {
+      const parts = token.split('.')
+      if (parts.length !== 2) return null
+      const claims = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8')) as { exp?: unknown }
+      return typeof claims.exp === 'number' && Number.isFinite(claims.exp) ? claims.exp : null
+    } catch {
+      return null
+    }
+  }
+
+  /** Fresh = parseable and comfortably before its signed exp (skew guards clock/latency). */
+  function accessTokenIsFresh(token: string): boolean {
+    const exp = accessTokenExpSeconds(token)
+    return exp !== null && nowSeconds() < exp - ACCESS_TOKEN_SKEW_SECONDS
+  }
+
   // Single in-flight check: concurrent triggers (startup + periodic + resume) share one request.
   let inflight: Promise<LicenseDecision> | null = null
+  function runCheck(): Promise<LicenseDecision> {
+    if (inflight) return inflight
+    inflight = performCheck().finally(() => {
+      inflight = null
+    })
+    return inflight
+  }
 
   return {
     check(): Promise<LicenseDecision> {
-      if (inflight) return inflight
-      inflight = performCheck().finally(() => {
-        inflight = null
-      })
-      return inflight
+      return runCheck()
     },
     startTrial(input): Promise<LicenseDecision> {
       return postTrialStart(input ?? {})
     },
     diagnostics(): Pick<LicenseDecision, 'machineIdMismatch' | 'deviceSecretStorageFallback'> {
       return { machineIdMismatch, deviceSecretStorageFallback: deviceSecretStorage.fallback }
+    },
+    async getAccessToken(): Promise<string | null> {
+      if (cachedAccessToken && accessTokenIsFresh(cachedAccessToken)) return cachedAccessToken
+      // Stale or never obtained → refresh via a /check (shares the single in-flight request).
+      try {
+        await runCheck()
+      } catch {
+        // Network failure: fall through to whatever (if anything) we still hold.
+      }
+      if (cachedAccessToken && accessTokenIsFresh(cachedAccessToken)) return cachedAccessToken
+      return null
     }
   }
 }

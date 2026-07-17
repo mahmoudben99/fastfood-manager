@@ -640,17 +640,26 @@ export async function rejectRemoteOrder(id: string, reason?: string): Promise<{ 
 // ── Per-restaurant flag (red-team finding #5) ──────────────────────────────────
 // The cloud RPCs are service_role-only; the desktop reaches them EXCLUSIVELY via
 // the admin endpoint /api/remote-order/settings, authenticated with the WP-D
-// device access token. Until WP-D lands, getDeviceAccessToken() returns null and
+// device access token. getDeviceAccessToken() now returns the live token from the
+// license client; when the device is unlicensed/never-checked it returns null and
 // both calls FAIL CLOSED (pendingIntegration) — the flag stays at its cloud
 // default (OFF), which is the release gate for enabling remote ordering.
 
 // TODO(integration): read from src/main/config/endpoints.ts (CONTRACT §4).
 const ADMIN_BASE_URL = 'https://fastfood-manager.vercel.app'
 
-/** TODO(WP-D integration): return the cached device ACCESS token (typ 'access',
- *  CONTRACT §1.3) from the license client. FAILS CLOSED (null) until wired. */
+/**
+ * The cached device ACCESS token (typ 'access', CONTRACT §1.3) from the license client. Null only
+ * when genuinely unlicensed / never checked. Lazily imported so the frozen factory tests (which
+ * import only the pure listener above) never pull in electron via license-service. Never logged.
+ */
 async function getDeviceAccessToken(): Promise<string | null> {
-  return null
+  try {
+    const { getDeviceAccessToken: fromLicense } = await import('../activation/license-service')
+    return await fromLicense()
+  } catch {
+    return null
+  }
 }
 
 export interface RemoteOrderingFlagStatus {

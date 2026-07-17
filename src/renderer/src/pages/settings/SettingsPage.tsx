@@ -473,11 +473,19 @@ export function SettingsPage() {
       setPassError(t('settings.currentPasswordIncorrect', { defaultValue: 'Current password is incorrect' }))
       return
     }
-    const hash = await window.api.settings.hashPassword(newPass)
-    await window.api.settings.set('admin_password_hash', hash)
+    // Store the admin password AND provision the remote owner-dashboard credential in one call.
+    const result = await window.api.settings.setAdminPassword(newPass)
     setCurrentPass('')
     setNewPass('')
     setConfirmPass('')
+    if (result.ok && result.ownerDashboard === 'too_short') {
+      setPassError(
+        t('settings.ownerDashboardCredentialTooShort', {
+          defaultValue:
+            'Password saved. Note: the online owner dashboard needs a password of at least 8 characters to be reachable.'
+        })
+      )
+    }
     flashSaved()
   }
 

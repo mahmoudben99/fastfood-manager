@@ -13,7 +13,7 @@ import { issueResetTicket, redeemResetTicket } from '../activation/reset-ticket'
 import { settingsRepo } from '../database/repositories/settings.repo'
 import { recordActivation } from '../activation/cloud'
 import { sendMessageToChat } from '../telegram/bot'
-import { syncAdminPassword } from '../sync/owner-sync'
+import { provisionOwnerCredential } from '../sync/owner-sync'
 
 export function registerActivationHandlers(): void {
   ipcMain.handle('activation:getMachineId', () => {
@@ -47,7 +47,8 @@ export function registerActivationHandlers(): void {
     }
     const hash = bcrypt.hashSync(newPassword, 10)
     settingsRepo.set('admin_password_hash', hash)
-    syncAdminPassword().catch(() => {})
+    // Provision the remote owner-dashboard credential (owner_credentials) with the new password.
+    provisionOwnerCredential(newPassword).catch(() => {})
     return { success: true }
   })
 
@@ -85,7 +86,8 @@ export function registerActivationHandlers(): void {
     }
     const hash = bcrypt.hashSync(newPassword, 10)
     settingsRepo.set('admin_password_hash', hash)
-    syncAdminPassword().catch(() => {})
+    // Provision the remote owner-dashboard credential (owner_credentials) with the new password.
+    provisionOwnerCredential(newPassword).catch(() => {})
     return { success: true }
   })
 }

@@ -137,3 +137,13 @@ export function startLicenseTrial(input: { restaurantName?: string; phone?: stri
 export function licenseDiagnostics(): Pick<LicenseDecision, 'machineIdMismatch' | 'deviceSecretStorageFallback'> {
   return getLicenseClient().diagnostics()
 }
+
+/**
+ * The current device ACCESS token (CONTRACT §1.3, typ 'access', ~1h TTL) from the last successful
+ * /check, refreshed via a /check when stale. Null only when genuinely unlicensed / never checked.
+ * This is the credential the desktop presents as `Authorization: Bearer <token>` to the admin
+ * endpoints that enable remote ordering and provision the owner-dashboard credential. NEVER log it.
+ */
+export function getDeviceAccessToken(): Promise<string | null> {
+  return getLicenseClient().getAccessToken()
+}

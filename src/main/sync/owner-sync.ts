@@ -87,31 +87,61 @@ export async function syncOrderStatusToCloud(orderId: number, status: string): P
   }
 }
 
-// Sync owner PIN to cloud (hashed) — LEGACY, kept for backward compat
-export async function syncOwnerPin(pin: string): Promise<void> {
-  // Now syncs the admin password hash instead of tablet PIN
+// Sync owner PIN to cloud (hashed) — LEGACY, kept for backward compat with older callers.
+export async function syncOwnerPin(_pin: string): Promise<void> {
   await syncAdminPassword()
 }
 
-// Sync the admin password bcrypt hash to cloud for owner dashboard authentication
+/**
+ * LEGACY no-op (finding #5). This used to upsert the admin bcrypt hash into `owner_pins`, but the
+ * remote owner dashboard (WP-E) authenticates ONLY against `owner_credentials`, and nothing reads
+ * `owner_pins` anymore — so writing it was security-theatre that made the dashboard look provisioned
+ * when it was not. The real remote-owner credential is now provisioned via `provisionOwnerCredential`
+ * at password set/change time (device-token authed). Kept as a no-op so existing fire-and-forget
+ * callers stay valid without silently re-introducing the dead table.
+ */
 export async function syncAdminPassword(): Promise<void> {
-  if (!net.isOnline()) return
-  try {
-    const machineId = getMachineId()
-    const supabase = getClient()
-    const { settingsRepo } = await import('../database/repositories/settings.repo')
-    const hash = settingsRepo.get('admin_password_hash')
-    if (!hash) return
+  /* no-op: owner dashboard auth is provisioned through provisionOwnerCredential (owner_credentials) */
+}
 
-    await supabase.from('owner_pins').upsert(
-      {
-        machine_id: machineId,
-        pin_hash: hash, // Store the bcrypt hash directly
-        updated_at: new Date().toISOString()
-      },
-      { onConflict: 'machine_id' }
-    )
+// Admin origin the desktop reaches its device-token-authed endpoints through (matches the
+// remote-order listener's ADMIN_BASE_URL). TODO(integration): read from config/endpoints.ts.
+const ADMIN_BASE_URL = 'https://fastfood-manager.vercel.app'
+
+/** The remote owner dashboard credential must be at least this long (mirrors WP-E MIN_CREDENTIAL_LENGTH). */
+export const MIN_OWNER_DASHBOARD_CREDENTIAL_LENGTH = 8
+
+export type OwnerCredentialProvisionResult =
+  | { ok: true }
+  | { ok: false; reason: 'offline' | 'too_short' | 'unlicensed' | 'failed' }
+
+/**
+ * Provision (or rotate) the remote owner-dashboard credential in the cloud `owner_credentials`
+ * table via the admin endpoint, authenticated with the device ACCESS token. This is the bridge
+ * that makes the owner dashboard reachable (finding #2). The plaintext credential is sent over TLS
+ * and bcrypt-hashed SERVER-side; it is never persisted here and NEVER logged.
+ *
+ * Reasons: 'too_short' — the credential is < 8 chars (the caller must surface an i18n hint and MUST
+ * NOT fall back to any weaker auth); 'offline'/'unlicensed'/'failed' — transient, retry later.
+ */
+export async function provisionOwnerCredential(password: string): Promise<OwnerCredentialProvisionResult> {
+  if (typeof password !== 'string' || password.length < MIN_OWNER_DASHBOARD_CREDENTIAL_LENGTH) {
+    return { ok: false, reason: 'too_short' }
+  }
+  if (!net.isOnline()) return { ok: false, reason: 'offline' }
+  try {
+    const { getDeviceAccessToken } = await import('../activation/license-service')
+    const token = await getDeviceAccessToken()
+    if (!token) return { ok: false, reason: 'unlicensed' }
+    const machineId = getMachineId()
+    const res = await fetch(`${ADMIN_BASE_URL}/api/owner-credential/provision`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+      body: JSON.stringify({ machineId, credential: password })
+    })
+    if (!res.ok) return { ok: false, reason: 'failed' }
+    return { ok: true }
   } catch {
-    /* silent */
+    return { ok: false, reason: 'failed' }
   }
 }

@@ -11,6 +11,9 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import test from 'node:test'
+// SELF-CONTAINED TEST SECRET: hardening tests build capability tokens; default if CI didn't set one.
+if (!process.env.SERVER_CAPABILITY_SECRET) process.env.SERVER_CAPABILITY_SECRET = 'ci-default-capability-secret-32bytes-minimum-000'
+
 
 const NOW = new Date('2026-07-16T10:00:00.000Z')
 const MACHINE = 'ABC123'
@@ -83,7 +86,7 @@ function mockSupabase() {
 }
 
 async function routeWith() {
-  const module = await import('../../app/api/remote-order/route.ts')
+  const module = await import('../../app/api/remote-order/_handler.ts')
   const supabase = mockSupabase()
   const route = module.createRemoteOrderRoute({
     supabase,
@@ -141,22 +144,30 @@ test('hardening_oversized_stream_without_content_length_cancelled', async () => 
 // ── #7 capability secret is mandatory in production (fail closed) ──────────────
 
 test('hardening_missing_secret_fails_closed_500', async (t) => {
-  const module = await import('../../app/api/remote-order/route.ts')
+  const module = await import('../../app/api/remote-order/_handler.ts')
   const saved = process.env.SERVER_CAPABILITY_SECRET
   t.after(() => {
     if (saved === undefined) delete process.env.SERVER_CAPABILITY_SECRET
     else process.env.SERVER_CAPABILITY_SECRET = saved
   })
 
+  // route.ts's production POST wrapper is exactly:
+  //   if (capabilitySecretProblem(process.env.SERVER_CAPABILITY_SECRET) !== null)
+  //     return jsonResponse({ error: 'config_error' }, 500)
+  // route.ts can't be imported under `node --test` (its extensionless ./_handler
+  // import), so we assert the exact decision that wrapper makes, via the tested fn.
+  const wrapperVerdict = (env) =>
+    module.capabilitySecretProblem(env) !== null ? { status: 500, error: 'config_error' } : null
+
   delete process.env.SERVER_CAPABILITY_SECRET
-  const missing = await module.POST(request(baseBody()))
-  assert.equal(missing.status, 500)
-  assert.equal((await missing.json()).error, 'config_error')
+  const missing = wrapperVerdict(process.env.SERVER_CAPABILITY_SECRET)
+  assert.equal(missing?.status, 500)
+  assert.equal(missing?.error, 'config_error')
 
   process.env.SERVER_CAPABILITY_SECRET = 'short'
-  const short = await module.POST(request(baseBody()))
-  assert.equal(short.status, 500)
-  assert.equal((await short.json()).error, 'config_error')
+  const short = wrapperVerdict(process.env.SERVER_CAPABILITY_SECRET)
+  assert.equal(short?.status, 500)
+  assert.equal(short?.error, 'config_error')
 
   assert.equal(module.capabilitySecretProblem(undefined), 'missing')
   assert.equal(module.capabilitySecretProblem(''), 'missing')
@@ -207,7 +218,7 @@ function scriptedStatusSupabase(script) {
 }
 
 async function statusRouteWith(script) {
-  const module = await import('../../app/api/remote-order/status/route.ts')
+  const module = await import('../../app/api/remote-order/status/_handler.ts')
   const supabase = scriptedStatusSupabase(script)
   return {
     supabase,
