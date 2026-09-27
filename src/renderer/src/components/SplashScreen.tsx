@@ -42,13 +42,9 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
   if (stage === 3) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-orange-600 via-orange-500 to-amber-500 overflow-hidden">
-      {/* Animated background elements */}
-      <div className="absolute inset-0 opacity-20">
-        <div className="absolute top-10 left-10 w-32 h-32 bg-white rounded-full blur-3xl animate-blob" />
-        <div className="absolute top-20 right-20 w-40 h-40 bg-yellow-200 rounded-full blur-3xl animate-blob animation-delay-2000" />
-        <div className="absolute bottom-20 left-1/3 w-36 h-36 bg-orange-300 rounded-full blur-3xl animate-blob animation-delay-4000" />
-      </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ember overflow-hidden">
+      {/* v4: static warm glow instead of blurred animated blobs (blur is too heavy for weak PCs) */}
+      <div className="absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_40%,rgb(255_178_124/0.35),transparent_70%)]" />
 
       {/* Floating food emojis - scatter animation */}
       {stage >= 0 && foodEmojis.map((emoji, i) => (
@@ -67,7 +63,7 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
       ))}
 
       {/* Main content window - 3:2 ratio with rounded corners */}
-      <div className="relative w-[600px] h-[400px] bg-white/10 backdrop-blur-md rounded-3xl shadow-2xl border-2 border-white/20 flex flex-col items-center justify-center p-8 z-10">
+      <div className="relative w-[600px] h-[400px] bg-black/15 rounded-3xl shadow-e4 border border-white/20 flex flex-col items-center justify-center p-8 z-10">
 
         {/* Logo or Restaurant Name */}
         {stage >= 1 && (

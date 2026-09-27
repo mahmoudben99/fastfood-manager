@@ -3,147 +3,135 @@
 <head>
   <meta charset="UTF-8">
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    /* v4 "Ember" splash: 58 KB JPEG (was a 5 MB PNG), compositor-only motion, reduced-motion aware. */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
-    html {
-      background: transparent;
-    }
+    html { background: transparent; }
 
     body {
       width: 900px;
       height: 600px;
       overflow: hidden;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: url('./splash-screen.png') center/cover no-repeat;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      position: relative;
-      border-radius: 20px;
+      background: transparent;
+      font-family: 'Segoe UI Variable Display', 'Segoe UI', system-ui, -apple-system, sans-serif;
+      color: #fff;
+      -webkit-font-smoothing: antialiased;
     }
 
-    /* Main content — centered on screen */
+    /* The picture lives on .frame (not body): a body background propagates to the whole
+       transparent window and the rounded corners never showed. */
+    .frame {
+      position: relative;
+      width: 900px;
+      height: 600px;
+      overflow: hidden;
+      border-radius: 22px;
+      background: #7a1d0b url('./splash-bg.jpg') center / cover no-repeat;
+    }
+
+    /* Warm vignette so the name stays legible on the busy photo */
+    .frame::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(60% 45% at 50% 58%, rgba(40, 12, 4, 0.35), transparent 70%),
+        linear-gradient(180deg, rgba(28, 10, 4, 0) 45%, rgba(28, 10, 4, 0.55) 100%);
+    }
+
     .container {
-      width: 100%;
+      position: relative;
+      z-index: 1;
       height: 100%;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      position: relative;
-      z-index: 10;
       text-align: center;
+      padding: 150px 56px 0;
     }
 
-    /* Restaurant name — big and centered, the hero text */
     .restaurant-name {
-      font-size: 72px;
+      font-size: 68px;
       font-weight: 900;
-      color: white;
-      text-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), 0 2px 4px rgba(0, 0, 0, 0.4);
-      letter-spacing: -2px;
+      line-height: 1.05;
+      letter-spacing: -1.5px;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.35), 0 10px 30px rgba(60, 15, 0, 0.45);
       opacity: 0;
-      animation: popIn 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55) 0.4s forwards;
-      margin-bottom: 16px;
-      padding: 0 40px;
-      line-height: 1.1;
+      transform: translateY(14px) scale(0.98);
+      animation: rise 700ms cubic-bezier(0.22, 1, 0.36, 1) 250ms forwards;
+      max-width: 780px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
-    @keyframes popIn {
-      0% {
-        opacity: 0;
-        transform: scale(0.3);
-      }
-      60% {
-        transform: scale(1.1);
-      }
-      100% {
-        opacity: 1;
-        transform: scale(1);
-      }
-    }
-
-    /* Subtitle: "Thank you for using" */
-    .subtitle {
-      font-size: 18px;
-      font-weight: 500;
-      color: rgba(255, 255, 255, 0.9);
-      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    .tagline {
+      margin-top: 18px;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 16px;
+      border-radius: 999px;
+      background: rgba(20, 8, 3, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+      color: rgba(255, 255, 255, 0.92);
       opacity: 0;
-      animation: fadeIn 0.6s ease-out 1.0s forwards;
-      margin-bottom: 4px;
+      animation: fade 600ms ease-out 700ms forwards;
     }
 
-    /* App name: "Fast Food Manager" */
-    .app-name {
-      font-size: 28px;
-      font-weight: 800;
-      color: white;
-      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
-      opacity: 0;
-      animation: fadeIn 0.6s ease-out 1.3s forwards;
-    }
-
-    @keyframes fadeIn {
-      0% {
-        opacity: 0;
-        transform: translateY(12px);
-      }
-      100% {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    /* Loading dots */
-    .loading {
-      position: absolute;
-      bottom: 30px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 8px;
-    }
-
-    .dot {
-      width: 8px;
-      height: 8px;
-      background: rgba(255, 255, 255, 0.8);
+    .tagline .dot {
+      width: 7px;
+      height: 7px;
       border-radius: 50%;
-      animation: pulse 1.5s ease-in-out infinite;
+      background: #ffb27c;
+      box-shadow: 0 0 10px #ff8c45;
     }
 
-    .dot:nth-child(1) { animation-delay: 0s; }
-    .dot:nth-child(2) { animation-delay: 0.2s; }
-    .dot:nth-child(3) { animation-delay: 0.4s; }
+    .progress {
+      position: absolute;
+      left: 50%;
+      bottom: 38px;
+      width: 220px;
+      height: 4px;
+      margin-left: -110px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.22);
+      overflow: hidden;
+      z-index: 1;
+    }
 
-    @keyframes pulse {
-      0%, 100% {
-        opacity: 0.3;
-        transform: scale(1);
-      }
-      50% {
-        opacity: 1;
-        transform: scale(1.3);
-      }
+    .progress::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #ffd2ae, #ffffff);
+      transform-origin: left center;
+      transform: scaleX(0);
+      animation: load 4.6s cubic-bezier(0.3, 0.6, 0.2, 1) 200ms forwards;
+    }
+
+    @keyframes rise { to { opacity: 1; transform: none; } }
+    @keyframes fade { to { opacity: 1; } }
+    @keyframes load { to { transform: scaleX(1); } }
+
+    @media (prefers-reduced-motion: reduce) {
+      .restaurant-name, .tagline { animation: none; opacity: 1; transform: none; }
+      .progress::after { animation: none; transform: scaleX(1); }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="restaurant-name" id="restaurantName">FFM</div>
-    <div class="subtitle">Thank you for using</div>
-    <div class="app-name">Fast Food Manager</div>
-
-    <div class="loading">
-      <div class="dot"></div>
-      <div class="dot"></div>
-      <div class="dot"></div>
+  <div class="frame">
+    <div class="container">
+      <div class="restaurant-name" id="restaurantName" dir="auto">FFM</div>
+      <div class="tagline"><span class="dot"></span><span>Fast Food Manager</span></div>
     </div>
+    <div class="progress" aria-hidden="true"></div>
   </div>
 
   <script>
