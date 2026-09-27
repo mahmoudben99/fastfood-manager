@@ -15,11 +15,16 @@
  * margin         a purchase made today raised a unit price and pushed a menu item from ≥ the
  *                margin threshold to below it (one alert per menu item)
  * slow_day / low_stock are skipped on days the work schedule marks as closed.
+ * Every kind is evaluated for the in-app list; `telegramEnabled` mirrors the kind's Telegram toggle
+ * (the scheduler only sends enabled kinds). Revenue is net of delivery fees; margins use the
+ * standard build (catalog-costs.ts: recipe + default options, combos with default picks).
  */
 import type Database from 'better-sqlite3'
 import type { InsightAlert, InsightAlertKind, InsightsSettings, PrepForecast } from '../../../shared/insights'
 import { addDays, localDateOf, localMinutesOf, localTimeOf, minutesOfTime, SQL_LOCAL, weekdayOf } from './dates'
-import { loadRecipes, loadStock, recipeCost, round1 } from './costs'
+import { loadStock, recipeCost, round1 } from './costs'
+import { loadCostingRecipes } from './catalog-costs'
+import { netTotal } from './sql'
 import { loadPriceBook } from './profit'
 import { buildForecast, FORECAST_WEEKS } from './forecast'
 import { ingredientNeeds } from './shopping-list'
@@ -43,7 +48,18 @@ export interface AlertContext {
   forecast?: PrepForecast
 }
 
-type Draft = Omit<InsightAlert, 'sent'>
+type Draft = Omit<InsightAlert, 'sent' | 'telegramEnabled'>
+
+/** Telegram toggle per alert kind. */
+export function telegramToggle(settings: InsightsSettings, kind: InsightAlertKind): boolean {
+  switch (kind) {
+    case 'cancellations': return settings.alertCancellations
+    case 'discounts': return settings.alertDiscounts
+    case 'slow_day': return settings.alertSlowDay
+    case 'low_stock': return settings.alertLowStock
+    case 'margin': return settings.alertMargin
+  }
+}
 
 export function meanAndSd(values: number[]): { mean: number; sd: number } {
   if (values.length === 0) return { mean: 0, sd: 0 }
@@ -135,7 +151,7 @@ export function expectedRevenueSoFar(db: Database.Database, today: string, cutof
   let samples = 0
   const stmt = db.prepare(
     `SELECT COUNT(*) AS orders,
-            COALESCE(SUM(CASE WHEN strftime('%H:%M', created_at, ${SQL_LOCAL}) <= ? THEN total ELSE 0 END), 0) AS revenue
+            COALESCE(SUM(CASE WHEN strftime('%H:%M', created_at, ${SQL_LOCAL}) <= ? THEN ${netTotal()} ELSE 0 END), 0) AS revenue
      FROM orders WHERE order_date = ? AND status != 'cancelled'`
   )
   for (let week = 1; week <= FORECAST_WEEKS; week++) {
@@ -155,7 +171,7 @@ function slowDayAlerts(db: Database.Database, ctx: AlertContext, today: string):
   const base = expectedRevenueSoFar(db, today, cutoff)
   if (!base || !(base.expected > 0)) return []
   const revenue = (db.prepare(
-    `SELECT COALESCE(SUM(total), 0) AS revenue FROM orders WHERE order_date = ? AND status != 'cancelled'`
+    `SELECT COALESCE(SUM(${netTotal()}), 0) AS revenue FROM orders WHERE order_date = ? AND status != 'cancelled'`
   ).get(today) as { revenue: number }).revenue
   const pct = Math.round((revenue / base.expected) * 100)
   if (pct >= ctx.settings.slowDayThresholdPct) return []
@@ -212,7 +228,7 @@ function marginAlerts(db: Database.Database, ctx: AlertContext, today: string): 
   const rising = purchases.filter((p) => p.previousPrice !== null && p.price > p.previousPrice)
   if (rising.length === 0) return []
 
-  const recipes = loadRecipes(db)
+  const recipes = loadCostingRecipes(db)
   const book = loadPriceBook(db, ctx.now)
   const stock = loadStock(db)
   const menu = new Map((db.prepare('SELECT id, name, name_ar, name_fr, price FROM menu_items WHERE is_active = 1').all() as
@@ -261,5 +277,9 @@ export function evaluateAlerts(db: Database.Database, ctx: AlertContext): Insigh
   if (kinds.has('slow_day')) drafts.push(...slowDayAlerts(db, ctx, today))
   if (kinds.has('low_stock')) drafts.push(...lowStockAlerts(db, ctx, today))
   if (kinds.has('margin')) drafts.push(...marginAlerts(db, ctx, today))
-  return drafts.map((draft) => ({ ...draft, sent: sent.has(draft.key) }))
+  return drafts.map((draft) => ({
+    ...draft,
+    sent: sent.has(draft.key),
+    telegramEnabled: telegramToggle(ctx.settings, draft.kind)
+  }))
 }

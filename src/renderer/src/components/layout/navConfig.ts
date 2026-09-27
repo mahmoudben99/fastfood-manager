@@ -3,6 +3,8 @@ import {
   BarChart3,
   ChefHat,
   ClipboardList,
+  LayoutDashboard,
+  Lightbulb,
   Monitor,
   Package,
   Settings,
@@ -35,7 +37,9 @@ export const NAV_GROUPS: NavGroup[] = [
     id: 'sales',
     label: 'ui.nav.groups.sales',
     items: [
+      { path: '/admin/dashboard', icon: LayoutDashboard, label: 'dashboard.nav' },
       { path: '/admin/analytics', icon: BarChart3, label: 'nav.analytics' },
+      { path: '/admin/insights', icon: Lightbulb, label: 'insights.nav' },
       { path: '/admin/orders-history', icon: ClipboardList, label: 'nav.ordersHistory' },
       { path: '/admin/promotions', icon: Tag, label: 'nav.promotions' }
     ]

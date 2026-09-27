@@ -8,11 +8,13 @@
  * staffing       = per weekday, runs of consecutive regular hours whose load factor
  *                  (avgOrders ÷ mean avgOrders of all regular hours) is ≥ 1.5 ('peak': plan
  *                  extra hands) or ≤ 0.5 ('quiet': breaks, prep, cleaning)
+ * Revenue is net of delivery fees (sql.ts).
  */
 import type Database from 'better-sqlite3'
 import type { RushHourCell, RushHoursReport, StaffingBlock } from '../../../shared/insights'
 import { assertRange, SQL_LOCAL } from './dates'
 import { round2 } from './costs'
+import { netTotal } from './sql'
 
 export const PEAK_FACTOR = 1.5
 export const QUIET_FACTOR = 0.5
@@ -23,7 +25,7 @@ export function buildRushHours(db: Database.Database, startDate: string, endDate
   const rows = db.prepare(
     `SELECT CAST(strftime('%w', order_date) AS INTEGER) AS weekday,
             CAST(strftime('%H', created_at, ${SQL_LOCAL}) AS INTEGER) AS hour,
-            COUNT(*) AS orders, COALESCE(SUM(total), 0) AS revenue,
+            COUNT(*) AS orders, COALESCE(SUM(${netTotal()}), 0) AS revenue,
             COUNT(DISTINCT order_date) AS activeDays
      FROM orders
      WHERE order_date BETWEEN ? AND ? AND status != 'cancelled'

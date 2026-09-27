@@ -9,11 +9,16 @@
  *   rounded = up to 0.1 (< 1), 0.5 (< 10) or 1 (≥ 10) for kg/liter; whole numbers for units
  *   cost    = rounded × latest purchase price (fallback: stock item price)
  * Stock items already at/below their threshold appear even when today's forecast does not use them.
+ *
+ * v4 catalog: the forecast's physical items (combo children included) use their own recipe;
+ * forecast combos add only their OWN recipe (packaging…); forecast options add their ingredients
+ * ("Extra cheese" → cheese). Kind 'no' options never use stock.
  */
 import type Database from 'better-sqlite3'
 import type { PrepForecast, ShoppingList, ShoppingListItem, ShoppingListUsage } from '../../../shared/insights'
 import { canonicalUnit } from '../stock-units'
-import { latestUnitCosts, lineStockQuantity, loadPurchaseHistory, loadRecipes, loadStock, round3 } from './costs'
+import { latestUnitCosts, lineStockQuantity, loadPurchaseHistory, loadRecipes, loadStock, round3, type RecipeLine } from './costs'
+import { loadOptionRecipes } from './catalog-costs'
 import { buildForecast, type ForecastOptions } from './forecast'
 
 /** Rounds a purchase quantity UP to a step a shop can actually sell. */
@@ -54,23 +59,33 @@ export function ingredientNeeds(
   const recipes = loadRecipes(db)
   const needs = new Map<number, IngredientNeed>()
   const warnings: string[] = []
-  for (const item of forecast.items) {
-    for (const line of recipes.get(item.menuItemId) ?? []) {
+  const add = (consumer: { menuItemId: number; name: string; expected: number }, lines: RecipeLine[]): void => {
+    for (const line of lines) {
       if (!line.stockActive) {
-        warnings.push(`${item.name}: stock item "${line.stockName}" is deleted`)
+        warnings.push(`${consumer.name}: stock item "${line.stockName}" is deleted`)
         continue
       }
       const perUnit = lineStockQuantity(line)
       if (perUnit === null) {
-        warnings.push(`${item.name}: recipe unit ${line.unit} does not match ${line.stockName} (${line.stockUnit})`)
+        warnings.push(`${consumer.name}: recipe unit ${line.unit} does not match ${line.stockName} (${line.stockUnit})`)
         continue
       }
-      const quantity = perUnit * item.expected
+      const quantity = perUnit * consumer.expected
       const entry = needs.get(line.stockItemId) ?? { need: 0, consumed: 0, usedBy: [] }
       entry.need += quantity
-      entry.usedBy.push({ menuItemId: item.menuItemId, name: item.name, quantity: round3(quantity) })
+      const same = entry.usedBy.find((u) => u.menuItemId === consumer.menuItemId && u.name === consumer.name)
+      if (same) same.quantity = round3(same.quantity + quantity)
+      else entry.usedBy.push({ menuItemId: consumer.menuItemId, name: consumer.name, quantity: round3(quantity) })
       needs.set(line.stockItemId, entry)
     }
+  }
+  for (const item of forecast.items) add(item, recipes.get(item.menuItemId) ?? [])
+  for (const combo of forecast.combos ?? []) add(combo, recipes.get(combo.menuItemId) ?? [])
+  const options = forecast.options ?? []
+  if (options.length > 0) {
+    const optionRecipes = loadOptionRecipes(db)
+    // usedBy.menuItemId is 0 for an option (it is not a menu item).
+    for (const option of options) add({ menuItemId: 0, name: option.name, expected: option.expected }, optionRecipes.get(option.optionId) ?? [])
   }
   for (const [id, consumed] of consumedOn(db, forecast.date)) {
     const entry = needs.get(id)

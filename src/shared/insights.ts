@@ -38,6 +38,13 @@ export interface ForecastItem extends LocalizedName {
   rounded: number
 }
 
+/** Expected uses of one modifier option (Extra cheese …) — its ingredients go on the shopping list. */
+export interface ForecastOption extends LocalizedName {
+  optionId: number
+  /** Expected option units (option quantity × line quantity), one decimal. */
+  expected: number
+}
+
 export interface PrepForecast {
   date: string
   /** 0 = Sunday … 6 = Saturday. */
@@ -51,8 +58,15 @@ export interface PrepForecast {
   trendFactor: number
   expectedOrders: number
   expectedRevenue: number
-  /** Active menu items with expected > 0, highest first. */
+  /**
+   * Active menu items with expected > 0, highest first. Physical items only: combo children count
+   * as their own item (a burger sold in a menu is still a burger to prep); combo parent lines do not.
+   */
   items: ForecastItem[]
+  /** Combos (parent lines) expected — only their OWN recipe (packaging…) is added to the needs. */
+  combos?: ForecastItem[]
+  /** Modifier options expected (kind 'no' never uses stock and is left out). */
+  options?: ForecastOption[]
 }
 
 export interface ShoppingListUsage {
@@ -110,6 +124,8 @@ export interface MenuIngredientCost extends LocalizedName {
   stockUnit: StockUnit
   unitCost: number
   cost: number
+  /** Set when the line comes from a default option or a combo's default pick (e.g. "Extra cheese"). */
+  via?: LocalizedName | null
 }
 
 export interface CostIncrease {
@@ -129,7 +145,16 @@ export interface MenuProfitItem extends LocalizedName {
   categoryId: number
   categoryName: string
   price: number
-  /** Recipe cost at latest unit costs; null without a recipe. */
+  /**
+   * A combo: cost = its own recipe + the default pick of every slot. qtySold / revenue are the combo
+   * lines; its children are ALSO counted on their own items (allocated revenue), so combos stay
+   * out of the quadrants (no double counting).
+   */
+  isCombo: boolean
+  /**
+   * Standard-build cost at latest unit costs: recipe + ingredients of the default options
+   * (combos: see isCombo); null without a recipe.
+   */
   cost: number | null
   marginDa: number | null
   marginPct: number | null
@@ -235,14 +260,28 @@ export interface InsightAlert {
   data: Record<string, unknown>
   /** Already sent to Telegram today. */
   sent: boolean
+  /**
+   * Telegram toggle of this alert kind. Alerts are always listed in the app; only enabled kinds
+   * are ever sent, so `false` means "shown here only".
+   */
+  telegramEnabled: boolean
 }
 
 // ─── 6. Dashboard ─────────────────────────────────────────────────────────────
 
 export interface DashboardKpis {
+  /** Order totals minus delivery fees (same rule as Analytics). */
   revenue: number
   orders: number
   avgTicket: number
+}
+
+export interface DashboardHour {
+  hour: number
+  orders: number
+  revenue: number
+  usualOrders: number
+  usualRevenue: number
 }
 
 export interface DashboardSummary {
@@ -257,7 +296,18 @@ export interface DashboardSummary {
   deltaPct: { revenue: number | null; orders: number | null; avgTicket: number | null }
   /** Last 14 days including today, oldest first, zero-filled. */
   sparkline: { date: string; revenue: number; orders: number }[]
-  topItemsToday: { menuItemId: number; name: string; name_ar: string | null; name_fr: string | null; quantity: number; revenue: number }[]
+  /** Combo children count as their item (allocated revenue); combo parent lines are skipped. */
+  topItemsToday: {
+    menuItemId: number; categoryId: number | null; name: string; name_ar: string | null; name_fr: string | null
+    quantity: number; revenue: number
+  }[]
+  /**
+   * Today per local hour (0–23, every hour) vs the usual for this weekday (same weighted
+   * same-weekday samples as the forecast; 0 without history). Revenue excludes delivery fees.
+   */
+  hourly: DashboardHour[]
+  /** Delivery fees collected today (not part of revenue — usually the driver's). */
+  deliveryFeesToday: number
   lowStockCount: number
   forecastToday: { expectedOrders: number; expectedRevenue: number; method: ForecastMethod }
   pendingAlerts: InsightAlert[]

@@ -605,7 +605,23 @@
     "last3Months": "Last 3 Months",
     "from": "From",
     "to": "To",
-    "apply": "Apply"
+    "apply": "Apply",
+    "last7": "7 days",
+    "last30": "30 days",
+    "loadError": "Could not load the analytics",
+    "revenueHint": "Excl. delivery fees",
+    "deliveryFees": "Delivery fees",
+    "marginHint": "{{pct}}% of revenue",
+    "avgTicket": "Average ticket",
+    "trend": "Revenue per day",
+    "trendHourly": "Revenue per hour",
+    "ordersN": "{{n}} orders",
+    "noDataHint": "Try a longer period.",
+    "byMethod": "Payments by method",
+    "byMethodSubtitle": "Net of refunds",
+    "noWorkers": "No active workers",
+    "noWorkersHint": "Add workers to compare them.",
+    "last90": "90 days"
   },
   "excel": {
     "updateDisabledBadge": "Safety hold",
@@ -1010,7 +1026,10 @@
     "netProfit": "Net Profit",
     "orderTypes": "Order Types",
     "topItems": "Top {{count}} Items",
-    "itemSold": "{{count}} sold"
+    "itemSold": "{{count}} sold",
+    "noOrdersHint": "Orders placed today will be summed up here.",
+    "deliveryFees": "Delivery fees (not in revenue):",
+    "payments": "Payments"
   },
   "trialLock": {
     "titleOfflineCountdown": "No Internet — {{time}}",
@@ -1724,6 +1743,328 @@
       "rules": "Check the pick counts of \"{{slot}}\".",
       "upcharge": "Check the upcharges of \"{{slot}}\" (0 or more).",
       "defaults": "\"{{slot}}\" has more default choices than its maximum ({{max}})."
+    }
+  },
+  "dashboard": {
+    "nav": "Dashboard",
+    "greeting": {
+      "morning": "Good morning",
+      "afternoon": "Good afternoon",
+      "evening": "Good evening",
+      "night": "Good night",
+      "withName": "{{greeting}}, {{name}}"
+    },
+    "updated": "updated at {{time}}",
+    "refresh": "Refresh",
+    "loadError": "The dashboard could not be loaded. Check the app and try again.",
+    "deliveryFees": "Delivery fees",
+    "kpi": {
+      "revenue": "Revenue today",
+      "orders": "Orders today",
+      "avgTicket": "Average ticket",
+      "expected": "Expected today",
+      "vsLastWeek": "vs last {{day}}",
+      "noCompare": "Nothing to compare with last week",
+      "expectedOrders": "≈ {{n}} orders",
+      "expectedNone": "Needs a few days of sales",
+      "reached": "Reached so far"
+    },
+    "hourly": {
+      "title": "Revenue by hour",
+      "subtitle": "Today compared with a usual day",
+      "peak": "Peak {{hour}}",
+      "today": "Today",
+      "usual": "Usual {{day}}",
+      "tooltip": "{{orders}} orders (usual {{usual}})",
+      "emptyTitle": "No sales yet today",
+      "emptyBody": "Bars appear here as soon as the first orders come in."
+    },
+    "top": {
+      "title": "Top items today",
+      "all": "All sales",
+      "emptyTitle": "Nothing sold yet",
+      "emptyBody": "Your best sellers of the day will show up here."
+    },
+    "status": {
+      "shift": "Cash shift",
+      "shiftOpen": "Open",
+      "shiftClosed": "No shift open",
+      "shiftSince": "Since {{time}} · {{name}}",
+      "shiftHint": "Open it at the POS",
+      "unpaid": "Unpaid orders",
+      "toCollect": "To collect:",
+      "allPaid": "All paid",
+      "lowStock": "Low stock items",
+      "lowStockHint": "Below alert level",
+      "stockOk": "All good",
+      "kitchen": "Kitchen tickets",
+      "late": "{{n}} late",
+      "openTickets": "{{n}} open",
+      "kitchenDetail": "{{n}} open",
+      "kitchenIdle": "All clear"
+    },
+    "alerts": {
+      "title": "Needs your attention",
+      "settings": "Settings"
+    },
+    "actions": {
+      "title": "Quick actions",
+      "pos": "Open POS",
+      "print": "Print prep list",
+      "send": "Send prep",
+      "closeShift": "Close shift",
+      "noShift": "No shift is open right now."
+    },
+    "welcome": {
+      "title": "Welcome to your dashboard",
+      "titleNamed": "Welcome, {{name}}",
+      "body": "Sales, prep and shopping show up here once orders come in.",
+      "progress": "Getting started",
+      "steps": {
+        "menu": {
+          "title": "Add your menu",
+          "body": "Items and prices",
+          "action": "Open menu"
+        },
+        "stock": {
+          "title": "Add stock and recipes",
+          "body": "For costs and shopping lists",
+          "action": "Open stock"
+        },
+        "telegram": {
+          "title": "Connect Telegram",
+          "body": "Morning prep and alerts on your phone",
+          "action": "Set up"
+        },
+        "order": {
+          "title": "Take your first order",
+          "body": "This page fills up right away",
+          "action": "Open POS"
+        }
+      }
+    },
+    "deliveryHint": "Not counted in revenue"
+  },
+  "insights": {
+    "nav": "Insights",
+    "title": "Insights",
+    "subtitle": "Profit, prep and rush hours from your sales",
+    "loadError": "Could not load this report",
+    "tabs": {
+      "profit": "Menu profit",
+      "prep": "Prep & shopping",
+      "rush": "Rush hours",
+      "alerts": "Alerts & Telegram"
+    },
+    "range": {
+      "label": "Period",
+      "7d": "7 days",
+      "30d": "30 days",
+      "90d": "90 days",
+      "custom": "Custom",
+      "from": "From",
+      "to": "To",
+      "apply": "Apply"
+    },
+    "units": {
+      "kg": "kg",
+      "liter": "L",
+      "unit": "pcs",
+      "g": "g",
+      "ml": "ml"
+    },
+    "alerts": {
+      "sent": "Sent to Telegram",
+      "willSend": "Telegram on",
+      "appOnly": "In the app only",
+      "more": "+{{n}} more",
+      "calmTitle": "All calm",
+      "calmBody": "Nothing unusual right now.",
+      "actions": {
+        "orders": "See orders",
+        "rush": "Rush hours",
+        "shopping": "Shopping list",
+        "profit": "Menu profit"
+      }
+    },
+    "telegram": {
+      "sent": "Sent to Telegram",
+      "notConfigured": "Telegram is not connected",
+      "notConfiguredHint": "Add the bot token and chat ID in Settings.",
+      "failed": "Telegram did not receive the message",
+      "failedHint": "Check the internet connection and try again."
+    },
+    "profit": {
+      "stats": {
+        "avgMargin": "Average margin",
+        "lowMargin": "Low-margin items",
+        "lowMarginHint": "Below {{pct}}%",
+        "noRecipe": "Items without a recipe",
+        "costUp": "Costs went up",
+        "costUpTop": "{{name}} {{pct}} in 30 days",
+        "costUpNone": "No big rise"
+      },
+      "chartTitle": "Menu map",
+      "chartSubtitle": "Popularity × profit per sale",
+      "axisMargin": "More profit per sale",
+      "axisPopular": "More popular",
+      "dotTitle": "{{sold}} sold · {{margin}} DA margin each",
+      "chartEmptyTitle": "Not enough sales yet",
+      "chartEmptyBody": "Sell a few dishes with a recipe first.",
+      "adviceTitle": "What to do",
+      "quadrant": {
+        "star": {
+          "name": "Stars",
+          "advice": "Keep them visible. Don't discount."
+        },
+        "plowhorse": {
+          "name": "Plowhorses",
+          "advice": "Raise the price a little or cut the cost."
+        },
+        "puzzle": {
+          "name": "Puzzles",
+          "advice": "Promote them: show first, suggest at the counter."
+        },
+        "dog": {
+          "name": "Dogs",
+          "advice": "Rework or remove."
+        }
+      },
+      "tableTitle": "Menu items",
+      "filter": {
+        "all": "All",
+        "attention": "Needs attention",
+        "combos": "Combos"
+      },
+      "filterEmpty": "Nothing to show with this filter.",
+      "cols": {
+        "item": "Item",
+        "sold": "Sold",
+        "price": "Price",
+        "cost": "Cost",
+        "margin": "Margin",
+        "foodCost": "Food cost",
+        "class": "Class"
+      },
+      "flags": {
+        "combo": "Combo",
+        "lowMargin": "Low margin",
+        "noRecipe": "No recipe",
+        "costUp": "Cost {{pct}} · {{ingredient}}",
+        "unitMismatch": "Unit mismatch",
+        "missingCost": "Missing price"
+      },
+      "costIncreaseLine": "Cost {{pct}} in 30 days — mostly {{ingredient}} ({{ingredientPct}}).",
+      "noRecipeHint": "No recipe: cost unknown.",
+      "addRecipe": "Add a recipe",
+      "emptyTitle": "No menu items yet",
+      "emptyBody": "Add dishes and recipes to see what each one earns.",
+      "openMenu": "Open menu"
+    },
+    "prep": {
+      "today": "Today",
+      "tomorrow": "Tomorrow",
+      "print": "Print prep list",
+      "send": "Send to Telegram",
+      "printed": "Prep list sent to the printer",
+      "printFailed": "The prep list could not be printed",
+      "noPrinter": "No receipt printer set up",
+      "noPrinterHint": "Choose a receipt printer in Settings › Printers.",
+      "basisWeekday": "Based on {{n}} similar days",
+      "basisDaily": "Based on the last {{n}} open days",
+      "basisNone": "No sales history yet",
+      "expectedOrders": "Expected orders",
+      "expectedRevenue": "Expected revenue",
+      "confidence": {
+        "high": "Reliable forecast",
+        "medium": "Fair forecast",
+        "low": "Rough forecast"
+      },
+      "trend": "Recent trend {{pct}}",
+      "planTitle": "Prep plan",
+      "optionsTitle": "Extras expected",
+      "noHistoryTitle": "No forecast yet",
+      "noHistoryBody": "Portions appear after a few days of sales.",
+      "shoppingTitle": "Shopping list",
+      "estTotal": "Estimated total",
+      "cols": {
+        "ingredient": "Ingredient",
+        "need": "Needed",
+        "have": "In stock",
+        "toBuy": "To buy",
+        "cost": "Est. cost"
+      },
+      "critical": "Not enough",
+      "lowStock": "Low stock",
+      "nothingTitle": "Nothing to buy",
+      "nothingBody": "Stock covers the forecast.",
+      "openStock": "Open stock",
+      "warningsTitle": "Some recipe lines were skipped"
+    },
+    "rush": {
+      "busiestHour": "Busiest hour",
+      "busiestDay": "Busiest day",
+      "average": "Orders per open day",
+      "perDay": "≈ {{n}} orders/day",
+      "heatmapTitle": "Week at a glance",
+      "heatmapSubtitle": "Average orders per hour",
+      "cellDetail": "≈ {{orders}} orders",
+      "avgTicket": "avg ticket",
+      "quiet": "Quiet",
+      "busy": "Busy",
+      "bestTitle": "Busiest hours",
+      "worstTitle": "Quietest hours",
+      "worstNone": "Not enough regular hours yet.",
+      "staffingTitle": "Staffing hints",
+      "staffingNone": "No clear rush or quiet time yet.",
+      "level": {
+        "peak": "Rush",
+        "quiet": "Quiet"
+      },
+      "peakHint": "×{{factor}} busier (≈ {{n}}/h) — add a person",
+      "quietHint": "≈ {{n}}/h — breaks, cleaning, prep",
+      "emptyTitle": "No orders in this period",
+      "emptyBody": "Pick a longer period."
+    },
+    "settings": {
+      "telegramOff": "Telegram not connected — alerts stay in the app.",
+      "openTelegram": "Connect Telegram",
+      "morningTitle": "Morning prep message",
+      "morningToggle": "Send the morning prep list",
+      "time": "Time",
+      "sendTest": "Send now",
+      "alertsTitle": "Alerts sent to Telegram",
+      "alertsSubtitle": "Always shown in the app",
+      "kinds": {
+        "cancellations": "Unusual cancellations",
+        "discounts": "Unusual discounts",
+        "slow_day": "Slow day",
+        "low_stock": "Stock too low for today",
+        "margin": "Margin drop after a purchase"
+      },
+      "kindsHint": {
+        "cancellations": "More than usual",
+        "discounts": "More than usual",
+        "slow_day": "Below a usual day",
+        "low_stock": "Won't cover today's forecast",
+        "margin": "A new price cut a margin"
+      },
+      "slowTime": "Check from",
+      "slowThreshold": "Alert below (% of usual)",
+      "marginTitle": "Margin target",
+      "marginSubtitle": "Flags dishes in Menu profit",
+      "marginLabel": "Minimum margin",
+      "errors": {
+        "time": "Enter a time like 09:00",
+        "pct": "Enter a whole number from {{min}} to {{max}}"
+      },
+      "fixErrors": "Please fix the highlighted fields",
+      "save": "Save",
+      "reset": "Undo changes",
+      "saved": "Settings saved",
+      "saveFailed": "Settings were not saved",
+      "unsaved": "Unsaved changes",
+      "nowTitle": "Right now"
     }
   }
 }

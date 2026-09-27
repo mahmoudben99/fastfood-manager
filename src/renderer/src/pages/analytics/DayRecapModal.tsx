@@ -1,30 +1,15 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { X, ShoppingCart, TrendingUp, DollarSign, Package } from 'lucide-react'
-import { formatCurrency } from '../../utils/formatCurrency'
-import { useAppStore } from '../../store/appStore'
+import { ShoppingCart, TrendingUp, Truck, Wallet } from 'lucide-react'
+import { paymentMethodLabel, type CashLang } from '../../../../shared/cash'
+import { EmptyState, Modal, Money, Skeleton, cn } from '../../components/ui'
 import { localToday } from '../../utils/localDate'
+import { longDate, useLocalName } from '../insights/shared/format'
+import type { MethodRow, ProfitSummary, TopItemRow } from './types'
 
 interface DayRecapModalProps {
   isOpen: boolean
   onClose: () => void
-}
-
-interface ProfitSummary {
-  total_revenue: number
-  order_count: number
-  total_stock_cost: number
-  total_worker_cost: number
-  net_profit: number
-}
-
-interface TopItem {
-  name: string
-  name_ar?: string
-  name_fr?: string
-  total_quantity: number
-  total_revenue: number
-  category_name: string
 }
 
 interface OrderTypeEntry {
@@ -33,218 +18,146 @@ interface OrderTypeEntry {
   revenue: number
 }
 
+interface Recap {
+  summary: ProfitSummary
+  top: TopItemRow[]
+  types: OrderTypeEntry[]
+  methods: MethodRow[]
+}
+
+const RANK = ['bg-ember text-on-primary', 'bg-surface-3 text-ink', 'bg-primary-soft text-primary-ink']
+
+function Kpi({ icon, label, value, tone }: { icon: ReactNode; label: string; value: ReactNode; tone: string }) {
+  return (
+    <div className="rounded-2xl border border-line bg-surface-2/60 p-4">
+      <div className={cn('mb-3 h-9 w-9 rounded-xl flex items-center justify-center [&_svg]:h-[18px] [&_svg]:w-[18px]', tone)}>{icon}</div>
+      <p className="text-[13px] font-medium text-muted">{label}</p>
+      <div className="num text-kpi text-ink">{value}</div>
+    </div>
+  )
+}
+
+/** Today's recap from the order screen: revenue, orders, profit, order types, payments, top 3. */
 export function DayRecapModal({ isOpen, onClose }: DayRecapModalProps) {
-  const { t } = useTranslation()
-  const { foodLanguage } = useAppStore()
-  const [summary, setSummary] = useState<ProfitSummary | null>(null)
-  const [topItems, setTopItems] = useState<TopItem[]>([])
-  const [orderTypes, setOrderTypes] = useState<OrderTypeEntry[]>([])
+  const { t, i18n } = useTranslation()
+  const nameOf = useLocalName()
+  const [recap, setRecap] = useState<Recap | null>(null)
   const [loading, setLoading] = useState(true)
-  const [currentTime, setCurrentTime] = useState(new Date())
+  const [time, setTime] = useState(() => new Date())
+  const lang = (['en', 'fr', 'ar'].includes(i18n.language) ? i18n.language : 'en') as CashLang
 
   useEffect(() => {
     if (!isOpen) return
-
-    const loadData = async () => {
-      setLoading(true)
-      // Restaurant-LOCAL day, matching orders.order_date. With the UTC day, between 00:00 and
-      // 01:00 local the recap showed YESTERDAY's revenue under today's heading.
-      const today = localToday()
-      try {
-        const [sum, top, types] = await Promise.all([
-          window.api.analytics.getProfitSummary(today, today),
-          window.api.analytics.getTopSellingItems(today, today, 3),
-          window.api.analytics.getOrderTypeBreakdown(today, today)
-        ])
-        setSummary(sum)
-        setTopItems(top)
-        setOrderTypes(types)
-      } catch (err) {
-        console.error('Failed to load day recap:', err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadData()
-    setCurrentTime(new Date())
-
-    const timer = setInterval(() => setCurrentTime(new Date()), 60_000)
-    return () => clearInterval(timer)
+    let alive = true
+    // Restaurant-LOCAL day, matching orders.order_date (UTC would show yesterday before 01:00).
+    const today = localToday()
+    setLoading(true)
+    setTime(new Date())
+    Promise.all([
+      window.api.analytics.getProfitSummary(today, today),
+      window.api.analytics.getTopSellingItems(today, today, 3),
+      window.api.analytics.getOrderTypeBreakdown(today, today),
+      window.api.payments.salesByMethod(today, today).catch(() => [])
+    ])
+      .then(([summary, top, types, methods]) => { if (alive) setRecap({ summary, top, types, methods }) })
+      .catch((err) => console.error('Failed to load day recap:', err))
+      .finally(() => { if (alive) setLoading(false) })
+    const timer = setInterval(() => setTime(new Date()), 60_000)
+    return () => { alive = false; clearInterval(timer) }
   }, [isOpen])
 
-  useEffect(() => {
-    if (!isOpen) return
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', handleEsc)
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.removeEventListener('keydown', handleEsc)
-      document.body.style.overflow = ''
-    }
-  }, [isOpen, onClose])
-
-  if (!isOpen) return null
-
-  const formattedDate = new Date().toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  })
-
-  const formattedTime = currentTime.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-
-  const getItemName = (item: TopItem): string => {
-    if (foodLanguage === 'ar' && item.name_ar) return item.name_ar
-    if (foodLanguage === 'fr' && item.name_fr) return item.name_fr
-    return item.name
-  }
-
-  const hasOrders = summary && summary.order_count > 0
-
-  const rankColors = ['text-yellow-400', 'text-gray-300', 'text-amber-600']
-  const rankLabels = ['#1', '#2', '#3']
+  const s = recap?.summary
+  const hasOrders = Boolean(s && s.order_count > 0)
+  const clock = `${String(time.getHours()).padStart(2, '0')}:${String(time.getMinutes()).padStart(2, '0')}`
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 50 }}>
-      <div className="fixed inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative bg-gray-900 text-white rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
-          <div>
-            <h2 className="text-xl font-bold">{t('dayRecap.title', { defaultValue: 'Day Recap' })}</h2>
-            <p className="text-sm text-gray-400 mt-0.5">{formattedDate}</p>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-400">{formattedTime}</span>
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      size="lg"
+      title={t('dayRecap.title')}
+      description={<span className="capitalize">{longDate(localToday(), i18n.language)} · <span className="num">{clock}</span></span>}
+    >
+      {loading ? (
+        <div className="space-y-4">
+          <div className="grid grid-cols-3 gap-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-28 rounded-2xl" />)}</div>
+          <Skeleton className="h-24 rounded-2xl" />
         </div>
+      ) : !hasOrders || !s || !recap ? (
+        <EmptyState compact icon={<ShoppingCart />} title={t('dayRecap.noOrders')} description={t('dayRecap.noOrdersHint')} />
+      ) : (
+        <div className="space-y-6">
+          <div className="grid grid-cols-3 gap-3">
+            <Kpi icon={<TrendingUp />} tone="bg-primary-soft text-primary-ink" label={t('dayRecap.totalRevenue')} value={<Money value={s.total_revenue} decimals={0} />} />
+            <Kpi icon={<ShoppingCart />} tone="bg-info-soft text-info-ink" label={t('dayRecap.orders')} value={s.order_count} />
+            <Kpi
+              icon={<Wallet />}
+              tone={s.net_profit >= 0 ? 'bg-success-soft text-success-ink' : 'bg-danger-soft text-danger-ink'}
+              label={t('dayRecap.netProfit')}
+              value={<Money value={s.net_profit} decimals={0} className={s.net_profit < 0 ? 'text-danger-ink' : undefined} />}
+            />
+          </div>
+          {s.total_delivery_fees > 0 && (
+            <p className="-mt-3 flex items-center gap-2 text-xs text-muted">
+              <Truck className="h-4 w-4 text-faint" />
+              {t('dayRecap.deliveryFees')} <Money value={s.total_delivery_fees} decimals={0} className="font-semibold text-ink-2" />
+            </p>
+          )}
 
-        {/* Content */}
-        <div className="px-6 py-5 overflow-y-auto flex-1 space-y-6">
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="h-8 w-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : !hasOrders ? (
-            <div className="flex flex-col items-center justify-center py-12 text-gray-400">
-              <ShoppingCart className="h-12 w-12 mb-3 opacity-40" />
-              <p className="text-lg">{t('dayRecap.noOrders', { defaultValue: 'No orders yet today' })}</p>
-            </div>
-          ) : (
-            <>
-              {/* Stat Cards */}
-              <div className="grid grid-cols-3 gap-4">
-                <div className="bg-gray-800 rounded-xl p-4 text-center">
-                  <div className="flex items-center justify-center mb-2">
-                    <DollarSign className="h-5 w-5 text-orange-400" />
-                  </div>
-                  <p className="text-2xl font-bold text-orange-400">
-                    {formatCurrency(summary!.total_revenue)}
-                  </p>
-                  <p className="text-xs text-gray-400 mt-1">{t('dayRecap.totalRevenue', { defaultValue: 'Total Revenue' })}</p>
-                </div>
+          <div className="grid sm:grid-cols-2 gap-6">
+            {recap.types.length > 0 && (
+              <section>
+                <h3 className="mb-2 text-sm font-semibold text-ink">{t('dayRecap.orderTypes')}</h3>
+                <ul className="space-y-2">
+                  {recap.types.map((ot) => (
+                    <li key={ot.order_type} className="flex items-center justify-between gap-3 rounded-xl border border-line px-3.5 py-2.5">
+                      <span className="text-sm text-ink-2">{t(`orders.${ot.order_type}`, { defaultValue: ot.order_type })}</span>
+                      <span className="text-end">
+                        <span className="num block text-sm font-bold text-ink">{ot.count}</span>
+                        <Money value={ot.revenue} decimals={0} className="text-xs text-muted" />
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+            {recap.methods.length > 0 && (
+              <section>
+                <h3 className="mb-2 text-sm font-semibold text-ink">{t('dayRecap.payments')}</h3>
+                <ul className="space-y-2">
+                  {recap.methods.filter((m) => Math.abs(m.amount) > 0.004).map((m) => (
+                    <li key={m.method} className="flex items-center justify-between gap-3 rounded-xl border border-line px-3.5 py-2.5">
+                      <span className="text-sm text-ink-2">{paymentMethodLabel(m.method, lang)}</span>
+                      <Money value={m.amount} decimals={0} className="text-sm font-bold text-ink" />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
 
-                <div className="bg-gray-800 rounded-xl p-4 text-center">
-                  <div className="flex items-center justify-center mb-2">
-                    <ShoppingCart className="h-5 w-5 text-blue-400" />
-                  </div>
-                  <p className="text-2xl font-bold text-blue-400">
-                    {summary!.order_count}
-                  </p>
-                  <p className="text-xs text-gray-400 mt-1">{t('dayRecap.orders', { defaultValue: 'Orders' })}</p>
-                </div>
-
-                <div className="bg-gray-800 rounded-xl p-4 text-center">
-                  <div className="flex items-center justify-center mb-2">
-                    <TrendingUp className="h-5 w-5 text-green-400" />
-                  </div>
-                  <p
-                    className={`text-2xl font-bold ${
-                      summary!.net_profit >= 0 ? 'text-green-400' : 'text-red-400'
-                    }`}
-                  >
-                    {formatCurrency(summary!.net_profit)}
-                  </p>
-                  <p className="text-xs text-gray-400 mt-1">{t('dayRecap.netProfit', { defaultValue: 'Net Profit' })}</p>
-                </div>
-              </div>
-
-              {/* Order Types */}
-              {orderTypes.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-3">
-                    {t('dayRecap.orderTypes', { defaultValue: 'Order Types' })}
-                  </h3>
-                  <div className="grid grid-cols-3 gap-3">
-                    {orderTypes.map((ot) => (
-                      <div
-                        key={ot.order_type}
-                        className="bg-gray-800/60 border border-gray-700 rounded-lg px-4 py-3 flex items-center justify-between"
-                      >
-                        <span className="text-sm text-gray-300 capitalize">
-                          {ot.order_type}
-                        </span>
-                        <div className="text-right">
-                          <span className="text-sm font-semibold text-white">{ot.count}</span>
-                          <p className="text-xs text-gray-500">{formatCurrency(ot.revenue)}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Top 3 Items */}
-              {topItems.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-3">
-                    {t('dayRecap.topItems', { defaultValue: 'Top {{count}} Items', count: topItems.length })}
-                  </h3>
-                  <div className="space-y-2">
-                    {topItems.map((item, idx) => (
-                      <div
-                        key={idx}
-                        className="bg-gray-800/60 border border-gray-700 rounded-lg px-4 py-3 flex items-center gap-4"
-                      >
-                        <span className={`text-lg font-bold w-8 ${rankColors[idx] || 'text-gray-400'}`}>
-                          {rankLabels[idx] || `#${idx + 1}`}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-white truncate">
-                            {getItemName(item)}
-                          </p>
-                          <p className="text-xs text-gray-500">{item.category_name}</p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-sm font-semibold text-white">
-                            {t('dayRecap.itemSold', { defaultValue: '{{count}} sold', count: item.total_quantity })}
-                          </p>
-                          <p className="text-xs text-gray-400">
-                            {formatCurrency(item.total_revenue)}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
+          {recap.top.length > 0 && (
+            <section>
+              <h3 className="mb-2 text-sm font-semibold text-ink">{t('dayRecap.topItems', { count: recap.top.length })}</h3>
+              <ul className="space-y-2">
+                {recap.top.map((item, idx) => (
+                  <li key={`${item.name}-${idx}`} className="flex items-center gap-4 rounded-xl border border-line px-3.5 py-2.5">
+                    <span className={cn('num h-8 w-8 shrink-0 rounded-lg text-sm font-bold flex items-center justify-center', RANK[idx] ?? 'bg-surface-2 text-ink-2')}>{idx + 1}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-ink"><bdi>{nameOf(item)}</bdi></p>
+                      <p className="text-xs text-muted">{item.category_name}</p>
+                    </div>
+                    <div className="text-end shrink-0">
+                      <p className="text-sm font-semibold text-ink">{t('dayRecap.itemSold', { count: item.total_quantity })}</p>
+                      <Money value={item.total_revenue} decimals={0} className="text-xs text-muted" />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
         </div>
-      </div>
-    </div>
+      )}
+    </Modal>
   )
 }
