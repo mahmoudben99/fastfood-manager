@@ -171,28 +171,13 @@ export function buildKitchenHTML(order: any, items: any[], settings: Record<stri
 </body></html>`
 }
 
-/** Test page, laid out at the width configured for THIS printer. */
-export function buildTestPrintHTML(settings: Record<string, string>, printerName: string, paperWidth: string | null): string {
-  const width = printableWidth(paperWidth || settings.printer_width)
-  return `<!DOCTYPE html><html>
-<head><meta charset="utf-8">
-<style>
-  * { margin: 0; padding: 0; }
-  body { font-family: 'Courier New', monospace; font-size: 12px; width: ${width.css}; padding: 4mm 2mm; text-align: center; }
-  .line { border-top: 1px dashed #000; margin: 8px 0; }
-</style></head>
-<body>
-  <div style="font-size:16px; font-weight:bold;">TEST PRINT</div>
-  <div class="line"></div>
-  <div>${esc(settings.restaurant_name || 'Fast Food Manager')}</div>
-  <div class="line"></div>
-  <div>Printer: ${esc(printerName)}</div>
-  <div>Width: ${width.mm}mm</div>
-  <div>Time: ${esc(new Date().toLocaleString())}</div>
-  <div class="line"></div>
-  <div>Printer is working!</div>
-  <br><br>
-</body></html>`
+/**
+ * Adds one small "TEST PRINT" line to the top of a real document, so a sample printed from the
+ * Test button is never mistaken for a real order.
+ */
+export function markAsTestPrint(html: string, printerName: string): string {
+  const banner = `<div style="text-align:center;font-size:11px;margin-bottom:4px;">— TEST PRINT · ${esc(printerName)} —</div>`
+  return html.replace(/<body[^>]*>/i, (tag) => tag + banner)
 }
 
 /** A realistic order for the Receipt Editor preview: real menu items when there are some. */

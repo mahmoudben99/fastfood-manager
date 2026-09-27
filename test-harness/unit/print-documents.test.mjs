@@ -37,7 +37,7 @@ export async function load(url, context, nextLoad) {
 register('data:text/javascript,' + encodeURIComponent(loaderSrc), import.meta.url, { data: { esbuildEntry } })
 
 const { buildFromTemplate } = await import('../../src/main/services/receipt-template.ts')
-const { buildDefaultReceiptHTML, buildKitchenHTML, buildSampleOrder } = await import('../../src/main/services/print-documents.ts')
+const { buildDefaultReceiptHTML, buildKitchenHTML, buildSampleOrder, markAsTestPrint } = await import('../../src/main/services/print-documents.ts')
 
 const order = buildSampleOrder([])
 const noLogo = { logoDataUrl: null, paperWidth: '80', receiptFontSize: 'medium' }
@@ -117,4 +117,13 @@ test('kitchen ticket: table, customer, change markers, removed lines and REPRINT
   assert.match(html, /Tacos &lt;XL&gt;/)
   assert.match(html, /FOR: GRILL/)
   assert.match(html, /\*\*\* REPRINT \*\*\*/)
+})
+
+test('test print: the full real receipt with one TEST PRINT line added at the top of the body', () => {
+  const receipt = buildDefaultReceiptHTML(order, { restaurant_name: 'Loft', currency_symbol: 'DA' }, noLogo)
+  const html = markAsTestPrint(receipt, 'EPSON <TM-T20>')
+  assert.match(html, /<body[^>]*>\s*<div[^>]*>— TEST PRINT · EPSON &lt;TM-T20&gt; —<\/div>/)
+  assert.equal(html.replace(/<div[^>]*>— TEST PRINT[^<]*<\/div>/, ''), receipt, 'nothing else changes')
+  assert.match(html, /Loft/)
+  assert.match(html, /TOTAL/i)
 })

@@ -122,3 +122,7 @@ html[dir="rtl"] ::-webkit-scrollbar { direction: rtl; }
 .menu-grid-item {
   transition: transform 0.3s ease, opacity 0.3s ease;
 }
+
+/* Receipt previews are paper: always white, whatever the app theme (dark mode repaints .bg-white). */
+.receipt-paper,
+.dark .receipt-paper { background-color: #ffffff !important; color-scheme: light; }

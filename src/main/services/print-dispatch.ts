@@ -10,7 +10,7 @@ import { receiptTemplatesRepo } from '../database/repositories/receipt-templates
 import { getDb } from '../database/connection'
 import { changesForTicket, loadRoutingConfig, targetPrinters, type KitchenLineChange, type PrintScope, type PrintTarget } from './print-routing'
 import { printHtml, type PrintResult } from './print-window'
-import { buildDefaultReceiptHTML, buildKitchenHTML, type PrintEventType } from './print-documents'
+import { buildDefaultReceiptHTML, buildKitchenHTML, buildSampleOrder, markAsTestPrint, type PrintEventType } from './print-documents'
 import { buildFromTemplate, type ReceiptContext } from './receipt-template'
 import { getLogoDataUrl } from './logo'
 
@@ -136,6 +136,53 @@ export async function printKitchenOn(
     reprint: opts.reprint
   })
   return printHtml(html, printerName)
+}
+
+/** A few random active menu items, so a test print looks like a real order from this restaurant. */
+function randomMenuSample(count = 3): { name: string; name_ar: string | null; price: number }[] {
+  const rows = getDb()
+    .prepare('SELECT name, name_ar, price FROM menu_items WHERE is_active = 1')
+    .all() as { name: string; name_ar: string | null; price: number }[]
+  for (let i = rows.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[rows[i], rows[j]] = [rows[j], rows[i]]
+  }
+  return rows.slice(0, count)
+}
+
+/**
+ * Test button: prints on `printerName` the real documents it is set up for — the customer receipt
+ * (active template, this printer's width and font) and/or its kitchen ticket — for a sample order
+ * made of random items from the restaurant's own menu. A printer with no routable task (e.g. just
+ * picked, not saved yet) prints the receipt.
+ */
+export async function printTestOn(printerName: string): Promise<PrintResult> {
+  const config = routing()
+  const rows = config.assignments.filter((row) => row.printer_name === printerName)
+  const printsReceipt = targetPrinters(config, { documentType: 'receipt', scope: 'all', workerId: null }).includes(printerName)
+  const printsFullKitchen = targetPrinters(config, { documentType: 'kitchen', scope: 'all', workerId: null }).includes(printerName)
+  const workerRow = rows.find((row) => row.assignment_type === 'worker' && row.worker_id != null)
+  const printsKitchen = printsFullKitchen || !!workerRow
+
+  const settings = settingsRepo.getAll()
+  const order = buildSampleOrder(randomMenuSample())
+  const documents: string[] = []
+  if (printsReceipt || !printsKitchen) documents.push(await receiptHTML(order, settings, printerName, {}))
+  if (printsKitchen) {
+    const printer = printerAssignmentsRepo.getSettingsForPrinter(printerName, 'kitchen')
+    documents.push(buildKitchenHTML(order, order.items, settings, {
+      paperWidth: printer?.paper_width || null,
+      kitchenFontSize: printer?.kitchen_font_size || null,
+      eventType: 'new',
+      workerName: !printsFullKitchen && workerRow ? workersRepo.getById(workerRow.worker_id!)?.name || null : null,
+      changes: [],
+      removedNames: {}
+    }))
+  }
+
+  const results: PrintResult[] = []
+  for (const html of documents) results.push(await printHtml(markAsTestPrint(html, printerName), printerName))
+  return combineResults(results)
 }
 
 /** Merges per-printer results into one: success only if every printer succeeded. */

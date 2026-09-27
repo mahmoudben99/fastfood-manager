@@ -74,7 +74,7 @@ export function ReceiptPreview({ template, paperWidth, refreshKey = 0 }: Receipt
       title={t('receiptEditor.livePreview')}
       srcDoc={html}
       sandbox=""
-      className="block mx-auto bg-white shadow-sm border border-gray-200 flex-1 min-h-[480px]"
+      className="receipt-paper block mx-auto shadow-sm border border-gray-200 flex-1 min-h-[480px]"
       style={{ width: widthPx, maxWidth: '100%' }}
     />
   )

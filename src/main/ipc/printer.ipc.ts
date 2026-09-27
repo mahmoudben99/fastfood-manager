@@ -9,9 +9,9 @@ import {
   configuredPrinters, parseKitchenChanges, planPrintJobs, targetPrinters, type PrintScope, type PrintTarget
 } from '../services/print-routing'
 import { cleanupStalePrintFiles, printHtml, type PrintResult } from '../services/print-window'
-import { buildSampleOrder, buildTestPrintHTML, type PrintEventType } from '../services/print-documents'
+import { buildSampleOrder, type PrintEventType } from '../services/print-documents'
 import {
-  noPrinterError, printKitchenOn, printPlanned, printReceiptOn, receiptHTML, resolveJobPrinter, routing
+  noPrinterError, printKitchenOn, printPlanned, printReceiptOn, printTestOn, receiptHTML, resolveJobPrinter, routing
 } from '../services/print-dispatch'
 
 /** Manual print options (contract C3): reprint=true prints a visible "REPRINT" banner. */
@@ -357,20 +357,16 @@ export function registerPrinterHandlers(): void {
     return { success: true }
   })
 
+  // Test button: prints the real receipt / kitchen ticket this printer is set up for, laid out
+  // exactly as configured (template, width, fonts, logo), with random items from the menu.
   ipcMain.handle('printer:testPrintOnPrinter', async (_, printerName: string): Promise<PrintResult> => {
     if (typeof printerName !== 'string' || !printerName.trim()) return { success: false, error: 'No printer selected' }
-    // Laid out at THIS printer's configured paper width (a 58 mm printer used to get the global
-    // 80 mm page, cropped, saying "Width: 80mm").
-    const paperWidth = printerAssignmentsRepo.getSettingsForPrinter(printerName, 'receipt')?.paper_width || null
-    return printHtml(buildTestPrintHTML(settingsRepo.getAll(), printerName, paperWidth), printerName)
+    return printTestOn(printerName)
   })
 
   ipcMain.handle('printer:testPrint', async (): Promise<PrintResult> => {
-    const settings = settingsRepo.getAll()
-    const printerName = settings.printer_name
+    const printerName = settingsRepo.getAll().printer_name
     if (!printerName) return { success: false, error: 'No printer configured' }
-    // Legacy single-printer screen: it saves printer_width right before calling this.
-    const paperWidth = settings.printer_width || printerAssignmentsRepo.getSettingsForPrinter(printerName, 'receipt')?.paper_width || null
-    return printHtml(buildTestPrintHTML(settings, printerName, paperWidth), printerName)
+    return printTestOn(printerName)
   })
 }

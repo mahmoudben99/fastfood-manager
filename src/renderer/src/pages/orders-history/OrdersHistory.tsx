@@ -532,7 +532,7 @@ export function OrdersHistory() {
               title={t('orders.previewReceipt')}
               srcDoc={previewHtml}
               sandbox=""
-              className="bg-white border rounded-lg shadow-inner h-[70vh] max-w-full"
+              className="receipt-paper border rounded-lg shadow-inner h-[70vh] max-w-full"
               style={{ width: `calc(${receiptPaperWidth(previewHtml)} + 24px)` }}
             />
           </div>
