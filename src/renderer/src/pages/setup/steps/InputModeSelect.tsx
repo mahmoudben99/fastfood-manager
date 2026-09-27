@@ -1,5 +1,8 @@
 import { useTranslation } from 'react-i18next'
-import { Monitor, Keyboard, TabletSmartphone, Hand } from 'lucide-react'
+import { Monitor, Keyboard, Mouse, TabletSmartphone, Hand, MonitorSmartphone } from 'lucide-react'
+import { cn } from '../../../components/ui/cn'
+import { StepLayout } from '../parts/StepLayout'
+import { ChoiceCard } from '../parts/ChoiceCard'
 import type { SetupData } from '../SetupWizard'
 
 interface Props {
@@ -8,60 +11,62 @@ interface Props {
 }
 
 const modes = [
-  {
-    value: 'keyboard',
-    icons: [Monitor, Keyboard],
-    label: 'Keyboard & Mouse',
-    desc: 'Traditional setup with physical keyboard and mouse. Best for desktop computers.'
-  },
-  {
-    value: 'touchscreen',
-    icons: [TabletSmartphone, Hand],
-    label: 'Touchscreen',
-    desc: 'Large buttons and built-in keyboard. Best for touch displays and tablets.'
+  { value: 'keyboard', title: 'setup.inputMode.keyboard', desc: 'setup.inputMode.keyboardDesc' },
+  { value: 'touchscreen', title: 'setup.inputMode.touch', desc: 'setup.inputMode.touchDesc' }
+] as const
+
+/** Small icon scene for each mode (desk PC with keyboard + mouse / touch screen with a hand). */
+function Illustration({ mode }: { mode: 'keyboard' | 'touchscreen' }) {
+  if (mode === 'keyboard') {
+    return (
+      <div className="flex items-end gap-2">
+        <Monitor className="h-20 w-20" strokeWidth={1.25} />
+        <Keyboard className="h-12 w-12" strokeWidth={1.25} />
+        <Mouse className="h-8 w-8" strokeWidth={1.25} />
+      </div>
+    )
   }
-]
+  return (
+    <div className="flex items-end">
+      <TabletSmartphone className="h-20 w-20" strokeWidth={1.25} />
+      <Hand className="-ms-6 mb-1 h-12 w-12" strokeWidth={1.25} />
+    </div>
+  )
+}
 
 export function InputModeSelect({ data, updateData }: Props) {
   const { t } = useTranslation()
 
   return (
-    <div className="space-y-6">
-      <div className="text-center">
-        <h2 className="text-2xl font-bold text-gray-900">
-          {t('setup.inputMode.title', { defaultValue: 'How will you use the app?' })}
-        </h2>
-        <p className="text-gray-500 mt-1">
-          {t('setup.inputMode.subtitle', { defaultValue: 'You can change this later in settings' })}
-        </p>
-      </div>
-
-      <div dir="ltr" className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-8">
+    <StepLayout icon={<MonitorSmartphone />} title={t('setup.inputMode.title')}>
+      <div dir="ltr" role="radiogroup" aria-label={t('setup.inputMode.title')} className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         {modes.map((mode) => {
-          const [Icon1, Icon2] = mode.icons
           const selected = data.inputMode === mode.value
           return (
-            <button
+            <ChoiceCard
               key={mode.value}
-              onClick={() => updateData({ inputMode: mode.value as 'keyboard' | 'touchscreen' })}
-              className={`p-8 rounded-2xl border-3 transition-all text-center hover:shadow-lg ${
-                selected
-                  ? 'border-orange-500 bg-orange-50 shadow-lg scale-[1.02]'
-                  : 'border-gray-200 bg-white hover:border-gray-300'
-              }`}
+              selected={selected}
+              onSelect={() => updateData({ inputMode: mode.value })}
+              className="flex flex-col gap-4 p-4"
             >
-              <div className="flex items-center justify-center gap-3 mb-4">
-                <Icon1 className={`h-12 w-12 ${selected ? 'text-orange-500' : 'text-gray-400'}`} strokeWidth={1.5} />
-                <Icon2 className={`h-10 w-10 ${selected ? 'text-orange-400' : 'text-gray-300'}`} strokeWidth={1.5} />
+              <div
+                aria-hidden
+                className={cn(
+                  'flex h-32 w-full items-center justify-center rounded-xl',
+                  selected ? 'bg-primary-soft-2 text-primary-ink' : 'bg-surface-2 text-muted'
+                )}
+              >
+                <Illustration mode={mode.value} />
               </div>
-              <div className={`text-xl font-bold ${selected ? 'text-orange-700' : 'text-gray-900'}`}>
-                {mode.label}
+              {/* dir=auto: the grid is forced LTR, the copy follows its own language */}
+              <div dir="auto" className="px-2 pb-2">
+                <div className="text-xl font-bold text-ink">{t(mode.title)}</div>
+                <p className="mt-1 text-sm text-muted">{t(mode.desc)}</p>
               </div>
-              <div className="text-sm text-gray-500 mt-2 leading-relaxed">{mode.desc}</div>
-            </button>
+            </ChoiceCard>
           )
         })}
       </div>
-    </div>
+    </StepLayout>
   )
 }

@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Store } from 'lucide-react'
 import { Input } from '../../../components/ui/Input'
 import { Select } from '../../../components/ui/Select'
 import { VirtualKeyboard } from '../../../components/VirtualKeyboard'
 import { LogoUploader } from '../../../components/LogoUploader'
+import { StepLayout } from '../parts/StepLayout'
 import type { SetupData } from '../SetupWizard'
 
 interface Props {
@@ -59,67 +61,74 @@ export function RestaurantInfo({ data, updateData }: Props) {
     })
   }
 
-  return (
-    <div className="space-y-6">
-      <div className="text-center">
-        <h2 className="text-2xl font-bold text-gray-900">{t('setup.restaurant.title')}</h2>
-      </div>
+  // Touch mode: fields are read-only and open the on-screen keyboard on tap.
+  const touchField = (field: string, type: 'numeric' | 'text') =>
+    isTouch ? { readOnly: true, onClick: () => setKeyboardTarget({ field, type }), className: 'cursor-pointer' } : {}
 
-      <div className="bg-white rounded-xl p-6 space-y-5 shadow-sm">
+  return (
+    <StepLayout icon={<Store />} title={t('setup.restaurant.title')}>
+      <div className="grid gap-6 sm:grid-cols-[10rem_1fr]">
         {/* Logo — stored by the main process (contract C1), shown via a data URL, removable */}
         <LogoUploader size="md" />
 
-        <Input
-          label={t('setup.restaurant.name')}
-          value={data.restaurantName}
-          readOnly={isTouch}
-          onClick={isTouch ? () => setKeyboardTarget({ field: 'restaurantName', type: 'text' }) : undefined}
-          onChange={isTouch ? undefined : (e) => updateData({ restaurantName: e.target.value })}
-          placeholder={t('setup.restaurant.namePlaceholder')}
-        />
-
-        <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-4">
           <Input
-            label={t('setup.restaurant.phone')}
-            value={data.phone}
-            readOnly={isTouch}
-            onClick={isTouch ? () => setKeyboardTarget({ field: 'phone', type: 'numeric' }) : undefined}
-            onChange={isTouch ? undefined : (e) => updateData({ phone: e.target.value })}
-            placeholder={t('setup.restaurant.phonePlaceholder')}
+            inputSize="lg"
+            label={`${t('setup.restaurant.name')} *`}
+            value={data.restaurantName}
+            {...touchField('restaurantName', 'text')}
+            onChange={isTouch ? undefined : (e) => updateData({ restaurantName: e.target.value })}
+            placeholder={t('setup.restaurant.namePlaceholder')}
           />
-          <Input
-            label={t('setup.restaurant.phone2')}
-            value={data.phone2}
-            readOnly={isTouch}
-            onClick={isTouch ? () => setKeyboardTarget({ field: 'phone2', type: 'numeric' }) : undefined}
-            onChange={isTouch ? undefined : (e) => updateData({ phone2: e.target.value })}
-            placeholder={t('setup.restaurant.phone2Placeholder')}
-          />
-        </div>
 
-        <Input
-          label={t('setup.restaurant.address')}
-          value={data.address || ''}
-          readOnly={isTouch}
-          onClick={isTouch ? () => setKeyboardTarget({ field: 'address', type: 'text' }) : undefined}
-          onChange={isTouch ? undefined : (e) => updateData({ address: e.target.value })}
-          placeholder={t('setup.restaurant.addressPlaceholder')}
-        />
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              inputSize="lg"
+              dir="ltr"
+              inputMode="tel"
+              label={`${t('setup.restaurant.phone')} *`}
+              value={data.phone}
+              {...touchField('phone', 'numeric')}
+              onChange={isTouch ? undefined : (e) => updateData({ phone: e.target.value })}
+              placeholder={t('setup.restaurant.phonePlaceholder')}
+            />
+            <Input
+              inputSize="lg"
+              dir="ltr"
+              inputMode="tel"
+              label={t('setup.restaurant.phone2')}
+              value={data.phone2}
+              {...touchField('phone2', 'numeric')}
+              onChange={isTouch ? undefined : (e) => updateData({ phone2: e.target.value })}
+              placeholder={t('setup.restaurant.phone2Placeholder')}
+            />
+          </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <Select
-            label={t('setup.restaurant.currency')}
-            value={data.currency}
-            onChange={(e) => handleCurrencyChange(e.target.value)}
-            options={currencies.map((c) => ({ value: c.value, label: c.label }))}
-          />
           <Input
-            label={t('setup.restaurant.currencySymbol')}
-            value={data.currencySymbol}
-            readOnly={isTouch}
-            onClick={isTouch ? () => setKeyboardTarget({ field: 'currencySymbol', type: 'text' }) : undefined}
-            onChange={isTouch ? undefined : (e) => updateData({ currencySymbol: e.target.value })}
+            inputSize="lg"
+            label={t('setup.restaurant.address')}
+            value={data.address || ''}
+            {...touchField('address', 'text')}
+            onChange={isTouch ? undefined : (e) => updateData({ address: e.target.value })}
+            placeholder={t('setup.restaurant.addressPlaceholder')}
           />
+
+          <div className="grid grid-cols-[1fr_9rem] gap-4 border-t border-line pt-4">
+            <Select
+              selectSize="lg"
+              label={t('setup.restaurant.currency')}
+              value={data.currency}
+              onChange={(e) => handleCurrencyChange(e.target.value)}
+              options={currencies.map((c) => ({ value: c.value, label: c.label }))}
+            />
+            <Input
+              inputSize="lg"
+              label={t('setup.restaurant.currencySymbol')}
+              value={data.currencySymbol}
+              {...touchField('currencySymbol', 'text')}
+              onChange={isTouch ? undefined : (e) => updateData({ currencySymbol: e.target.value })}
+            />
+          </div>
         </div>
       </div>
 
@@ -133,6 +142,6 @@ export function RestaurantInfo({ data, updateData }: Props) {
           onClose={() => setKeyboardTarget(null)}
         />
       )}
-    </div>
+    </StepLayout>
   )
 }

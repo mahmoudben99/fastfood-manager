@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Delete, Check, Space, ChevronUp } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { Delete, Check, Space, ArrowBigUp, Languages } from 'lucide-react'
+import { cn } from './ui/cn'
 
 interface VirtualKeyboardProps {
   value: string
@@ -38,7 +40,21 @@ const ARABIC_ROWS = [
 
 const SYMBOL_ROW = ['@', '.', '-', '_', '/', ':', '#', '&', '!', '?', ',']
 
+const SPECIAL_KEYS = ['SHIFT', 'DEL', 'SPACE', 'DONE', 'LANG']
+
+// Key looks (tokens only, so the panel follows light/dark by itself).
+// Height is set per keyboard (h-14 = 56px text keys, h-16 = 64px numpad): cn() does not dedupe.
+// Short screens (<= 800px tall: 1366x768 / 1280x720 windows) drop one step (48 / 56px) so the
+// 7-row Arabic layout leaves room for the field being edited. (Literal classes: Tailwind scans text.)
+const KEY_BASE =
+  'tap rounded-xl font-semibold flex items-center justify-center select-none focus-visible:outline-2 focus-visible:outline-focus'
+const KEY_CHAR = 'bg-surface text-ink border border-line shadow-e1 hover:bg-surface-2 active:bg-surface-3'
+const KEY_DIGIT = 'bg-surface-3 text-ink border border-line hover:brightness-95 active:brightness-90'
+const KEY_FN = 'bg-surface-3 text-ink-2 border border-line-strong hover:text-ink active:brightness-95'
+const KEY_DONE = 'bg-ember text-on-primary shadow-glow hover:brightness-[1.07] active:brightness-95'
+
 export function VirtualKeyboard({ value, onChange, onClose, type, visible, extended = false, initialLayout = 'latin' }: VirtualKeyboardProps) {
+  const { t } = useTranslation()
   const [shifted, setShifted] = useState(false)
   const [layout, setLayout] = useState<'latin' | 'arabic'>(initialLayout)
 
@@ -85,82 +101,100 @@ export function VirtualKeyboard({ value, onChange, onClose, type, visible, exten
     }
   }
 
+  const doneLabel = t('ui.keyboard.done')
+
   return (
     <div className="fixed inset-0 z-[9999] flex flex-col justify-end" onClick={onClose}>
-      {/* Translucent backdrop */}
-      <div className="absolute inset-0 bg-black/30" />
+      {/* Light scrim: the field being edited stays readable above the panel */}
+      <div className="absolute inset-0 bg-overlay/50 animate-fade-in" />
 
-      {/* Keyboard panel */}
+      {/* Keyboard panel. Keys are always laid out LTR (QWERTY / Arabic keyboards / numpad are
+          physical layouts), so an Arabic UI doesn't mirror them. */}
       <div
-        className="relative bg-gray-800 border-t border-gray-600 p-2 animate-slide-up-keyboard"
+        role="group"
+        aria-label={t('ui.keyboard.label')}
+        dir="ltr"
+        className="relative rounded-t-3xl border-t border-line bg-surface-2 px-3 pt-3 pb-3 shadow-e4 animate-slide-up-keyboard"
         onClick={(e) => e.stopPropagation()}
       >
+        <div aria-hidden className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-line-strong [@media(max-height:800px)]:hidden" />
         {type === 'numeric' ? (
           /* Numpad layout */
-          <div className="max-w-xs mx-auto">
+          <div className="mx-auto max-w-sm">
             {NUM_ROWS.map((row, ri) => (
-              <div key={ri} className="flex gap-2 mb-2 justify-center">
+              <div key={ri} className="mb-2 flex justify-center gap-2">
                 {row.map((key) => (
                   <button
                     key={key}
+                    type="button"
                     onClick={() => handleKey(key)}
-                    className={`flex-1 max-w-[80px] h-14 rounded-lg font-bold text-xl flex items-center justify-center active:scale-95 transition-all ${
+                    aria-label={key === 'DEL' ? t('ui.keyboard.backspace') : key === 'C' ? t('ui.keyboard.clear') : undefined}
+                    className={cn(
+                      KEY_BASE,
+                      'num h-16 flex-1 text-2xl [@media(max-height:800px)]:h-14',
                       key === 'C'
-                        ? 'bg-red-500 hover:bg-red-600 text-white'
+                        ? 'bg-danger-soft text-danger-ink border border-line hover:brightness-95'
                         : key === 'DEL'
-                          ? 'bg-gray-600 hover:bg-gray-500 text-white'
-                          : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
-                    }`}
+                          ? KEY_FN
+                          : KEY_CHAR
+                    )}
                   >
-                    {key === 'DEL' ? <Delete className="h-6 w-6" /> : key}
+                    {key === 'DEL' ? <Delete className="h-7 w-7" /> : key}
                   </button>
                 ))}
               </div>
             ))}
             {/* Done button */}
-            <button
-              onClick={onClose}
-              className="w-full h-14 rounded-lg font-bold text-xl bg-orange-500 hover:bg-orange-600 text-white flex items-center justify-center gap-2 active:scale-95 transition-all mt-1"
-            >
-              <Check className="h-6 w-6" />
-              Done
+            <button type="button" onClick={onClose} className={cn(KEY_BASE, KEY_DONE, 'mt-1 h-14 w-full gap-2 text-xl [@media(max-height:800px)]:h-12')}>
+              <Check className="h-6 w-6" strokeWidth={2.5} />
+              {doneLabel}
             </button>
           </div>
         ) : (
-          /* Full QWERTY layout */
-          <div className="max-w-3xl mx-auto">
+          /* Full QWERTY / Arabic layout */
+          <div className="mx-auto max-w-4xl">
             {textRows(layout, extended).map((row, ri) => (
-              <div key={ri} className="flex gap-1 mb-1 justify-center">
+              <div key={ri} className="mb-1.5 flex justify-center gap-1.5">
                 {row.map((key) => {
-                  const isSpecial = ['SHIFT', 'DEL', 'SPACE', 'DONE', 'LANG'].includes(key)
-                  const displayKey = key === 'SHIFT' ? (shifted ? '⬆' : '⇧')
-                    : key === 'LANG' ? (layout === 'latin' ? 'ع' : 'ABC')
-                    : key === 'DEL' ? '' : key === 'SPACE' ? '' : key === 'DONE' ? '' : (shifted ? key : key.toLowerCase())
+                  const isSpecial = SPECIAL_KEYS.includes(key)
+                  const displayKey = key === 'LANG' ? (layout === 'latin' ? 'ع' : 'ABC') : shifted ? key : key.toLowerCase()
+                  const label =
+                    key === 'DEL' ? t('ui.keyboard.backspace')
+                      : key === 'SPACE' ? t('ui.keyboard.space')
+                      : key === 'SHIFT' ? t('ui.keyboard.shift')
+                      : key === 'LANG' ? t('ui.keyboard.switchLayout')
+                      : undefined
 
                   return (
                     <button
                       key={key}
+                      type="button"
                       onClick={() => handleKey(key)}
-                      className={`h-12 rounded-lg font-semibold text-base flex items-center justify-center active:scale-95 transition-all ${
+                      aria-label={label}
+                      aria-pressed={key === 'SHIFT' ? shifted : undefined}
+                      className={cn(
+                        KEY_BASE,
+                        'h-14 min-w-0 text-lg [@media(max-height:800px)]:h-12',
                         key === 'SPACE'
-                          ? 'flex-[4] bg-gray-100 hover:bg-gray-200 text-gray-500'
+                          ? cn('flex-[4]', KEY_CHAR)
                           : key === 'DONE'
-                            ? 'flex-[2] bg-orange-500 hover:bg-orange-600 text-white'
+                            ? cn('flex-[2] gap-1.5', KEY_DONE)
                             : key === 'SHIFT'
-                              ? `flex-[1.4] ${shifted ? 'bg-orange-400 text-white' : 'bg-gray-600 hover:bg-gray-500 text-white'}`
+                              ? cn('flex-[1.4]', shifted ? 'bg-primary-soft-2 text-primary-ink border border-primary/40' : KEY_FN)
                               : key === 'LANG'
-                                ? 'flex-[1.4] bg-gray-600 hover:bg-gray-500 text-white'
-                              : key === 'DEL'
-                                ? 'flex-[1.4] bg-gray-600 hover:bg-gray-500 text-white'
-                                : ri === 0
-                                  ? 'flex-1 bg-gray-500 hover:bg-gray-400 text-white'
-                                  : 'flex-1 bg-gray-100 hover:bg-gray-200 text-gray-900'
-                      }`}
+                                ? cn('flex-[1.4] gap-1.5', KEY_FN)
+                                : key === 'DEL'
+                                  ? cn('flex-[1.4]', KEY_FN)
+                                  : ri === 0 && !isSpecial
+                                    ? cn('num flex-1', KEY_DIGIT)
+                                    : cn('flex-1', KEY_CHAR)
+                      )}
                     >
-                      {key === 'DEL' ? <Delete className="h-5 w-5" />
-                        : key === 'SPACE' ? <Space className="h-5 w-5" />
-                        : key === 'DONE' ? <><Check className="h-5 w-5 me-1" /> Done</>
-                        : key === 'SHIFT' ? <ChevronUp className="h-5 w-5" />
+                      {key === 'DEL' ? <Delete className="h-6 w-6" />
+                        : key === 'SPACE' ? <Space className="h-6 w-6" />
+                        : key === 'DONE' ? <><Check className="h-5 w-5" strokeWidth={2.5} />{doneLabel}</>
+                        : key === 'SHIFT' ? <ArrowBigUp className={cn('h-6 w-6', shifted && 'fill-current')} />
+                        : key === 'LANG' ? <><Languages className="h-5 w-5" />{displayKey}</>
                         : displayKey}
                     </button>
                   )

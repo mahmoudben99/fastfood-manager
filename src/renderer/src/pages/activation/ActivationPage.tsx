@@ -3,7 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../../store/appStore'
 import { Button } from '../../components/ui/Button'
-import { ShieldCheck, Clock, Copy, Check, Wifi, AlertCircle } from 'lucide-react'
+import { Input } from '../../components/ui/Input'
+import { ShieldCheck, Clock, Wifi, KeyRound, Info } from 'lucide-react'
+import { BrandMark } from '../setup/parts/BrandMark'
+import { LanguageSwitcher } from '../setup/parts/LanguageSwitcher'
+import { Notice } from '../setup/parts/Notice'
+import { MachineIdField } from './MachineIdField'
 
 export function ActivationPage() {
   const { t } = useTranslation()
@@ -15,18 +20,11 @@ export function ActivationPage() {
   const [error, setError] = useState('')
   const [activating, setActivating] = useState(false)
   const [startingTrial, setStartingTrial] = useState(false)
-  const [copied, setCopied] = useState(false)
   const [trialError, setTrialError] = useState('')
 
   useEffect(() => {
     window.api.activation.getMachineId().then(setMachineId)
   }, [])
-
-  const copyMachineId = () => {
-    navigator.clipboard.writeText(machineId)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
 
   const formatInput = (value: string) => {
     const clean = value.replace(/[^A-Fa-f0-9-]/g, '').toUpperCase()
@@ -84,119 +82,120 @@ export function ActivationPage() {
     }
   }
 
+  const serialComplete = serialCode.length >= 23
+  const busy = activating || startingTrial
+
   return (
-    <div className="h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-4">
+    <div className="h-screen overflow-y-auto bg-canvas">
+      <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-6 py-4">
+        <header className="flex flex-wrap items-center justify-between gap-4">
+          <BrandMark />
+          <LanguageSwitcher />
+        </header>
 
-        {/* Header */}
-        <div className="text-center mb-2">
-          <h1 className="text-2xl font-bold text-white">Fast Food Manager</h1>
-          <p className="text-gray-400 text-sm mt-1">{t('activation.chooseStart', { defaultValue: 'Choose how to get started' })}</p>
-        </div>
+        <main className="flex flex-1 flex-col justify-center py-6">
+          {/* The brand mark + card titles say it all; the page title stays for screen readers. */}
+          <h1 className="sr-only">{t('activation.title')}</h1>
 
-        {/* ── Card 1: Serial Code ── */}
-        <div className="bg-white rounded-2xl shadow-xl p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center flex-shrink-0">
-              <ShieldCheck className="h-5 w-5 text-orange-500" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-gray-900">{t('activation.haveLicense', { defaultValue: 'I have a license' })}</h2>
-              <p className="text-xs text-gray-500">{t('activation.enterSerial', { defaultValue: 'Enter your serial code to activate' })}</p>
-            </div>
-          </div>
-
-          {/* Machine ID */}
-          <div className="mb-3">
-            <label className="block text-xs font-medium text-gray-500 mb-1">{t('activation.machineId')}</label>
-            <div className="flex items-center gap-2">
-              <div className="flex-1 bg-gray-100 rounded-lg px-3 py-2 font-mono text-xs text-gray-700 select-all">
-                {machineId || '…'}
+          {/* Side by side from 768px (1024 fits two ~470px cards), stacked below. */}
+          <div className="grid items-stretch gap-5 md:grid-cols-2">
+            {/* ── Card 1: Serial Code (the ONE ember CTA) ── */}
+            <section className="flex flex-col rounded-3xl border border-line bg-surface p-6 shadow-e2">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="h-11 w-11 shrink-0 rounded-xl bg-primary-soft text-primary-ink flex items-center justify-center">
+                  <ShieldCheck className="h-5 w-5" aria-hidden />
+                </div>
+                <h2 className="min-w-0 text-xl font-bold text-ink">
+                  {t('activation.haveLicense', { defaultValue: 'I have a license' })}
+                </h2>
               </div>
-              <button
-                onClick={copyMachineId}
-                className="p-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                title={t('activation.copyMachineId', { defaultValue: 'Copy Machine ID' })}
-              >
-                {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4 text-gray-500" />}
-              </button>
-            </div>
+
+              <div className="space-y-4">
+                <MachineIdField
+                  machineId={machineId}
+                  label={
+                    <span className="inline-flex items-center gap-1.5">
+                      {t('activation.machineId')}
+                      <span role="img" aria-label={t('activation.contact')} title={t('activation.contact')} className="inline-flex text-muted">
+                        <Info className="h-4 w-4" />
+                      </span>
+                    </span>
+                  }
+                />
+
+                {/* Serial code: always LTR + monospace, auto-grouped XXXXX-XXXXX-XXXXX-XXXXX */}
+                <Input
+                  label={t('activation.serialCode')}
+                  type="text"
+                  dir="ltr"
+                  inputSize="lg"
+                  spellCheck={false}
+                  autoComplete="off"
+                  value={serialCode}
+                  onChange={(e) => setSerialCode(formatInput(e.target.value))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && serialComplete && !busy) void handleActivate()
+                  }}
+                  placeholder="XXXXX-XXXXX-XXXXX-XXXXX"
+                  maxLength={23}
+                  error={error || undefined}
+                  className="text-center font-mono uppercase tracking-[0.12em]"
+                />
+              </div>
+
+              <div className="mt-auto pt-5">
+                <Button
+                  size="xl"
+                  fullWidth
+                  onClick={handleActivate}
+                  loading={activating}
+                  disabled={serialCode.length < 23 || startingTrial}
+                  icon={<KeyRound className="h-5 w-5" />}
+                >
+                  {t('activation.activate')}
+                </Button>
+              </div>
+            </section>
+
+            {/* ── Card 2: Free Trial ── */}
+            <section className="flex flex-col rounded-3xl border border-line bg-surface p-6 shadow-e2">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="h-11 w-11 shrink-0 rounded-xl bg-info-soft text-info-ink flex items-center justify-center">
+                  <Clock className="h-5 w-5" aria-hidden />
+                </div>
+                <h2 className="min-w-0 text-xl font-bold text-ink">
+                  {t('activation.startFreeTrial', { defaultValue: 'Start Free Trial' })}
+                </h2>
+              </div>
+
+              {/* One line: 7 days · all features · internet required */}
+              <p className="flex items-center gap-2 text-sm font-medium text-ink-2">
+                <Wifi className="h-4 w-4 shrink-0 text-info-ink" aria-hidden />
+                {t('activation.trialLine')}
+              </p>
+
+              {trialError && <Notice tone="danger" className="mt-4">{trialError}</Notice>}
+
+              <div className="mt-auto pt-5">
+                <Button
+                  variant="secondary"
+                  size="xl"
+                  fullWidth
+                  onClick={handleStartTrial}
+                  loading={startingTrial}
+                  disabled={activating}
+                  icon={<Clock className="h-5 w-5" />}
+                >
+                  {t('activation.startTrialButton', { defaultValue: 'Start 7-Day Free Trial' })}
+                </Button>
+              </div>
+            </section>
           </div>
 
-          {/* Serial Code Input */}
-          <div className="mb-3">
-            <input
-              type="text"
-              value={serialCode}
-              onChange={(e) => setSerialCode(formatInput(e.target.value))}
-              placeholder="XXXXX-XXXXX-XXXXX-XXXXX"
-              className="w-full border rounded-lg px-3 py-2.5 font-mono text-sm tracking-wider text-center uppercase focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none"
-              maxLength={23}
-            />
-          </div>
-
-          {error && (
-            <div className="mb-3 flex items-center gap-2 text-red-600 text-xs bg-red-50 rounded-lg px-3 py-2">
-              <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
-              {error}
-            </div>
-          )}
-
-          <Button
-            onClick={handleActivate}
-            loading={activating}
-            disabled={serialCode.length < 23}
-            className="w-full justify-center"
-          >
-            {t('activation.activate')}
-          </Button>
-        </div>
-
-        {/* Divider */}
-        <div className="flex items-center gap-3">
-          <div className="flex-1 h-px bg-gray-600" />
-          <span className="text-gray-400 text-xs font-medium">{t('activation.or', { defaultValue: 'OR' })}</span>
-          <div className="flex-1 h-px bg-gray-600" />
-        </div>
-
-        {/* ── Card 2: Free Trial ── */}
-        <div className="bg-white rounded-2xl shadow-xl p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
-              <Clock className="h-5 w-5 text-blue-500" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-gray-900">{t('activation.startFreeTrial', { defaultValue: 'Start Free Trial' })}</h2>
-              <p className="text-xs text-gray-500">{t('activation.trialSubtitle', { defaultValue: '7 days, full features — no credit card' })}</p>
-            </div>
-          </div>
-
-          <div className="flex items-start gap-2 bg-blue-50 rounded-lg px-3 py-2 mb-4">
-            <Wifi className="h-3.5 w-3.5 text-blue-500 flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-blue-700">
-              {t('activation.trialInternetNote', { defaultValue: 'Requires internet. Keeps working offline for up to 7 days between checks.' })}
-            </p>
-          </div>
-
-          {trialError && (
-            <div className="mb-3 flex items-center gap-2 text-red-600 text-xs bg-red-50 rounded-lg px-3 py-2">
-              <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
-              {trialError}
-            </div>
-          )}
-
-          <Button
-            onClick={handleStartTrial}
-            loading={startingTrial}
-            className="w-full justify-center bg-blue-600 hover:bg-blue-700 focus:ring-blue-500"
-          >
-            {t('activation.startTrialButton', { defaultValue: 'Start 7-Day Free Trial' })}
-          </Button>
-        </div>
-
-        <p className="text-xs text-gray-500 text-center">
-          {t('activation.needLicense', { defaultValue: 'Need a license? Contact us to purchase.' })}
-        </p>
+          <p className="mt-5 text-center text-sm text-muted">
+            {t('activation.needLicense', { defaultValue: 'Need a license? Contact us to purchase.' })}
+          </p>
+        </main>
       </div>
     </div>
   )

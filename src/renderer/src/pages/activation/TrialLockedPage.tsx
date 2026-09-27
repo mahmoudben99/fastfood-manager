@@ -1,24 +1,34 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../../store/appStore'
-import { ShieldX, WifiOff, Copy, Check, KeyRound } from 'lucide-react'
-import splashBg from '../../assets/splash-screen.png'
+import { ShieldX, WifiOff, KeyRound, CirclePause, Fingerprint, RefreshCw } from 'lucide-react'
+import { Button } from '../../components/ui/Button'
+import { cn } from '../../components/ui/cn'
+import { MachineIdField } from './MachineIdField'
 
 interface TrialLockedPageProps {
   reason: 'expired' | 'paused' | 'offline' | string
   offlineSecondsLeft?: number | null
 }
 
+/** Offline grace period the main process counts down from (seconds). */
+const OFFLINE_GRACE_SECONDS = 120
+const URGENT_SECONDS = 30
+
 export function TrialLockedPage({ reason, offlineSecondsLeft }: TrialLockedPageProps) {
   const navigate = useNavigate()
   const { t } = useTranslation()
+  const titleId = useId()
   const { setActivated, setTrialStatus } = useAppStore()
   const [machineId, setMachineId] = useState('')
-  const [copied, setCopied] = useState(false)
   const [showMachineId, setShowMachineId] = useState(false)
+  const [checking, setChecking] = useState(false)
 
   const isOffline = reason === 'offline'
+  const isPaused = reason === 'paused'
+  const counting = isOffline && offlineSecondsLeft != null && offlineSecondsLeft > 0
+  const urgent = counting && (offlineSecondsLeft as number) <= URGENT_SECONDS
 
   const handleShowMachineId = async () => {
     if (!machineId) {
@@ -28,16 +38,20 @@ export function TrialLockedPage({ reason, offlineSecondsLeft }: TrialLockedPageP
     setShowMachineId(true)
   }
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(machineId)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
   const handleEnterCode = () => {
     setActivated(false)
     setTrialStatus(null)
     navigate('/activate')
+  }
+
+  // Same immediate cloud check the browser online/offline events trigger; the App unlocks on the
+  // resulting status/offline-cleared event. The spinner just acknowledges the tap.
+  const handleCheckNow = () => {
+    if (checking) return
+    setChecking(true)
+    Promise.resolve(window.api.trial.checkNow())
+      .catch(() => {})
+      .finally(() => setTimeout(() => setChecking(false), 1500))
   }
 
   const formatCountdown = (seconds: number) => {
@@ -46,122 +60,125 @@ export function TrialLockedPage({ reason, offlineSecondsLeft }: TrialLockedPageP
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
+  // Warning while the offline countdown is still running (or paused); danger once locked.
+  const tone: 'warning' | 'danger' = counting || isPaused ? 'warning' : 'danger'
+  const Icon = isOffline ? WifiOff : isPaused ? CirclePause : ShieldX
+
+  const title = isOffline
+    ? counting
+      ? t('trialLock.titleNoInternet')
+      : t('trialLock.titleOfflineLocked', { defaultValue: 'App Locked — No Internet' })
+    : isPaused
+      ? t('trialLock.titlePaused', { defaultValue: 'Trial Paused' })
+      : t('trialLock.titleExpired', { defaultValue: 'Free Trial Expired' })
+
+  // One short line each (the long v3 sentences stay in the locale files, unused here).
+  const subtitle = isOffline
+    ? t('trialLock.shortOffline')
+    : isPaused
+      ? t('trialLock.shortPaused')
+      : t('trialLock.shortExpired')
+
+  // Share of the grace period still left (bar drains towards the lock).
+  const remaining = counting ? Math.min(1, Math.max(0, (offlineSecondsLeft as number) / OFFLINE_GRACE_SECONDS)) : 0
+
+  // Compact on purpose: the offline state (timer + 3 actions + machine ID) fits 1280x720 and
+  // 1024x768 without scrolling; it still scrolls on anything smaller.
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center"
-      style={{
-        backgroundImage: `url(${splashBg})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center'
-      }}
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      className="fixed inset-0 z-[200] overflow-y-auto bg-canvas animate-fade-in"
     >
-      {/* Dark overlay for readability */}
-      <div className="absolute inset-0 bg-black/40" />
+      <div className="mx-auto flex min-h-full w-full max-w-lg flex-col items-center justify-center px-6 py-6">
+        <div className="w-full rounded-3xl border border-line bg-surface p-6 text-center shadow-e3">
+          <div
+            className={cn(
+              'mx-auto mb-3 h-14 w-14 rounded-2xl flex items-center justify-center',
+              tone === 'warning' ? 'bg-warning-soft text-warning-ink' : 'bg-danger-soft text-danger-ink'
+            )}
+          >
+            <Icon className="h-7 w-7" aria-hidden />
+          </div>
 
-      <div className="relative z-10 bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4 text-center">
-        {/* Icon */}
-        <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 ${
-          isOffline ? 'bg-yellow-100' : 'bg-red-100'
-        }`}>
-          {isOffline
-            ? <WifiOff className="h-8 w-8 text-yellow-500" />
-            : <ShieldX className="h-8 w-8 text-red-500" />
-          }
-        </div>
+          <h1 id={titleId} className="text-xl font-extrabold leading-tight tracking-tight text-ink rtl:tracking-normal">
+            {title}
+          </h1>
+          <p className="mx-auto mt-1 max-w-sm text-sm text-muted">{subtitle}</p>
 
-        {/* Title */}
-        <h1 className="text-xl font-bold text-gray-900 mb-2">
-          {isOffline
-            ? (offlineSecondsLeft && offlineSecondsLeft > 0
-                ? t('trialLock.titleOfflineCountdown', {
-                    defaultValue: 'No Internet — {{time}}',
-                    time: formatCountdown(offlineSecondsLeft)
-                  })
-                : t('trialLock.titleOfflineLocked', { defaultValue: 'App Locked — No Internet' }))
-            : reason === 'paused'
-              ? t('trialLock.titlePaused', { defaultValue: 'Trial Paused' })
-              : t('trialLock.titleExpired', { defaultValue: 'Free Trial Expired' })
-          }
-        </h1>
+          {/* Offline grace countdown: big timer + draining bar (lock at 0) */}
+          {counting && (
+            <div
+              className="mt-4 rounded-2xl border border-line bg-surface-2 px-4 py-3"
+              title={t('trialLock.lockOnZero', { defaultValue: 'App will lock when timer reaches zero' })}
+            >
+              <p
+                dir="ltr"
+                aria-live="polite"
+                aria-label={t('trialLock.timeLeft')}
+                className={cn('num text-kpi', urgent ? 'text-danger-ink' : 'text-warning-ink')}
+              >
+                {formatCountdown(offlineSecondsLeft as number)}
+              </p>
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-3">
+                <div
+                  className={cn(
+                    'h-full w-full rounded-full origin-left rtl:origin-right transition-transform duration-1000 ease-linear',
+                    urgent ? 'bg-danger' : 'bg-warning'
+                  )}
+                  style={{ transform: `scaleX(${remaining})` }}
+                />
+              </div>
+            </div>
+          )}
 
-        {/* Subtitle */}
-        <p className="text-gray-500 text-sm mb-5">
-          {isOffline
-            ? t('trialLock.subtitleOffline', {
-                defaultValue:
-                  'The free trial requires an internet connection to verify your license. Please reconnect to continue.'
-              })
-            : reason === 'paused'
-              ? t('trialLock.subtitlePaused', {
-                  defaultValue:
-                    'Your trial has been paused by the administrator. Please contact us to resume access.'
-                })
-              : t('trialLock.subtitleExpired', {
-                  defaultValue:
-                    'Your 7-day free trial has ended. Activate with a serial code to continue using Fast Food Manager.'
-                })
-          }
-        </p>
+          {/* Actions: ONE ember CTA, secondary actions side by side */}
+          <div className="mt-5 space-y-2">
+            <Button size="xl" fullWidth onClick={handleEnterCode} icon={<KeyRound className="h-5 w-5" />}>
+              {t('trialLock.enterCode', { defaultValue: 'Enter Activation Code' })}
+            </Button>
 
-        {/* Countdown progress bar for offline */}
-        {isOffline && offlineSecondsLeft != null && offlineSecondsLeft > 0 && (
-          <div className="mb-5">
-            <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-yellow-400 to-red-500 rounded-full transition-all duration-1000"
-                style={{ width: `${Math.max(0, (1 - offlineSecondsLeft / 120) * 100)}%` }}
+            {(isOffline || !showMachineId) && (
+              <div className="flex gap-2">
+                {isOffline && (
+                  <Button
+                    variant="secondary"
+                    size="lg"
+                    className="flex-1"
+                    onClick={handleCheckNow}
+                    loading={checking}
+                    icon={<RefreshCw className="h-5 w-5" />}
+                  >
+                    {t('trialLock.checkNow')}
+                  </Button>
+                )}
+                {!showMachineId && (
+                  <Button
+                    variant={isOffline ? 'secondary' : 'ghost'}
+                    size="lg"
+                    className="flex-1"
+                    onClick={handleShowMachineId}
+                    title={t('trialLock.showMachineId', { defaultValue: 'Show Machine ID (for support)' })}
+                    icon={<Fingerprint className="h-5 w-5" />}
+                  >
+                    {t('activation.machineId')}
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Machine ID display */}
+          {showMachineId && machineId && (
+            <div className="mt-4 border-t border-line pt-4 text-start">
+              <MachineIdField
+                machineId={machineId}
+                label={t('trialLock.sendIdHint', { defaultValue: 'Send this ID to support to get an activation code:' })}
               />
             </div>
-            <p className="text-xs text-gray-400 mt-1">
-              {t('trialLock.lockOnZero', {
-                defaultValue: 'App will lock when timer reaches zero'
-              })}
-            </p>
-          </div>
-        )}
-
-        {/* Actions */}
-        <div className="space-y-3">
-          <button
-            onClick={handleEnterCode}
-            className="w-full py-2.5 px-4 rounded-xl bg-orange-600 text-white text-sm font-semibold hover:bg-orange-700 transition-colors flex items-center justify-center gap-2"
-          >
-            <KeyRound className="h-4 w-4" />
-            {t('trialLock.enterCode', { defaultValue: 'Enter Activation Code' })}
-          </button>
-
-          <button
-            onClick={handleShowMachineId}
-            className="w-full py-2.5 px-4 rounded-xl border-2 border-gray-200 text-gray-600 text-sm font-medium hover:border-gray-300 transition-colors"
-          >
-            {t('trialLock.showMachineId', { defaultValue: 'Show Machine ID (for support)' })}
-          </button>
+          )}
         </div>
-
-        {/* Machine ID display */}
-        {showMachineId && machineId && (
-          <div className="mt-4 p-3 bg-gray-50 rounded-xl">
-            <p className="text-xs text-gray-500 mb-2">
-              {t('trialLock.sendIdHint', {
-                defaultValue: 'Send this ID to support to get an activation code:'
-              })}
-            </p>
-            <div className="flex items-center gap-2">
-              <div className="flex-1 font-mono text-sm bg-white border border-gray-200 rounded-lg px-3 py-2 select-all text-gray-800">
-                {machineId}
-              </div>
-              <button
-                onClick={handleCopy}
-                className="p-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                {copied
-                  ? <Check className="h-4 w-4 text-green-500" />
-                  : <Copy className="h-4 w-4 text-gray-500" />
-                }
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )

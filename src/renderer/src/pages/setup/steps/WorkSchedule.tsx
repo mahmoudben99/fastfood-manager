@@ -1,11 +1,18 @@
 import { useTranslation } from 'react-i18next'
-import { Select } from '../../../components/ui/Select'
+import { CalendarClock } from 'lucide-react'
+import { SegmentedControl } from '../../../components/ui/SegmentedControl'
+import { controlClass } from '../../../components/ui/Field'
+import { cn } from '../../../components/ui/cn'
+import { StepLayout } from '../parts/StepLayout'
 import type { SetupData } from '../SetupWizard'
 
 interface Props {
   data: SetupData
   updateData: (partial: Partial<SetupData>) => void
 }
+
+// controlClass is w-full: the sized wrapper sets each time field (fits "08:00 AM" + picker icon).
+const timeClass = controlClass({ className: 'num text-center' })
 
 export function WorkSchedule({ data, updateData }: Props) {
   const { t } = useTranslation()
@@ -27,51 +34,63 @@ export function WorkSchedule({ data, updateData }: Props) {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="text-center">
-        <h2 className="text-2xl font-bold text-gray-900">{t('setup.schedule.title')}</h2>
-        <p className="text-gray-500 mt-1">{t('setup.schedule.subtitle')}</p>
-      </div>
+    <StepLayout icon={<CalendarClock />} title={t('setup.schedule.title')}>
+      <ul className="space-y-2">
+        {data.schedule.map((day, i) => {
+          const closed = day.status === 'closed'
+          const dayName = t(`days.${day.day_of_week}`)
+          return (
+            <li
+              key={i}
+              className={cn(
+                'flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-line px-3 py-2',
+                closed ? 'bg-surface-2' : 'bg-surface'
+              )}
+            >
+              <span className={cn('w-24 shrink-0 truncate text-base font-semibold', closed ? 'text-muted' : 'text-ink')}>
+                {dayName}
+              </span>
 
-      <div className="bg-white rounded-xl p-4 shadow-sm space-y-3">
-        {data.schedule.map((day, i) => (
-          <div
-            key={i}
-            className={`flex items-center gap-3 p-3 rounded-lg ${
-              day.status === 'closed' ? 'bg-gray-50 opacity-60' : 'bg-white'
-            }`}
-          >
-            <div className="w-28 font-medium text-gray-700 text-sm shrink-0">
-              {t(`days.${day.day_of_week}`)}
-            </div>
+              <SegmentedControl
+                value={day.status}
+                onChange={(value) => updateDay(i, 'status', value)}
+                options={statusOptions}
+                ariaLabel={dayName}
+              />
 
-            <Select
-              value={day.status}
-              onChange={(e) => updateDay(i, 'status', e.target.value)}
-              options={statusOptions}
-              className="w-36"
-            />
-
-            {day.status !== 'closed' && (
-              <>
-                <input
-                  type="time"
-                  value={day.open_time || '08:00'}
-                  onChange={(e) => updateDay(i, 'open_time', e.target.value)}
-                  className="border rounded-lg px-2 py-1.5 text-sm"
-                />
-                <span className="text-gray-400 text-sm">-</span>
-                <input
-                  type="time"
-                  value={day.close_time || (day.status === 'half' ? '14:00' : '23:00')}
-                  onChange={(e) => updateDay(i, 'close_time', e.target.value)}
-                  className="border rounded-lg px-2 py-1.5 text-sm"
-                />
-              </>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
+              {/* Closed days: the segmented control already says so, no times to show */}
+              {!closed && (
+                // ms-auto on an outer box (page direction); the clock times inside read LTR in every language.
+                <div className="ms-auto">
+                  <div dir="ltr" className="flex items-center gap-2">
+                    <div className="w-[9.25rem]">
+                      <input
+                        type="time"
+                        data-ui="input"
+                        aria-label={`${dayName} · ${t('setup.schedule.openTime')}`}
+                        value={day.open_time || '08:00'}
+                        onChange={(e) => updateDay(i, 'open_time', e.target.value)}
+                        className={timeClass}
+                      />
+                    </div>
+                    <span className="text-muted" aria-hidden>–</span>
+                    <div className="w-[9.25rem]">
+                      <input
+                        type="time"
+                        data-ui="input"
+                        aria-label={`${dayName} · ${t('setup.schedule.closeTime')}`}
+                        value={day.close_time || (day.status === 'half' ? '14:00' : '23:00')}
+                        onChange={(e) => updateDay(i, 'close_time', e.target.value)}
+                        className={timeClass}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+    </StepLayout>
   )
 }
