@@ -1,13 +1,34 @@
+// Self-contained on purpose: unit tests import this file directly with Node's type stripping,
+// which cannot resolve extensionless relative imports.
 const UNIT_ALIASES: Record<string, string> = {
-  kg: 'kg', kilogram: 'kg', kilograms: 'kg',
-  g: 'g', gram: 'g', grams: 'g',
-  l: 'liter', litre: 'liter', litres: 'liter', liter: 'liter', liters: 'liter',
+  kg: 'kg', kgs: 'kg', kilo: 'kg', kilos: 'kg', kilogram: 'kg', kilograms: 'kg',
+  kilogramme: 'kg', kilogrammes: 'kg',
+  g: 'g', gr: 'g', gram: 'g', grams: 'g', gramme: 'g', grammes: 'g',
+  l: 'liter', lt: 'liter', ltr: 'liter', litre: 'liter', litres: 'liter', liter: 'liter', liters: 'liter',
   ml: 'ml', milliliter: 'ml', milliliters: 'ml', millilitre: 'ml', millilitres: 'ml',
-  unit: 'unit', units: 'unit', piece: 'unit', pieces: 'unit', pcs: 'unit'
+  unit: 'unit', units: 'unit', piece: 'unit', pieces: 'unit', pc: 'unit', pcs: 'unit'
 }
 
-function normalized(unit: string | null | undefined): string {
-  return UNIT_ALIASES[String(unit || '').trim().toLowerCase()] || String(unit || '').trim().toLowerCase()
+/** Mass (g/kg), volume (ml/liter) or count (unit). Conversions only happen inside one family. */
+const UNIT_FAMILY: Record<string, 'mass' | 'volume' | 'count'> = {
+  g: 'mass', kg: 'mass', ml: 'volume', liter: 'volume', unit: 'count'
+}
+
+/** Base-unit factor inside a family: 1 kg = 1000 g, 1 liter = 1000 ml. */
+const UNIT_FACTOR: Record<string, number> = { g: 1, kg: 1000, ml: 1, liter: 1000, unit: 1 }
+
+export function canonicalUnit(unit: string | null | undefined): string {
+  const key = String(unit || '').trim().toLowerCase()
+  return UNIT_ALIASES[key] || key
+}
+
+/** True when a recipe written in `recipeUnit` can be deducted from stock tracked in `stockUnit`. */
+export function recipeUnitCompatibleWithStock(recipeUnit: string, stockUnit: string): boolean {
+  const recipe = canonicalUnit(recipeUnit)
+  const stock = canonicalUnit(stockUnit)
+  if (recipe && recipe === stock) return true
+  const from = UNIT_FAMILY[recipe]
+  return from !== undefined && from === UNIT_FAMILY[stock]
 }
 
 /**
@@ -23,15 +44,13 @@ export function recipeQuantityInStockUnits(
     throw new Error('Recipe quantity must be a finite number greater than zero')
   }
 
-  const from = normalized(recipeUnit)
-  const to = normalized(stockUnit)
+  const from = canonicalUnit(recipeUnit)
+  const to = canonicalUnit(stockUnit)
   if (from === to) return recipeQuantity
-  if (from === 'g' && to === 'kg') return recipeQuantity / 1000
-  if (from === 'kg' && to === 'g') return recipeQuantity * 1000
-  if (from === 'ml' && to === 'liter') return recipeQuantity / 1000
-  if (from === 'liter' && to === 'ml') return recipeQuantity * 1000
-
-  throw new Error(`Recipe unit ${recipeUnit} is incompatible with stock unit ${stockUnit}`)
+  if (!recipeUnitCompatibleWithStock(from, to)) {
+    throw new Error(`Recipe unit ${recipeUnit} is incompatible with stock unit ${stockUnit}`)
+  }
+  return (recipeQuantity * UNIT_FACTOR[from]) / UNIT_FACTOR[to]
 }
 
 export function totalRecipeDeduction(

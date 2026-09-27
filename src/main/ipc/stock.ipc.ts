@@ -18,6 +18,11 @@ export function registerStockHandlers(): void {
     return stockRepo.getLowStockCount()
   })
 
+  ipcMain.handle('stock:getRecipeUsage', (_, id: number) => {
+    if (!Number.isInteger(id) || id <= 0) throw new Error('A valid stock item id is required')
+    return stockRepo.getRecipeUsage(id)
+  })
+
   ipcMain.handle('stock:create', (_, input: CreateStockItemInput) => {
     return stockRepo.create(input)
   })

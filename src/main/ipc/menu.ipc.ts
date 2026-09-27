@@ -26,6 +26,17 @@ export function registerMenuHandlers(): void {
     return menuRepo.delete(id)
   })
 
+  ipcMain.handle('menu:getDeleted', () => {
+    return menuRepo.getDeleted()
+  })
+
+  ipcMain.handle('menu:restore', (_, id: number) => {
+    if (!Number.isInteger(id) || id <= 0) throw new Error('A valid menu item id is required')
+    const restored = menuRepo.restore(id)
+    if (!restored) throw new Error('That menu item no longer exists')
+    return restored
+  })
+
   ipcMain.handle('menu:uploadImage', async () => {
     const result = await dialog.showOpenDialog({
       properties: ['openFile'],
