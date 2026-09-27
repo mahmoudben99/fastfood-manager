@@ -69,6 +69,7 @@ export function StatCard({
         <div className="flex items-center gap-2 text-xs">
           {hasDelta && (
             <span
+              dir="ltr"
               className={cn(
                 'num inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 font-bold [&_svg]:h-3.5 [&_svg]:w-3.5',
                 good === null ? 'bg-surface-2 text-muted' : good ? 'bg-success-soft text-success-ink' : 'bg-danger-soft text-danger-ink'
