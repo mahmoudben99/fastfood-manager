@@ -28,6 +28,11 @@ export interface RoutingConfig {
   /** Legacy settings.printer_name / settings.kitchen_printer_name. */
   receiptPrinter: string
   kitchenPrinter: string
+  /**
+   * KDS "screen instead of paper" (settings kds_replaces_paper_<workerId|expo>): stations whose
+   * AUTOMATIC kitchen tickets are skipped. 0 = the full ticket / unassigned lines (expo).
+   */
+  paperlessStations?: number[]
 }
 
 export type PrintScope = 'all' | 'worker' | 'unassigned'
@@ -112,8 +117,19 @@ export interface PlanInput {
   manual?: boolean
 }
 
-/** One entry per (document, printer). Automatic jobs honour each printer's own auto-print flag. */
+/**
+ * One entry per (document, printer). Automatic jobs honour each printer's own auto-print flag
+ * and skip the kitchen tickets of stations a kitchen screen replaces; manual prints never do.
+ */
 export function planPrintJobs(input: PlanInput): PlannedPrintJob[] {
+  const jobs = planRoutedJobs(input)
+  const paperless = new Set(input.config.paperlessStations ?? [])
+  if (input.manual || paperless.size === 0) return jobs
+  return jobs.filter((job) =>
+    job.documentType !== 'kitchen' || !paperless.has(job.scope === 'worker' ? job.workerId ?? 0 : 0))
+}
+
+function planRoutedJobs(input: PlanInput): PlannedPrintJob[] {
   const { config, manual = false } = input
   const jobs: PlannedPrintJob[] = []
   const autoOn = (rows: AssignmentRow[], printer: string): boolean =>
@@ -183,11 +199,21 @@ export function loadRoutingConfig(db: Database.Database): RoutingConfig {
   for (const worker of workers) workerPrinters[worker.id] = worker.printer_name
   const setting = (key: string): string =>
     (db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined)?.value || ''
+  const paperlessStations: number[] = []
+  const paperless = db.prepare(
+    "SELECT key FROM settings WHERE substr(key, 1, 19) = 'kds_replaces_paper_' AND value = 'true'"
+  ).all() as { key: string }[]
+  for (const { key } of paperless) {
+    const suffix = key.slice('kds_replaces_paper_'.length)
+    if (suffix === 'expo') paperlessStations.push(0)
+    else if (/^\d+$/.test(suffix)) paperlessStations.push(Number(suffix))
+  }
   return {
     assignments,
     workerPrinters,
     receiptPrinter: setting('printer_name'),
-    kitchenPrinter: setting('kitchen_printer_name')
+    kitchenPrinter: setting('kitchen_printer_name'),
+    paperlessStations
   }
 }
 

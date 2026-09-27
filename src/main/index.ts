@@ -14,6 +14,7 @@ import { checkLicense } from './activation/license-service'
 import { resolveWatcherOutcome } from './activation/license-outcome'
 import type { LicenseReason } from './activation/license-client'
 import { registerTabletHandlers } from './ipc/tablet.ipc'
+import { registerKdsHandlers } from './ipc/kds.ipc'
 import { startTabletServer, stopTabletServer } from './tablet/server'
 import { startAnalyticsSync, stopAnalyticsSync } from './sync/analytics-sync'
 import { ordersRepo } from './database/repositories/orders.repo'
@@ -439,6 +440,7 @@ app.whenReady().then(async () => {
     log('Registering IPC handlers')
     registerAllHandlers()
     registerTabletHandlers(() => mainWindow)
+    registerKdsHandlers(() => mainWindow)
     startOrderEffectsRuntime()
 
     // Allow trial activation page to start the watcher mid-session (after factory reset)

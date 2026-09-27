@@ -18,6 +18,10 @@ import { PromotionsPage } from './pages/promotions/PromotionsPage'
 import { AmbianceScreen } from './pages/ambiance/AmbianceScreen'
 import { ReceiptEditor } from './pages/settings/ReceiptEditor'
 import { UpdateToast } from './components/ui/UpdateToast'
+import './pages/kds/kds-i18n'
+import { KdsScreen } from './pages/kds/KdsScreen'
+import { BoardScreen } from './pages/kds/BoardScreen'
+import { KdsSettingsPage } from './pages/kds/KdsSettingsPage'
 
 export default function App() {
   const [loading, setLoading] = useState(true)
@@ -166,6 +170,9 @@ export default function App() {
         <Route path="/activate" element={<ActivationPage />} />
         <Route path="/setup" element={<SetupWizard />} />
         <Route path="/orders" element={<OrderScreen />} />
+        {/* Kitchen display + customer board: second-screen windows (src/main/kds-window.ts). */}
+        <Route path="/kds" element={<KdsScreen />} />
+        <Route path="/board" element={<BoardScreen />} />
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<Navigate to="/admin/menu" replace />} />
           <Route path="menu" element={<MenuManagement />} />
@@ -177,6 +184,7 @@ export default function App() {
           <Route path="backup" element={<BackupRestore />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="ambiance" element={<AmbianceScreen />} />
+          <Route path="kds" element={<KdsSettingsPage />} />
           <Route path="promotions" element={<PromotionsPage />} />
           <Route path="receipt-editor" element={<ReceiptEditor />} />
         </Route>

@@ -12,6 +12,7 @@ import {
   type KitchenLineChange,
   type KitchenLineSnapshot
 } from './print-routing'
+import { syncKdsAfterOrderChange } from './kds/kds-sync'
 
 export type OrderSource = 'pos' | 'tablet' | 'remote'
 export type OrderStatus = 'pending' | 'preparing' | 'completed' | 'cancelled'
@@ -293,6 +294,8 @@ function enqueueOutbox(
     : ['owner-sync', 'analytics-dirty', 'queue-broadcast']
   const insert = db.prepare('INSERT INTO outbox_events (event_type, payload) VALUES (?, ?)')
   for (const type of types) insert.run(type, payload)
+  // Every order mutation passes here inside its transaction: keep the kitchen screens in step.
+  syncKdsAfterOrderChange(db, orderId)
 }
 
 function upsertCustomer(
