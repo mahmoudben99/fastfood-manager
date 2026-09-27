@@ -1,5 +1,16 @@
 import { getDb } from '../connection'
 
+/**
+ * Item names for per-item reports, still grouped by menu_item_id. The name is the one the item
+ * was SOLD under (migration 019 snapshot) on its most recent line in the period, so renaming or
+ * reusing a menu item does not rewrite history. SQLite documents that with exactly one max()
+ * aggregate, bare columns come from the row holding that max — hence last_line_id.
+ */
+const SOLD_NAME_COLUMNS = `MAX(oi.id) AS last_line_id,
+                COALESCE(oi.item_name, mi.name) AS name,
+                CASE WHEN oi.item_name IS NOT NULL THEN oi.item_name_ar ELSE mi.name_ar END AS name_ar,
+                CASE WHEN oi.item_name IS NOT NULL THEN oi.item_name_fr ELSE mi.name_fr END AS name_fr`
+
 export const analyticsRepo = {
   getProfitSummary(startDate: string, endDate: string) {
     const revenue = getDb()
@@ -83,7 +94,7 @@ export const analyticsRepo = {
   getTopSellingItems(startDate: string, endDate: string, limit: number = 10) {
     return getDb()
       .prepare(
-        `SELECT mi.name, mi.name_ar, mi.name_fr,
+        `SELECT ${SOLD_NAME_COLUMNS},
                 SUM(oi.quantity) as total_quantity,
                 SUM(oi.total_price) as total_revenue,
                 COALESCE(c.name, 'Uncategorized') as category_name
@@ -102,7 +113,7 @@ export const analyticsRepo = {
   getWorstSellingItems(startDate: string, endDate: string, limit: number = 10) {
     return getDb()
       .prepare(
-        `SELECT mi.name, mi.name_ar, mi.name_fr,
+        `SELECT ${SOLD_NAME_COLUMNS},
                 SUM(oi.quantity) as total_quantity,
                 SUM(oi.total_price) as total_revenue,
                 COALESCE(c.name, 'Uncategorized') as category_name

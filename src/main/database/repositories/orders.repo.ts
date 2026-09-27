@@ -5,6 +5,7 @@ import {
   type OrderSource,
   type OrderStatus
 } from '../../services/order-service'
+import { orderEditRejectedMessage } from '../../../shared/order-edit'
 
 const ORDER_TYPES = new Set(['local', 'takeout', 'delivery'])
 
@@ -31,6 +32,8 @@ export interface Order {
   source: OrderSource
   source_request_id: string | null
   duplicate?: boolean
+  /** create() only: documents the order transaction queued for automatic printing. */
+  auto_print_documents?: ('receipt' | 'kitchen')[]
   created_at: string
   completed_at: string | null
   items?: OrderItem[]
@@ -45,7 +48,14 @@ export interface OrderItem {
   total_price: number
   notes: string | null
   worker_id: number | null
+  /** Sale-time name snapshot (migration 019); null only for rows it could not backfill. */
+  item_name?: string | null
+  item_name_ar?: string | null
+  item_name_fr?: string | null
+  /** Display names: the snapshot when present, otherwise the current menu item's names. */
   menu_item_name?: string
+  menu_item_name_ar?: string | null
+  menu_item_name_fr?: string | null
   worker_name?: string
 }
 
@@ -119,7 +129,14 @@ export const ordersRepo = {
       operator: input.operator
     })
     if (!result.ok) throw serviceError(result)
-    return { ...this.getById(result.orderId)!, duplicate: result.duplicate }
+    const autoPrintDocuments = (getDb().prepare(
+      `SELECT DISTINCT document_type FROM print_jobs WHERE order_id = ? AND event_type = 'new'`
+    ).all(result.orderId) as { document_type: 'receipt' | 'kitchen' }[]).map((row) => row.document_type)
+    return {
+      ...this.getById(result.orderId)!,
+      duplicate: result.duplicate,
+      auto_print_documents: autoPrintDocuments
+    }
   },
 
   getById(id: number): Order | undefined {
@@ -129,9 +146,13 @@ export const ordersRepo = {
   },
 
   getOrderItems(orderId: number): OrderItem[] {
+    // Lines show the name they were SOLD under (migration 019 snapshot). The localized variants
+    // follow the same snapshot so a renamed/reused item never mixes old and new names.
     return getDb().prepare(
-      `SELECT oi.*, mi.name AS menu_item_name, mi.name_ar AS menu_item_name_ar,
-              mi.name_fr AS menu_item_name_fr, w.name AS worker_name
+      `SELECT oi.*, COALESCE(oi.item_name, mi.name) AS menu_item_name,
+              CASE WHEN oi.item_name IS NOT NULL THEN oi.item_name_ar ELSE mi.name_ar END AS menu_item_name_ar,
+              CASE WHEN oi.item_name IS NOT NULL THEN oi.item_name_fr ELSE mi.name_fr END AS menu_item_name_fr,
+              w.name AS worker_name
        FROM order_items oi
        LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
        LEFT JOIN workers w ON oi.worker_id = w.id
@@ -203,8 +224,10 @@ export const ordersRepo = {
       notes?: string | null
     }
   ): Order | undefined {
+    // Every refusal is an explicit error (never an unchanged row), so no caller can mistake a
+    // rejected edit for a saved one. The renderer maps the token to a translated message.
     const existing = this.getById(orderId)
-    if (!existing) return undefined
+    if (!existing) throw new Error(orderEditRejectedMessage('not_found'))
 
     const header: {
       orderType?: 'local' | 'takeout' | 'delivery'
@@ -239,8 +262,9 @@ export const ordersRepo = {
       header: Object.keys(header).length > 0 ? header : undefined
     })
     if (!result.ok) {
-      // Preserve the legacy renderer contract: finalized edits return the unchanged row.
-      if (result.code === 'line_edit_not_allowed') return this.getById(orderId)
+      if (result.code === 'not_found' || result.code === 'line_edit_not_allowed') {
+        throw new Error(orderEditRejectedMessage(result.reason ?? 'not_found'))
+      }
       throw serviceError(result)
     }
     return this.getById(orderId)
