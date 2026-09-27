@@ -27,7 +27,7 @@ export function Toggle({ checked, onChange, label, description, disabled, size =
     >
       <span
         className={cn(
-          'absolute top-1/2 start-[3px] rounded-full bg-white shadow-e1 transition-transform duration-150 ease-[var(--ease-out)]',
+          'absolute top-1/2 start-[3px] rounded-full bg-[#fff] shadow-e1 transition-transform duration-150 ease-[var(--ease-out)]',
           lg ? 'h-[26px] w-[26px]' : 'h-5 w-5'
         )}
         style={{
