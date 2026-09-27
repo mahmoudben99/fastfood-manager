@@ -1,21 +1,35 @@
 import { getClient } from '../activation/cloud'
 import { getMachineId } from '../activation/activation'
 import { localDate } from '../database/repositories/orders.repo'
+import { settingsRepo } from '../database/repositories/settings.repo'
 import { net } from 'electron'
+import { formatItemsSummary, summaryLang, topLevelLineCount } from './order-summary'
+
+/**
+ * v4: the summary names each line's options and combo picks ("1x Burger (+Cheese; NO Onions)") and
+ * ends with the delivery fee ("Delivery fee 200") — owner_orders has no delivery column and the
+ * total already includes the fee. item_count counts sold lines, not combo pick rows.
+ */
+function ownerSummary(order: any): { itemsSummary: string; itemCount: number } {
+  let lang = summaryLang('en')
+  try { lang = summaryLang(settingsRepo.get('language')) } catch { /* settings unavailable: English */ }
+  return {
+    itemsSummary: formatItemsSummary(order.items, { lang, deliveryFee: order.delivery_fee }),
+    itemCount: topLevelLineCount(order.items)
+  }
+}
 
 /** Strict, retryable owner-order upsert for the durable outbox consumer. */
 export async function syncOrderToCloudStrict(order: any): Promise<void> {
   if (!net.isOnline()) throw new Error('Owner sync is offline')
-  const itemsSummary = order.items
-    ? order.items.map((item: any) => `${item.quantity}x ${item.menu_item_name}`).join(', ')
-    : ''
+  const { itemsSummary, itemCount } = ownerSummary(order)
   const { error } = await getClient().from('owner_orders').upsert(
     {
       machine_id: getMachineId(),
       order_number: order.daily_number,
       order_type: order.order_type,
       total: order.total,
-      item_count: order.items?.length || 0,
+      item_count: itemCount,
       items_summary: itemsSummary,
       status: order.status || 'preparing',
       discount_amount: order.discount_amount || 0,
@@ -33,9 +47,7 @@ export async function syncOrderToCloud(order: any): Promise<void> {
     const machineId = getMachineId()
     const supabase = getClient()
 
-    const itemsSummary = order.items
-      ? order.items.map((i: any) => `${i.quantity}x ${i.menu_item_name}`).join(', ')
-      : ''
+    const { itemsSummary, itemCount } = ownerSummary(order)
 
     // Key on the restaurant-LOCAL order_date, not UTC(created_at). The local daily_number
     // counter restarts by local day, and the upsert conflict key is
@@ -49,7 +61,7 @@ export async function syncOrderToCloud(order: any): Promise<void> {
         order_number: order.daily_number,
         order_type: order.order_type,
         total: order.total,
-        item_count: order.items?.length || 0,
+        item_count: itemCount,
         items_summary: itemsSummary,
         status: order.status || 'preparing',
         discount_amount: order.discount_amount || 0,
