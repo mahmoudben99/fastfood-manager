@@ -22,6 +22,7 @@ import './pages/kds/kds-i18n'
 import { KdsScreen } from './pages/kds/KdsScreen'
 import { BoardScreen } from './pages/kds/BoardScreen'
 import { KdsSettingsPage } from './pages/kds/KdsSettingsPage'
+import { CompliancePage } from './pages/compliance/CompliancePage' // v4 fiscal
 import { Toaster } from './components/ui/Toast'
 import { ApprovalHost } from './components/checkout'
 
@@ -202,6 +203,7 @@ export default function App() {
           <Route path="kds" element={<KdsSettingsPage />} />
           <Route path="promotions" element={<PromotionsPage />} />
           <Route path="receipt-editor" element={<ReceiptEditor />} />
+          <Route path="compliance" element={<CompliancePage />} />
         </Route>
         <Route
           path="*"
