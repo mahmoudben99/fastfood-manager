@@ -3,6 +3,15 @@ import { normalizeAlgerianPhone } from '../domain/customer-phone'
 import { businessDateInAlgiers, orderEditRejection, type OrderEditRejection } from '../../shared/order-edit'
 import { recordAuditEvent } from './audit-events'
 import { totalRecipeDeduction } from './stock-units'
+import { ensurePrintJobColumns } from './print-queue'
+import {
+  diffKitchenLines,
+  loadRoutingConfig,
+  planPrintJobs,
+  serializeKitchenChanges,
+  type KitchenLineChange,
+  type KitchenLineSnapshot
+} from './print-routing'
 
 export type OrderSource = 'pos' | 'tablet' | 'remote'
 export type OrderStatus = 'pending' | 'preparing' | 'completed' | 'cancelled'
@@ -223,18 +232,6 @@ function validateEditLines(lines: OrderLineEditInput[]): void {
   })
   if (units > MAX_UNITS) throw new DomainError('invalid_input', `Order cannot contain more than ${MAX_UNITS} units`)
 }
-
-// Print routing + per-printer job columns (fix/print). Imported here rather than at the top of the
-// file to keep this change inside the print-enqueue section; hoist when convenient.
-import { ensurePrintJobColumns } from './print-queue'
-import {
-  diffKitchenLines,
-  loadRoutingConfig,
-  planPrintJobs,
-  serializeKitchenChanges,
-  type KitchenLineChange,
-  type KitchenLineSnapshot
-} from './print-routing'
 
 function printSetting(db: Database.Database, key: string): string | undefined {
   return (db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined)?.value
