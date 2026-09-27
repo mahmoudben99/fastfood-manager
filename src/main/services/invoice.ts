@@ -47,7 +47,7 @@ export function issueInvoice(db: Database.Database, orderId: number, customer: I
 const LABELS = {
   en: { title: 'INVOICE', number: 'No.', date: 'Date', seller: 'Seller', buyer: 'Customer', qty: 'Qty', item: 'Item', amount: 'Amount', discount: 'Discount', deliveryFee: 'Delivery fee', ht: 'Total excl. VAT', tva: 'VAT', ttc: 'Total incl. VAT', total: 'Total', order: 'Order' },
   fr: { title: 'FACTURE', number: 'N°', date: 'Date', seller: 'Vendeur', buyer: 'Client', qty: 'Qté', item: 'Désignation', amount: 'Montant', discount: 'Remise', deliveryFee: 'Frais de livraison', ht: 'Total HT', tva: 'TVA', ttc: 'Total TTC', total: 'Total', order: 'Commande' },
-  ar: { title: 'فاتورة', number: 'رقم', date: 'التاريخ', seller: 'البائع', buyer: 'الزبون', qty: 'الكمية', item: 'البيان', amount: 'المبلغ', discount: 'تخفيض', deliveryFee: 'رسوم التوصيل', ht: 'المجموع دون رسوم', tva: 'الرسم على القيمة المضافة', ttc: 'المجموع مع الرسوم', total: 'المجموع', order: 'طلب' }
+  ar: { title: 'فاتورة', number: 'رقم', date: 'التاريخ', seller: 'البائع', buyer: 'الزبون', qty: 'الكمية', item: 'البيان', amount: 'المبلغ', discount: 'خصم', deliveryFee: 'رسوم التوصيل', ht: 'المجموع خارج الرسم', tva: 'الرسم على القيمة المضافة', ttc: 'المجموع بكل الرسوم', total: 'المجموع', order: 'طلب' }
 }
 
 /** Receipt-width (default) or A4 invoice HTML. */

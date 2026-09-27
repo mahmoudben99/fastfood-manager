@@ -29,13 +29,13 @@ const LABELS: Record<CashLang, CashLabels> = {
     unpaid: 'NOT PAID — collect on delivery / pickup', eta: 'min'
   },
   fr: {
-    deliveryFee: 'Frais de livraison', subtotal: 'Sous-total', address: 'Adresse', zone: 'Zone', deliveryNotes: 'Note livraison',
+    deliveryFee: 'Frais de livraison', subtotal: 'Sous-total', address: 'Adresse', zone: 'Zone', deliveryNotes: 'Note de livraison',
     paid: 'Payé', tendered: 'Espèces reçues', change: 'Monnaie rendue', refund: 'Remboursement', balanceDue: 'Reste à payer',
     unpaid: 'NON PAYÉ — à encaisser à la livraison / au retrait', eta: 'min'
   },
   ar: {
     deliveryFee: 'رسوم التوصيل', subtotal: 'المجموع الفرعي', address: 'العنوان', zone: 'المنطقة', deliveryNotes: 'ملاحظة التوصيل',
-    paid: 'مدفوع', tendered: 'المبلغ المستلم', change: 'الباقي', refund: 'استرجاع', balanceDue: 'المبلغ المتبقي',
+    paid: 'مدفوع', tendered: 'المبلغ المستلم', change: 'الباقي', refund: 'استرداد', balanceDue: 'المبلغ المتبقي',
     unpaid: 'غير مدفوع — يُحصّل عند التسليم', eta: 'د'
   }
 }

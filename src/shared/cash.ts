@@ -24,7 +24,7 @@ export interface PaymentMethodConfig {
 export type CashLang = 'en' | 'fr' | 'ar'
 
 const METHOD_LABELS: Record<BuiltinPaymentMethod, Record<CashLang, string>> = {
-  cash: { en: 'Cash', fr: 'Espèces', ar: 'نقدا' },
+  cash: { en: 'Cash', fr: 'Espèces', ar: 'نقدًا' },
   cib: { en: 'CIB card', fr: 'Carte CIB', ar: 'بطاقة CIB' },
   edahabia: { en: 'Edahabia', fr: 'Edahabia', ar: 'الذهبية' },
   baridipay: { en: 'BaridiPay (QR)', fr: 'BaridiPay (QR)', ar: 'بريدي باي' },
