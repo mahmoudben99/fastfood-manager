@@ -127,3 +127,19 @@ test('test print: the full real receipt with one TEST PRINT line added at the to
   assert.match(html, /Loft/)
   assert.match(html, /TOTAL/i)
 })
+
+test('kitchen tickets follow the app language (fr / ar), English unchanged', () => {
+  const ctx = { paperWidth: '80', kitchenFontSize: 'large', eventType: 'updated', workerName: 'Grill', changes: [], removedNames: {} }
+  const fr = buildKitchenHTML(order, order.items, { language: 'fr' }, ctx)
+  assert.match(fr, /CUISINE/)
+  assert.match(fr, /SUR PLACE/)
+  assert.match(fr, /MODIFIÉE/)
+  assert.match(fr, /POUR : GRILL/)
+  const ar = buildKitchenHTML(order, order.items, { language: 'ar' }, ctx)
+  assert.match(ar, /dir="rtl"/)
+  assert.match(ar, /المطبخ/)
+  const en = buildKitchenHTML(order, order.items, {}, ctx)
+  assert.match(en, /KITCHEN/)
+  assert.match(en, /UPDATED/)
+  assert.match(en, /FOR: GRILL/)
+})

@@ -114,13 +114,16 @@ export function receiptPaymentsHTML(order: any, settings: Record<string, string>
 }
 
 /** Delivery block for the kitchen ticket header (zone, address, phone). */
-export function kitchenDeliveryHTML(order: any): string {
+export function kitchenDeliveryHTML(
+  order: any,
+  labels: { zone: string; tel: string; codUnpaid: string } = { zone: 'ZONE:', tel: 'TEL:', codUnpaid: 'COD - NOT PAID' }
+): string {
   const delivery = order?.delivery
   if (order?.order_type !== 'delivery') return ''
   let html = ''
-  if (delivery?.zone_name) html += `<div class="center bold">ZONE: ${esc(String(delivery.zone_name).toUpperCase())}</div>`
+  if (delivery?.zone_name) html += `<div class="center bold">${esc(labels.zone)} ${esc(String(delivery.zone_name).toUpperCase())}</div>`
   if (delivery?.address) html += `<div class="center">${esc(delivery.address)}</div>`
-  if (order.customer_phone) html += `<div class="center">TEL: ${esc(order.customer_phone)}</div>`
-  if (order.payment_status === 'unpaid' || order.payment_status === 'partial') html += '<div class="center bold">COD - NOT PAID</div>'
+  if (order.customer_phone) html += `<div class="center">${esc(labels.tel)} ${esc(order.customer_phone)}</div>`
+  if (order.payment_status === 'unpaid' || order.payment_status === 'partial') html += `<div class="center bold">${esc(labels.codUnpaid)}</div>`
   return html
 }

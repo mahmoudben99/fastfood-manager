@@ -9,6 +9,7 @@ import {
 import type { ReceiptContext } from './receipt-template'
 import { kitchenDeliveryHTML, receiptDeliveryHTML, receiptFeeRowsHTML, receiptPaymentsHTML } from './print-cash'
 import { fiscalNumberHTML } from './fiscal/print-fiscal' // v4 fiscal
+import { kitchenLabels, kitchenOrderTypeLabel } from './print-kitchen-labels'
 
 export type PrintEventType = 'new' | 'updated' | 'cancelled' | 'restored'
 
@@ -91,12 +92,6 @@ export function buildDefaultReceiptHTML(order: any, settings: Record<string, str
 </body></html>`
 }
 
-function kitchenOrderType(orderType: string): string {
-  if (orderType === 'delivery') return 'DELIVERY'
-  if (orderType === 'takeout') return 'TAKEAWAY'
-  return 'DINE IN'
-}
-
 export interface KitchenContext {
   paperWidth: string | null
   kitchenFontSize: string | null
@@ -114,8 +109,9 @@ export interface KitchenContext {
 export function buildKitchenHTML(order: any, items: any[], settings: Record<string, string>, ctx: KitchenContext): string {
   const width = printableWidth(ctx.paperWidth || settings.printer_width)
   const isRTL = settings.language === 'ar'
+  const K = kitchenLabels(settings)
   const sizes = fontSizes(ctx.kitchenFontSize || settings.kitchen_font_size, 'large')
-  const eventLabel = ctx.eventType === 'new' ? '' : ctx.eventType.toUpperCase()
+  const eventLabel = ctx.eventType === 'new' ? '' : (K.events[ctx.eventType] ?? ctx.eventType.toUpperCase())
   const current = new Map<number, KitchenLineChange>()
   for (const change of ctx.changes) if (change.kind !== 'removed') current.set(change.orderItemId, change)
   const removed = ctx.changes.filter((change) => change.kind === 'removed')
@@ -123,13 +119,13 @@ export function buildKitchenHTML(order: any, items: any[], settings: Record<stri
   const markFor = (itemId: number): string => {
     const change = current.get(itemId)
     if (!change) return ''
-    if (change.kind === 'added') return mark('+ ADDED')
+    if (change.kind === 'added') return mark(K.added)
     const marks: string[] = []
     if (change.previousQuantity != null && change.previousQuantity !== change.quantity) {
-      marks.push(mark(`QTY ${change.previousQuantity} -> ${change.quantity}`))
+      marks.push(mark(`${K.qty} ${change.previousQuantity} -> ${change.quantity}`))
     }
-    if (change.noteChanged) marks.push(mark('NOTE CHANGED'))
-    if (change.modifiersChanged) marks.push(mark('OPTIONS CHANGED'))
+    if (change.noteChanged) marks.push(mark(K.noteChanged))
+    if (change.modifiersChanged) marks.push(mark(K.optionsChanged))
     return marks.join(' ')
   }
   // v4 catalog: a combo parent is a container; its children print with a "COMBO:" header.
@@ -154,35 +150,35 @@ export function buildKitchenHTML(order: any, items: any[], settings: Record<stri
   ${kitchenCatalogCSS(sizes)}
 </style></head>
 <body>
-  ${ctx.reprint ? reprintBannerHTML('REPRINT', sizes.big) : ''}
+  ${ctx.reprint ? reprintBannerHTML(K.reprint, sizes.big) : ''}
   ${eventLabel ? `<div class="center bold big" style="border:3px solid #000;padding:4px;margin-bottom:4px">${esc(eventLabel)}</div>` : ''}
-  <div class="center bold big">KITCHEN</div>
+  <div class="center bold big">${esc(K.kitchen)}</div>
   <div class="center bold big">#${esc(order.daily_number)}</div>
-  <div class="center">${kitchenOrderType(order.order_type)}</div>
-  ${order.table_number ? `<div class="center bold big">TABLE ${esc(order.table_number)}</div>` : ''}
+  <div class="center">${esc(kitchenOrderTypeLabel(order.order_type, K))}</div>
+  ${order.table_number ? `<div class="center bold big">${esc(K.table)} ${esc(order.table_number)}</div>` : ''}
   ${order.customer_name ? `<div class="center">${esc(String(order.customer_name).toUpperCase())}</div>` : ''}
-  ${kitchenDeliveryHTML(order)}
-  ${ctx.workerName ? `<div class="center"><div class="worker-badge">FOR: ${esc(ctx.workerName.toUpperCase())}</div></div>` : ''}
+  ${kitchenDeliveryHTML(order, K)}
+  ${ctx.workerName ? `<div class="center"><div class="worker-badge">${esc(K.forStation)} ${esc(ctx.workerName.toUpperCase())}</div></div>` : ''}
   <div class="line"></div>
   ${lines.map((item: any, index: number) => `
-    ${kitchenComboHeaderHTML(item, lines[index - 1])}
+    ${kitchenComboHeaderHTML(item, lines[index - 1], K.combo)}
     <div class="item${isComboChild(item) ? ' combo-child' : ''}">
       ${markFor(item.id)}
       <span class="qty">${esc(item.quantity)}x</span>
-      <span class="item-name">${esc(item.menu_item_name || 'Item')}</span>
+      <span class="item-name">${esc(item.menu_item_name || K.item)}</span>
       ${kitchenModifiersHTML(item.modifiers, settings.language)}
       ${item.notes ? `<div class="item-notes">${esc(item.notes)}</div>` : ''}
     </div>
   `).join('')}
   ${removed.map((change) => `
     <div class="item removed">
-      ${mark('REMOVED')}
+      ${mark(K.removed)}
       <span class="qty">${esc(change.quantity)}x</span>
       <span class="item-name">${esc(ctx.removedNames[change.menuItemId] || `Item #${change.menuItemId}`)}</span>
     </div>
   `).join('')}
   <div class="line"></div>
-  ${order.notes ? `<div><b>Notes:</b> ${esc(order.notes)}</div><div class="line"></div>` : ''}
+  ${order.notes ? `<div><b>${esc(K.notes)}</b> ${esc(order.notes)}</div><div class="line"></div>` : ''}
   <div class="center" style="font-size:10px">${esc(new Date(order.created_at).toLocaleTimeString())}</div>
   <br>
 </body></html>`

@@ -112,8 +112,8 @@ export function kitchenModifiersHTML(modifiers: PrintModifier[] | undefined, lan
 }
 
 /** "COMBO: <name>" once above each run of children of the same combo on a kitchen ticket. */
-export function kitchenComboHeaderHTML(item: any, previous: any): string {
+export function kitchenComboHeaderHTML(item: any, previous: any, label = 'COMBO:'): string {
   if (!isComboChild(item)) return ''
   if (previous && previous.parent_order_item_id === item.parent_order_item_id) return ''
-  return `<div class="combo-ctx">COMBO: ${esc(String(item.combo_name || '').toLocaleUpperCase())}</div>`
+  return `<div class="combo-ctx">${esc(label)} ${esc(String(item.combo_name || '').toLocaleUpperCase())}</div>`
 }
