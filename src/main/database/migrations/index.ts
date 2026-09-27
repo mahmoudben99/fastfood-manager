@@ -18,6 +18,7 @@ import { migration016 } from './016_order_sources'
 import { migration017 } from './017_order_effects'
 import { migration018 } from './018_order_effects_hardening'
 import { migration019 } from './019_order_item_name_snapshot'
+import { migration020 } from './020_category_soft_delete'
 
 interface Migration {
   version: number
@@ -44,7 +45,8 @@ const migrations: Migration[] = [
   migration016,
   migration017,
   migration018,
-  migration019
+  migration019,
+  migration020
 ]
 
 export function runMigrations(db: Database.Database): void {

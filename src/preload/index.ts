@@ -57,6 +57,11 @@ const api = {
     create: (input: any) => ipcRenderer.invoke('menu:create', input),
     update: (id: number, input: any) => ipcRenderer.invoke('menu:update', id, input),
     delete: (id: number) => ipcRenderer.invoke('menu:delete', id),
+    /** Soft-deleted menu items, most recent first. */
+    getDeleted: () => ipcRenderer.invoke('menu:getDeleted'),
+    /** Undo a delete; also re-activates the item's category if it was deleted. */
+    restore: (id: number): Promise<{ item: any; categoryRestored: boolean }> =>
+      ipcRenderer.invoke('menu:restore', id),
     uploadImage: () => ipcRenderer.invoke('menu:uploadImage')
   },
   stock: {
@@ -64,6 +69,11 @@ const api = {
     getById: (id: number) => ipcRenderer.invoke('stock:getById', id),
     getLowStock: () => ipcRenderer.invoke('stock:getLowStock'),
     getLowStockCount: () => ipcRenderer.invoke('stock:getLowStockCount'),
+    /** Active menu items whose recipe deducts from this stock item. */
+    getRecipeUsage: (
+      id: number
+    ): Promise<{ menu_item_id: number; menu_item_name: string; quantity: number; unit: string }[]> =>
+      ipcRenderer.invoke('stock:getRecipeUsage', id),
     create: (input: any) => ipcRenderer.invoke('stock:create', input),
     update: (id: number, input: any) => ipcRenderer.invoke('stock:update', id, input),
     delete: (id: number) => ipcRenderer.invoke('stock:delete', id),

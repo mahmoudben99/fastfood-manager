@@ -1,84 +1,71 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Plus, Search, Pencil, Trash2, Layers } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Tags, ArchiveRestore, X } from 'lucide-react'
 import { useAppStore } from '../../store/appStore'
 import { Button } from '../../components/ui/Button'
-import { Input } from '../../components/ui/Input'
 import { Select } from '../../components/ui/Select'
-import { Modal } from '../../components/ui/Modal'
 import { Badge } from '../../components/ui/Badge'
 import { formatCurrency } from '../../utils/formatCurrency'
+import { ipcErrorMessage } from '../../utils/ipcErrorMessage'
 import { VirtualKeyboard } from '../../components/VirtualKeyboard'
+import { MenuItemForm, toRecipeRows } from './MenuItemForm'
+import { CategoryManager } from './CategoryManager'
+import { ConfirmDialog } from './ConfirmDialog'
+import { checkRecipeRows, isBlockingIssue } from './recipeUnits'
+
+type Notice = { tone: 'success' | 'warning' | 'error'; text: string } | null
+
+const NOTICE_STYLES = {
+  success: 'bg-green-50 border-green-200 text-green-800',
+  warning: 'bg-amber-50 border-amber-200 text-amber-800',
+  error: 'bg-red-50 border-red-200 text-red-700'
+}
 
 export function MenuManagement() {
   const { t } = useTranslation()
   const { foodLanguage, inputMode } = useAppStore()
   const isTouch = inputMode === 'touchscreen'
   const [items, setItems] = useState<any[]>([])
+  const [deletedItems, setDeletedItems] = useState<any[]>([])
   const [categories, setCategories] = useState<any[]>([])
   const [stockItems, setStockItems] = useState<any[]>([])
   const [search, setSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
-  const [showForm, setShowForm] = useState(false)
-  const [editItem, setEditItem] = useState<any>(null)
+  const [showDeleted, setShowDeleted] = useState(false)
+  const [showCategories, setShowCategories] = useState(false)
+  const [notice, setNotice] = useState<Notice>(null)
+  const [confirmDelete, setConfirmDelete] = useState<any>(null)
+  const [deleteError, setDeleteError] = useState('')
+  const [deleting, setDeleting] = useState(false)
 
-  // Form state
-  const [formName, setFormName] = useState('')
-  const [formNameAr, setFormNameAr] = useState('')
-  const [formNameFr, setFormNameFr] = useState('')
-  const [formPrice, setFormPrice] = useState('')
-  const [formCategory, setFormCategory] = useState('')
-  const [formImagePath, setFormImagePath] = useState('')
-  const [formEmoji, setFormEmoji] = useState('')
-  const [formIngredients, setFormIngredients] = useState<
-    { stock_item_id: number; quantity: number; unit: string }[]
-  >([])
-  const [saving, setSaving] = useState(false)
+  // Add/edit form: remounted (fresh state) every time it opens.
+  const [form, setForm] = useState<{ item: any | null; validate: boolean; key: number } | null>(null)
 
-  // Multi-size mode
-  const [multiSize, setMultiSize] = useState(false)
-  const [formSizes, setFormSizes] = useState<{ label: string; price: string }[]>([])
-  const PRESET_SIZES = ['S', 'M', 'L', 'XL']
-
-  // Virtual keyboard
-  const [keyboardTarget, setKeyboardTarget] = useState<{ field: string; type: 'numeric' | 'text' } | null>(null)
-
-  const getKeyboardValue = (): string => {
-    if (!keyboardTarget) return ''
-    switch (keyboardTarget.field) {
-      case 'search': return search
-      case 'formName': return formName
-      case 'formNameAr': return formNameAr
-      case 'formNameFr': return formNameFr
-      case 'formPrice': return formPrice
-      default: return ''
-    }
-  }
-
-  const handleKeyboardChange = (val: string) => {
-    if (!keyboardTarget) return
-    switch (keyboardTarget.field) {
-      case 'search': setSearch(val); break
-      case 'formName': setFormName(val); break
-      case 'formNameAr': setFormNameAr(val); break
-      case 'formNameFr': setFormNameFr(val); break
-      case 'formPrice': setFormPrice(val); break
-    }
-  }
+  // Virtual keyboard (search field; the form has its own)
+  const [searchKeyboard, setSearchKeyboard] = useState(false)
 
   useEffect(() => {
     loadData()
   }, [])
 
-  const loadData = async () => {
-    const [menuItems, cats, stock] = await Promise.all([
-      window.api.menu.getAll(),
-      window.api.categories.getAll(),
-      window.api.stock.getAll()
-    ])
-    setItems(menuItems)
-    setCategories(cats)
-    setStockItems(stock)
+  const loadData = async (): Promise<any[]> => {
+    try {
+      const [menuItems, cats, stock, deleted] = await Promise.all([
+        window.api.menu.getAll(),
+        window.api.categories.getAll(),
+        window.api.stock.getAll(),
+        window.api.menu.getDeleted()
+      ])
+      setItems(menuItems)
+      setCategories(cats)
+      setStockItems(stock)
+      setDeletedItems(deleted)
+      if (filterCategory && !cats.some((c: any) => String(c.id) === filterCategory)) setFilterCategory('')
+      return stock
+    } catch (err) {
+      setNotice({ tone: 'error', text: ipcErrorMessage(err, t('menu.loadFailed')) })
+      return stockItems
+    }
   }
 
   const getName = (item: any) => {
@@ -87,122 +74,95 @@ export function MenuManagement() {
     return item.name
   }
 
-  const filtered = items.filter((item) => {
+  const filtered = (showDeleted ? deletedItems : items).filter((item) => {
     const matchSearch = getName(item).toLowerCase().includes(search.toLowerCase())
     const matchCategory = !filterCategory || item.category_id === Number(filterCategory)
     return matchSearch && matchCategory
   })
 
-  const openForm = async (item?: any) => {
-    if (item) {
+  const openForm = async (item?: any, validate = false) => {
+    if (!item) {
+      setForm({ item: null, validate: false, key: Date.now() })
+      return
+    }
+    try {
       const full = await window.api.menu.getById(item.id)
-      setEditItem(full)
-      setFormName(full.name)
-      setFormNameAr(full.name_ar || '')
-      setFormNameFr(full.name_fr || '')
-      setFormPrice(String(full.price))
-      setFormCategory(String(full.category_id))
-      setFormImagePath(full.image_path || '')
-      setFormEmoji(full.emoji || '')
-      setFormIngredients(
-        full.ingredients?.map((i: any) => ({
-          stock_item_id: i.stock_item_id,
-          quantity: i.quantity,
-          unit: i.unit
-        })) || []
-      )
-    } else {
-      setEditItem(null)
-      setFormName('')
-      setFormNameAr('')
-      setFormNameFr('')
-      setFormPrice('')
-      setFormCategory(categories[0]?.id?.toString() || '')
-      setFormImagePath('')
-      setFormEmoji('')
-      setFormIngredients([])
-      setMultiSize(false)
-      setFormSizes([])
+      if (full) setForm({ item: full, validate, key: Date.now() })
+    } catch (err) {
+      setNotice({ tone: 'error', text: ipcErrorMessage(err, t('menu.loadFailed')) })
     }
-    setShowForm(true)
   }
 
-  const handleSave = async () => {
-    setSaving(true)
+  const handleDelete = async () => {
+    if (!confirmDelete || deleting) return
+    setDeleting(true)
+    setDeleteError('')
+    try {
+      await window.api.menu.delete(confirmDelete.id)
+      setNotice({ tone: 'success', text: t('menu.deleted', { name: getName(confirmDelete) }) })
+      setConfirmDelete(null)
+      await loadData()
+    } catch (err) {
+      setDeleteError(ipcErrorMessage(err, t('menu.deleteFailed')))
+    } finally {
+      setDeleting(false)
+    }
+  }
 
-    if (multiSize && !editItem && formSizes.length > 0) {
-      // Create one menu item per size
-      for (const size of formSizes) {
-        if (!size.price) continue
-        const data = {
-          name: `${formName} ${size.label}`,
-          name_ar: formNameAr ? `${formNameAr} ${size.label}` : undefined,
-          name_fr: formNameFr ? `${formNameFr} ${size.label}` : undefined,
-          price: Number(size.price),
-          category_id: Number(formCategory),
-          image_path: formImagePath || undefined,
-          emoji: formEmoji || undefined,
-          ingredients: formIngredients
-        }
-        await window.api.menu.create(data)
-      }
-    } else {
-      const data = {
-        name: formName,
-        name_ar: formNameAr || undefined,
-        name_fr: formNameFr || undefined,
-        price: Number(formPrice),
-        category_id: Number(formCategory),
-        image_path: formImagePath || undefined,
-        emoji: formEmoji || undefined,
-        ingredients: formIngredients
-      }
-
-      if (editItem) {
-        await window.api.menu.update(editItem.id, data)
+  const handleRestore = async (item: any) => {
+    const name = getName(item)
+    try {
+      const { item: restored, categoryRestored } = await window.api.menu.restore(item.id)
+      const stock = await loadData()
+      const full = await window.api.menu.getById(restored.id)
+      if (checkRecipeRows(toRecipeRows(full?.ingredients), stock).some(isBlockingIssue)) {
+        setNotice({ tone: 'warning', text: t('menu.restoredNeedsRecipeFix', { name }) })
+        await openForm(restored, true)
       } else {
-        await window.api.menu.create(data)
+        setNotice({
+          tone: 'success',
+          text: categoryRestored
+            ? t('menu.restoredWithCategory', { name, category: restored.category_name })
+            : t('menu.restored', { name })
+        })
       }
+    } catch (err) {
+      setNotice({ tone: 'error', text: ipcErrorMessage(err, t('menu.restoreFailed')) })
     }
-
-    setShowForm(false)
-    setSaving(false)
-    loadData()
   }
 
-  const handleUploadImage = async () => {
-    const path = await window.api.menu.uploadImage()
-    if (path) setFormImagePath(path)
-  }
-
-  const handleDelete = async (id: number) => {
-    await window.api.menu.delete(id)
-    loadData()
-  }
-
-  const addIngredient = () => {
-    setFormIngredients([...formIngredients, { stock_item_id: 0, quantity: 0, unit: 'g' }])
-  }
-
-  const updateIngredient = (index: number, field: string, value: any) => {
-    const updated = [...formIngredients]
-    updated[index] = { ...updated[index], [field]: value }
-    setFormIngredients(updated)
-  }
-
-  const removeIngredient = (index: number) => {
-    setFormIngredients(formIngredients.filter((_, i) => i !== index))
-  }
+  const categoryOf = (item: any) => categories.find((c: any) => c.id === item.category_id)
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">{t('menu.title')}</h1>
-        <Button onClick={() => openForm()}>
-          <Plus className="h-4 w-4" />
-          {t('menu.addItem')}
-        </Button>
+      <div className="flex items-center justify-between mb-6 gap-2 flex-wrap">
+        <h1 className="text-2xl font-bold text-gray-900">{showDeleted ? t('menu.deletedTitle') : t('menu.title')}</h1>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => setShowCategories(true)}>
+            <Tags className="h-4 w-4" />
+            {t('menu.categories.manage')}
+          </Button>
+          <Button variant="secondary" onClick={() => setShowDeleted(!showDeleted)}>
+            <ArchiveRestore className="h-4 w-4" />
+            {showDeleted ? t('menu.hideDeleted') : t('menu.showDeleted', { count: deletedItems.length })}
+          </Button>
+          {!showDeleted && (
+            <Button onClick={() => openForm()}>
+              <Plus className="h-4 w-4" />
+              {t('menu.addItem')}
+            </Button>
+          )}
+        </div>
       </div>
+
+      {notice && (
+        <div className={`flex items-start gap-3 mb-4 border rounded-lg p-3 text-sm ${NOTICE_STYLES[notice.tone]}`}>
+          <p className="flex-1">{notice.text}</p>
+          <button type="button" onClick={() => setNotice(null)} className="opacity-60 hover:opacity-100" title={t('common.close')}>
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex gap-3 mb-4">
@@ -211,7 +171,7 @@ export function MenuManagement() {
           <input
             value={search}
             readOnly={isTouch}
-            onClick={isTouch ? () => setKeyboardTarget({ field: 'search', type: 'text' }) : undefined}
+            onClick={isTouch ? () => setSearchKeyboard(true) : undefined}
             onChange={isTouch ? undefined : (e) => setSearch(e.target.value)}
             placeholder={t('menu.search')}
             className={`w-full ps-10 pe-3 ${isTouch ? 'py-3 text-base' : 'py-2 text-sm'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500`}
@@ -231,273 +191,90 @@ export function MenuManagement() {
       {/* Items grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {filtered.map((item) => (
-          <div key={item.id} className="bg-white rounded-xl border p-4 group">
+          <div key={item.id} className={`bg-white rounded-xl border p-4 group ${showDeleted ? 'opacity-80' : ''}`}>
             {item.image_path ? (
               <div className="aspect-video rounded-lg bg-gray-100 mb-3 overflow-hidden">
-                <img
-                  src={`app-image://${item.image_path}`}
-                  alt={item.name}
-                  className="w-full h-full object-cover"
-                />
+                <img src={`app-image://${item.image_path}`} alt={item.name} className="w-full h-full object-cover" />
               </div>
             ) : (
               <div className="aspect-video rounded-lg bg-gradient-to-br from-orange-50 to-amber-50 mb-3 flex items-center justify-center">
-                <span className="text-4xl">{item.emoji || categories.find((c: any) => c.id === item.category_id)?.icon || '🍔'}</span>
+                <span className="text-4xl">{item.emoji || categoryOf(item)?.icon || '🍔'}</span>
               </div>
             )}
             <h3 className="font-semibold text-gray-900">{getName(item)}</h3>
-            <div className="flex items-center justify-between mt-2">
+            <div className="flex items-center justify-between mt-2 gap-2">
               <span className="text-orange-600 font-bold">{formatCurrency(item.price)}</span>
-              <Badge>{categories.find((c: any) => c.id === item.category_id)?.icon || ''} {item.category_name}</Badge>
+              <Badge variant={item.category_active === 0 ? 'warning' : 'default'}>
+                {categoryOf(item)?.icon || ''} {item.category_name}
+                {item.category_active === 0 ? ` (${t('menu.categoryDeleted')})` : ''}
+              </Badge>
             </div>
-            <div className={`flex gap-2 mt-3 transition-opacity ${isTouch ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-              <Button variant="ghost" size={isTouch ? 'md' : 'sm'} onClick={() => openForm(item)}>
-                <Pencil className={isTouch ? 'h-5 w-5' : 'h-4 w-4'} />
+            {showDeleted ? (
+              <Button variant="secondary" size={isTouch ? 'md' : 'sm'} onClick={() => handleRestore(item)} className="mt-3 w-full">
+                <ArchiveRestore className="h-4 w-4" />
+                {t('menu.restore')}
               </Button>
-              <Button variant="ghost" size={isTouch ? 'md' : 'sm'} onClick={() => handleDelete(item.id)}>
-                <Trash2 className={`${isTouch ? 'h-5 w-5' : 'h-4 w-4'} text-red-500`} />
-              </Button>
-            </div>
+            ) : (
+              <div className={`flex gap-2 mt-3 transition-opacity ${isTouch ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                <Button variant="ghost" size={isTouch ? 'md' : 'sm'} onClick={() => openForm(item)} title={t('common.edit')}>
+                  <Pencil className={isTouch ? 'h-5 w-5' : 'h-4 w-4'} />
+                </Button>
+                <Button variant="ghost" size={isTouch ? 'md' : 'sm'} onClick={() => { setDeleteError(''); setConfirmDelete(item) }} title={t('common.delete')}>
+                  <Trash2 className={`${isTouch ? 'h-5 w-5' : 'h-4 w-4'} text-red-500`} />
+                </Button>
+              </div>
+            )}
           </div>
         ))}
       </div>
 
       {filtered.length === 0 && (
-        <div className="text-center py-16 text-gray-400">{t('menu.noItems')}</div>
+        <div className="text-center py-16 text-gray-400">{showDeleted ? t('menu.noDeletedItems') : t('menu.noItems')}</div>
       )}
 
-      {/* Add/Edit Modal */}
-      <Modal
-        isOpen={showForm}
-        onClose={() => { setShowForm(false); setKeyboardTarget(null) }}
-        title={editItem ? t('menu.editItem') : t('menu.addItem')}
-        size="lg"
-      >
-        <div className="space-y-4">
-          <div className="grid grid-cols-3 gap-3">
-            <Input
-              label={t('menu.name')}
-              value={formName}
-              readOnly={isTouch}
-              onClick={isTouch ? () => setKeyboardTarget({ field: 'formName', type: 'text' }) : undefined}
-              onChange={isTouch ? undefined : (e) => setFormName(e.target.value)}
-            />
-            <Input
-              label={t('menu.nameAr')}
-              value={formNameAr}
-              readOnly={isTouch}
-              onClick={isTouch ? () => setKeyboardTarget({ field: 'formNameAr', type: 'text' }) : undefined}
-              onChange={isTouch ? undefined : (e) => setFormNameAr(e.target.value)}
-              dir="rtl"
-            />
-            <Input
-              label={t('menu.nameFr')}
-              value={formNameFr}
-              readOnly={isTouch}
-              onClick={isTouch ? () => setKeyboardTarget({ field: 'formNameFr', type: 'text' }) : undefined}
-              onChange={isTouch ? undefined : (e) => setFormNameFr(e.target.value)}
-            />
-          </div>
+      {form && (
+        <MenuItemForm
+          key={form.key}
+          item={form.item}
+          validateOnOpen={form.validate}
+          categories={categories}
+          stockItems={stockItems}
+          getName={getName}
+          isTouch={isTouch}
+          onClose={() => setForm(null)}
+          onSaved={loadData}
+        />
+      )}
 
-          <div className="grid grid-cols-2 gap-3">
-            {!multiSize && (
-              <Input
-                label={t('menu.price')}
-                type={isTouch ? 'text' : 'number'}
-                inputMode="numeric"
-                value={formPrice}
-                readOnly={isTouch}
-                onClick={isTouch ? () => setKeyboardTarget({ field: 'formPrice', type: 'numeric' }) : undefined}
-                onChange={isTouch ? undefined : (e) => setFormPrice(e.target.value)}
-                step="0.01"
-                min="0"
-              />
-            )}
-            <Select
-              label={t('menu.category')}
-              value={formCategory}
-              onChange={(e) => setFormCategory(e.target.value)}
-              options={categories.map((c: any) => ({ value: String(c.id), label: `${c.icon ? c.icon + ' ' : ''}${getName(c)}` }))}
-            />
-          </div>
+      <ConfirmDialog
+        isOpen={!!confirmDelete}
+        title={t('menu.deleteTitle')}
+        message={confirmDelete ? t('menu.deleteConfirm', { name: getName(confirmDelete) }) : ''}
+        confirmLabel={t('common.delete')}
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDelete(null)}
+        busy={deleting}
+        error={deleteError}
+      />
 
-          {/* Multi-size toggle (only for new items) */}
-          {!editItem && (
-            <div>
-              <button
-                type="button"
-                onClick={() => {
-                  const next = !multiSize
-                  setMultiSize(next)
-                  if (next && formSizes.length === 0) {
-                    setFormSizes(PRESET_SIZES.map(s => ({ label: s, price: '' })))
-                  }
-                }}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  multiSize
-                    ? 'bg-orange-100 text-orange-700 border-2 border-orange-400'
-                    : 'bg-gray-100 text-gray-600 border-2 border-transparent hover:bg-gray-200'
-                }`}
-              >
-                <Layers className="h-4 w-4" />
-                Multiple Sizes
-              </button>
-            </div>
-          )}
-
-          {/* Size rows */}
-          {multiSize && !editItem && (
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">Sizes & Prices</label>
-              {formSizes.map((size, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <input
-                    value={size.label}
-                    onChange={(e) => {
-                      const updated = [...formSizes]
-                      updated[i] = { ...updated[i], label: e.target.value }
-                      setFormSizes(updated)
-                    }}
-                    placeholder="Size label"
-                    className="w-24 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  />
-                  <input
-                    type="number"
-                    value={size.price}
-                    onChange={(e) => {
-                      const updated = [...formSizes]
-                      updated[i] = { ...updated[i], price: e.target.value }
-                      setFormSizes(updated)
-                    }}
-                    placeholder="Price"
-                    step="0.01"
-                    className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  />
-                  <button
-                    onClick={() => setFormSizes(formSizes.filter((_, idx) => idx !== i))}
-                    className="p-2 hover:bg-red-100 rounded text-gray-400 hover:text-red-500"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={() => setFormSizes([...formSizes, { label: '', price: '' }])}
-                className="flex items-center gap-1 text-sm text-orange-600 hover:text-orange-700 font-medium"
-              >
-                <Plus className="h-4 w-4" />
-                Add Size
-              </button>
-            </div>
-          )}
-
-          {/* Emoji */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Emoji</label>
-            <div className="flex items-center gap-2">
-              <input
-                value={formEmoji}
-                onChange={(e) => setFormEmoji(e.target.value)}
-                placeholder="🍔"
-                className="w-16 h-10 border rounded-lg text-center text-xl focus:outline-none focus:ring-2 focus:ring-orange-500"
-                maxLength={2}
-              />
-              <span className="text-xs text-gray-400">Paste or type a food emoji</span>
-            </div>
-          </div>
-
-          {/* Image */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t('menu.image')}</label>
-            <div className="flex items-center gap-3">
-              {formImagePath && (
-                <img
-                  src={`app-image://${formImagePath}`}
-                  className="w-16 h-16 rounded-lg object-cover"
-                />
-              )}
-              <Button variant="secondary" size="sm" onClick={handleUploadImage}>
-                {t('menu.uploadImage')}
-              </Button>
-            </div>
-          </div>
-
-          {/* Ingredients */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium text-gray-700">{t('menu.ingredients')}</label>
-              <Button variant="ghost" size="sm" onClick={addIngredient}>
-                <Plus className="h-4 w-4" />
-                {t('menu.addIngredient')}
-              </Button>
-            </div>
-            <div className="space-y-2">
-              {formIngredients.map((ing, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <select
-                    value={ing.stock_item_id}
-                    onChange={(e) => updateIngredient(i, 'stock_item_id', Number(e.target.value))}
-                    className="flex-1 border rounded-lg px-2 py-1.5 text-sm"
-                  >
-                    <option value={0}>{t('menu.stockItem')}</option>
-                    {stockItems.map((s: any) => (
-                      <option key={s.id} value={s.id}>{getName(s)}</option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    value={ing.quantity}
-                    onChange={(e) => updateIngredient(i, 'quantity', Number(e.target.value))}
-                    placeholder={t('menu.quantity')}
-                    min="0.000001"
-                    step="0.001"
-                    className="w-24 border rounded-lg px-2 py-1.5 text-sm"
-                  />
-                  <select
-                    value={ing.unit}
-                    onChange={(e) => updateIngredient(i, 'unit', e.target.value)}
-                    className="w-20 border rounded-lg px-2 py-1.5 text-sm"
-                  >
-                    <option value="g">g</option>
-                    <option value="ml">ml</option>
-                    <option value="unit">unit</option>
-                  </select>
-                  <button
-                    onClick={() => removeIngredient(i)}
-                    className="p-1 hover:bg-red-100 rounded text-gray-400 hover:text-red-500"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex gap-2 pt-4 border-t">
-            <Button variant="secondary" onClick={() => setShowForm(false)} className="flex-1">
-              {t('common.cancel')}
-            </Button>
-            <Button
-              onClick={handleSave}
-              loading={saving}
-              disabled={!formName || (!multiSize && !formPrice) || (multiSize && formSizes.filter(s => s.label && s.price).length === 0) || !formCategory}
-              className="flex-1"
-            >
-              {t('common.save')}
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      <CategoryManager
+        isOpen={showCategories}
+        onClose={() => setShowCategories(false)}
+        categories={categories}
+        items={items}
+        onChanged={async () => { await loadData() }}
+        isTouch={isTouch}
+        getName={getName}
+      />
 
       {/* Virtual Keyboard for touchscreen mode */}
-      {isTouch && keyboardTarget && (
+      {isTouch && searchKeyboard && (
         <VirtualKeyboard
           visible
-          type={keyboardTarget.type}
-          value={getKeyboardValue()}
-          onChange={handleKeyboardChange}
-          onClose={() => setKeyboardTarget(null)}
+          type="text"
+          value={search}
+          onChange={setSearch}
+          onClose={() => setSearchKeyboard(false)}
         />
       )}
     </div>

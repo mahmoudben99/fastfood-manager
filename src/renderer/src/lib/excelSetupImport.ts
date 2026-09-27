@@ -1,6 +1,8 @@
 import * as XLSX from 'xlsx'
 import {
   SETUP_IMPORT_LIMITS,
+  normalizeStockUnit,
+  parseSetupImportNumber,
   setupImportNameKey,
   validateSetupImportPayload,
   type SetupImportPayload
@@ -46,16 +48,21 @@ function parseSheet(
     throw new Error(`Workbook is missing the required "${sheetName}" sheet`)
   }
 
+  // Keep blank rows while reading so every row can be reported with its real Excel row number.
+  const isBlank = (values: CellValue[]) =>
+    !values.some((value) => value !== null && value !== undefined && String(value).trim() !== '')
   const matrix = XLSX.utils.sheet_to_json<CellValue[]>(sheet, {
     header: 1,
     defval: null,
-    blankrows: false,
+    blankrows: true,
     raw: true
   })
-  if (matrix.length === 0) throw new Error(`Sheet "${sheetName}" is empty and has no header row`)
+  const headerIndex = matrix.findIndex((values) => !isBlank(values))
+  if (headerIndex < 0) throw new Error(`Sheet "${sheetName}" is empty and has no header row`)
+  const firstExcelRow = (sheet['!ref'] ? XLSX.utils.decode_range(sheet['!ref']).s.r : 0) + 1
 
   const headers = new Map<string, number>()
-  matrix[0].forEach((value, index) => {
+  matrix[headerIndex].forEach((value, index) => {
     const header = normalizedHeader(value)
     if (!header) return
     if (headers.has(header)) throw new Error(`Sheet "${sheetName}" has duplicate header "${value}"`)
@@ -69,11 +76,9 @@ function parseSheet(
   }
 
   const rows = matrix
-    .slice(1)
-    .map((values, index) => ({ values, excelRow: index + 2 }))
-    .filter(({ values }) =>
-      values.some((value) => value !== null && value !== undefined && String(value).trim() !== '')
-    )
+    .map((values, index) => ({ values, excelRow: firstExcelRow + index }))
+    .slice(headerIndex + 1)
+    .filter(({ values }) => !isBlank(values))
 
   return { headers, rows }
 }
@@ -112,10 +117,16 @@ function requiredNumber(value: CellValue, sheet: string, row: number, header: st
   if (value === null || value === undefined || String(value).trim() === '') {
     throw new Error(`${sheet} row ${row}: ${header} is required`)
   }
-  // SheetJS returns true numeric cells as numbers. Accept plain numeric text too, but reject
-  // locale-ambiguous strings such as "1,200" rather than guessing whether that means 1.2 or 1200.
-  const parsed = typeof value === 'number' ? value : Number(value)
-  if (!Number.isFinite(parsed)) {
+  // SheetJS returns true numeric cells as numbers. Numeric text is accepted too, including a
+  // decimal comma ("0,5"), but locale-ambiguous strings such as "1,200" are refused rather than
+  // guessing whether they mean 1.2 or 1200.
+  const parsed = parseSetupImportNumber(value)
+  if (parsed === 'ambiguous') {
+    throw new Error(
+      `${sheet} row ${row}: ${header} "${String(value).trim()}" is ambiguous. Write it without a thousands separator (e.g. 1200) or with a dot for decimals (e.g. 1.2)`
+    )
+  }
+  if (parsed === undefined) {
     throw new Error(`${sheet} row ${row}: ${header} must be a valid number`)
   }
   return parsed
@@ -227,7 +238,7 @@ export function parseSetupWorkbook(data: Uint8Array): SetupImportPayload {
   }))
 
   const stockUnitByName = new Map(
-    stockItems.map((item) => [setupImportNameKey(item.name), item.unit_type])
+    stockItems.map((item) => [setupImportNameKey(item.name), normalizeStockUnit(item.unit_type)])
   )
   const ingredients = ingredientsSheet
     ? (() => {
@@ -242,7 +253,18 @@ export function parseSetupWorkbook(data: Uint8Array): SetupImportPayload {
             row.excelRow,
             'Stock_Item_Name'
           )
-          const fallbackUnit = stockUnitByName.get(setupImportNameKey(stockItemName))
+          const stockUnit = stockUnitByName.get(setupImportNameKey(stockItemName))
+          const unit = optionalText(cell(row, ingredientUnit))
+          // Never guess a weight/volume unit: a blank Unit used to fall back to the stock unit,
+          // so "150" of minced meat was deducted as 150 kg per burger.
+          if (!unit && (stockUnit === 'kg' || stockUnit === 'liter')) {
+            throw new Error(
+              `Ingredients row ${row.excelRow}: Unit is required for "${stockItemName}" ` +
+                (stockUnit === 'kg'
+                  ? '(stock counted in kg). Write g or kg'
+                  : '(stock counted in L). Write ml or L')
+            )
+          }
           return {
             menu_item_name: requiredText(
               cell(row, ingredientMenu),
@@ -257,7 +279,7 @@ export function parseSetupWorkbook(data: Uint8Array): SetupImportPayload {
               row.excelRow,
               'Quantity'
             ),
-            unit: optionalText(cell(row, ingredientUnit)) || fallbackUnit || ''
+            unit: unit || (stockUnit === 'unit' ? 'unit' : '')
           }
         })
       })()

@@ -9,6 +9,7 @@ import { Modal } from '../../components/ui/Modal'
 import { Badge } from '../../components/ui/Badge'
 import { formatCurrency } from '../../utils/formatCurrency'
 import { VirtualKeyboard } from '../../components/VirtualKeyboard'
+import { ipcErrorMessage } from '../../utils/ipcErrorMessage'
 
 const UNIT_LABELS: Record<string, string> = {
   kg: 'kg',
@@ -33,6 +34,9 @@ export function StockManagement() {
   const [formUnitType, setFormUnitType] = useState('kg')
   const [formPrice, setFormPrice] = useState('')
   const [formThreshold, setFormThreshold] = useState('')
+  const [formError, setFormError] = useState('')
+  /** Active menu items whose recipe uses the edited stock item (locks the unit). */
+  const [recipeUsage, setRecipeUsage] = useState<{ menu_item_id: number; menu_item_name: string }[]>([])
 
   // Adjustment modal
   const [adjustModal, setAdjustModal] = useState<{
@@ -42,6 +46,7 @@ export function StockManagement() {
   const [adjQuantity, setAdjQuantity] = useState('')
   const [adjReason, setAdjReason] = useState('')
   const [adjPrice, setAdjPrice] = useState('')
+  const [adjError, setAdjError] = useState('')
   const [saving, setSaving] = useState(false)
 
   // Virtual keyboard
@@ -81,12 +86,23 @@ export function StockManagement() {
   }, [])
 
   const loadData = async () => {
-    const [all, count] = await Promise.all([
-      window.api.stock.getAll(),
-      window.api.stock.getLowStockCount()
-    ])
-    setItems(all)
-    setLowCount(count)
+    try {
+      const [all, count] = await Promise.all([
+        window.api.stock.getAll(),
+        window.api.stock.getLowStockCount()
+      ])
+      setItems(all)
+      setLowCount(count)
+    } catch (err) {
+      console.error('Failed to load stock:', err)
+    }
+  }
+
+  /** Accepts "12.5" and "12,5"; returns NaN for anything else (including empty). */
+  const parseAmount = (value: string): number => {
+    const trimmed = value.trim()
+    if (!trimmed) return Number.NaN
+    return Number(/^-?\d*,\d+$/.test(trimmed) ? trimmed.replace(',', '.') : trimmed)
   }
 
   const getName = (item: any) => {
@@ -129,7 +145,13 @@ export function StockManagement() {
   const displayed = tab === 'low' ? items.filter((i) => i.quantity <= i.alert_threshold) : items
 
   const openForm = (item?: any) => {
+    setFormError('')
+    setRecipeUsage([])
     if (item) {
+      window.api.stock
+        .getRecipeUsage(item.id)
+        .then(setRecipeUsage)
+        .catch(() => setRecipeUsage([]))
       setEditItem(item)
       setFormName(item.name)
       setFormNameAr(item.name_ar || '')
@@ -150,45 +172,82 @@ export function StockManagement() {
   }
 
   const handleSave = async () => {
+    if (saving) return
+    const price = parseAmount(formPrice)
+    const threshold = formThreshold.trim() ? parseAmount(formThreshold) : 0
+    if (!Number.isFinite(price) || price < 0) {
+      setFormError(t('stock.invalidPrice'))
+      return
+    }
+    if (!Number.isFinite(threshold) || threshold < 0) {
+      setFormError(t('stock.invalidThreshold'))
+      return
+    }
+    setFormError('')
     setSaving(true)
     const data = {
-      name: formName,
-      name_ar: formNameAr || undefined,
-      name_fr: formNameFr || undefined,
+      name: formName.trim(),
+      // null (not undefined) so a cleared translation is really removed.
+      name_ar: formNameAr.trim() || null,
+      name_fr: formNameFr.trim() || null,
       unit_type: formUnitType,
-      price_per_unit: Number(formPrice),
-      alert_threshold: Number(formThreshold) || 0
+      price_per_unit: price,
+      alert_threshold: threshold
     }
-    if (editItem) {
-      await window.api.stock.update(editItem.id, data)
-    } else {
-      await window.api.stock.create(data)
+    try {
+      if (editItem) {
+        await window.api.stock.update(editItem.id, data)
+      } else {
+        await window.api.stock.create(data)
+      }
+      setShowForm(false)
+      setKeyboardTarget(null)
+      await loadData()
+    } catch (err) {
+      setFormError(ipcErrorMessage(err, t('stock.saveFailed')))
+    } finally {
+      setSaving(false)
     }
-    setShowForm(false)
-    setSaving(false)
-    loadData()
   }
 
   const handleAdjustment = async () => {
-    if (!adjustModal) return
-    setSaving(true)
-
+    if (!adjustModal || saving) return
     const { item, type } = adjustModal
-    if (type === 'fix') {
-      await window.api.stock.fix(item.id, Number(adjQuantity), adjReason)
-    } else if (type === 'adjust') {
-      await window.api.stock.adjust(item.id, Number(adjQuantity), adjReason)
-    } else if (type === 'purchase') {
-      await window.api.stock.addPurchase(item.id, Number(adjQuantity), Number(adjPrice))
+    const quantity = parseAmount(adjQuantity)
+    const price = parseAmount(adjPrice)
+    if (type === 'purchase' ? !(quantity > 0) : !(quantity >= 0)) {
+      setAdjError(type === 'purchase' ? t('stock.invalidPurchaseQuantity') : t('stock.invalidQuantity'))
+      return
     }
-
-    setAdjustModal(null)
-    setSaving(false)
-    loadData()
+    if (type === 'purchase' && !(price >= 0)) {
+      setAdjError(t('stock.invalidPrice'))
+      return
+    }
+    setAdjError('')
+    setSaving(true)
+    try {
+      if (type === 'fix') {
+        await window.api.stock.fix(item.id, quantity, adjReason)
+      } else if (type === 'adjust') {
+        await window.api.stock.adjust(item.id, quantity, adjReason)
+      } else if (type === 'purchase') {
+        await window.api.stock.addPurchase(item.id, quantity, price)
+      }
+      setAdjustModal(null)
+      setKeyboardTarget(null)
+      await loadData()
+    } catch (err) {
+      setAdjError(ipcErrorMessage(err, t('stock.adjustFailed')))
+    } finally {
+      setSaving(false)
+    }
   }
 
   const openAdjust = (item: any, type: 'fix' | 'adjust' | 'purchase') => {
-    setAdjQuantity(type === 'purchase' ? '' : String(item.quantity))
+    // Stock goes negative when more is sold than was recorded. A correction cannot be negative,
+    // so start from 0 and let the user type the real counted quantity.
+    setAdjQuantity(type === 'purchase' ? '' : String(Math.max(0, item.quantity)))
+    setAdjError('')
     setAdjReason('')
     setAdjPrice(String(item.price_per_unit))
     setAdjustModal({ item, type })
@@ -287,6 +346,7 @@ export function StockManagement() {
               label={t('stock.unitType')}
               value={formUnitType}
               onChange={(e) => setFormUnitType(e.target.value)}
+              disabled={!!editItem && recipeUsage.length > 0}
               options={[
                 { value: 'kg', label: t('stock.units.kg') },
                 { value: 'liter', label: t('stock.units.liter') },
@@ -296,9 +356,20 @@ export function StockManagement() {
             <Input label={t('stock.pricePerUnit')} type={isTouch ? 'text' : 'number'} inputMode="numeric" value={formPrice} readOnly={isTouch} onClick={isTouch ? () => setKeyboardTarget({ field: 'formPrice', type: 'numeric' }) : undefined} onChange={isTouch ? undefined : (e) => setFormPrice(e.target.value)} step="0.01" />
             <Input label={t('stock.alertThreshold')} type={isTouch ? 'text' : 'number'} inputMode="numeric" value={formThreshold} readOnly={isTouch} onClick={isTouch ? () => setKeyboardTarget({ field: 'formThreshold', type: 'numeric' }) : undefined} onChange={isTouch ? undefined : (e) => setFormThreshold(e.target.value)} />
           </div>
+          {editItem && recipeUsage.length > 0 && (
+            <p className="text-xs text-gray-500 bg-gray-50 rounded-lg p-3">
+              {t('stock.unitLocked', {
+                items: recipeUsage.slice(0, 8).map((u) => u.menu_item_name).join(', ') +
+                  (recipeUsage.length > 8 ? ` (+${recipeUsage.length - 8})` : '')
+              })}
+            </p>
+          )}
+          {formError && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{formError}</p>
+          )}
           <div className="flex gap-2 pt-4 border-t">
-            <Button variant="secondary" onClick={() => setShowForm(false)} className="flex-1">{t('common.cancel')}</Button>
-            <Button onClick={handleSave} loading={saving} disabled={!formName || !formPrice} className="flex-1">{t('common.save')}</Button>
+            <Button variant="secondary" onClick={() => setShowForm(false)} disabled={saving} className="flex-1">{t('common.cancel')}</Button>
+            <Button onClick={handleSave} loading={saving} disabled={!formName.trim() || !formPrice} className="flex-1">{t('common.save')}</Button>
           </div>
         </div>
       </Modal>
@@ -324,6 +395,11 @@ export function StockManagement() {
               <span className="text-gray-500">{t('stock.currentQty')}:</span>{' '}
               <strong>{formatQty(adjustModal.item)}</strong>
             </p>
+            {adjustModal.type !== 'purchase' && adjustModal.item.quantity < 0 && (
+              <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                {t('stock.negativeStockNote', { qty: formatQty(adjustModal.item) })}
+              </p>
+            )}
             <Input
               label={adjustModal.type === 'purchase' ? t('stock.purchaseQty') : t('stock.newQuantity')}
               type={isTouch ? 'text' : 'number'}
@@ -350,7 +426,7 @@ export function StockManagement() {
                 />
                 {adjQuantity && adjPrice && (
                   <p className="text-sm font-medium">
-                    {t('stock.totalCost')}: {formatCurrency(Number(adjQuantity) * Number(adjPrice))}
+                    {t('stock.totalCost')}: {formatCurrency((parseAmount(adjQuantity) || 0) * (parseAmount(adjPrice) || 0))}
                   </p>
                 )}
               </>
@@ -364,8 +440,11 @@ export function StockManagement() {
                 onChange={isTouch ? undefined : (e) => setAdjReason(e.target.value)}
               />
             )}
+            {adjError && (
+              <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{adjError}</p>
+            )}
             <div className="flex gap-2 pt-4 border-t">
-              <Button variant="secondary" onClick={() => setAdjustModal(null)} className="flex-1">{t('common.cancel')}</Button>
+              <Button variant="secondary" onClick={() => setAdjustModal(null)} disabled={saving} className="flex-1">{t('common.cancel')}</Button>
               <Button onClick={handleAdjustment} loading={saving} className="flex-1">{t('common.confirm')}</Button>
             </div>
           </div>
