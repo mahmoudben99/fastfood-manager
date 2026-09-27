@@ -1,4 +1,13 @@
 import { getDb } from '../connection'
+import { settingsRepo } from './settings.repo'
+import {
+  migrateLegacySocialRows,
+  parseSocialMedia,
+  serializeSocialMedia,
+  type SocialMediaEntry
+} from '../../../shared/settings-rules'
+
+const SOCIAL_MIGRATION_MARKER = 'social_media_table_migrated'
 
 export const receiptTemplatesRepo = {
   getAllTemplates() {
@@ -62,20 +71,49 @@ export const receiptTemplatesRepo = {
     })()
   },
 
-  getAllSocialMedia() {
-    return getDb().prepare('SELECT * FROM social_media ORDER BY id').all()
+  /** Deactivate every template so the printer falls back to the built-in default receipt. */
+  clearActive() {
+    getDb().prepare('UPDATE receipt_templates SET is_active = 0 WHERE is_active != 0').run()
   },
 
-  saveSocialMedia(items: { platform: string; handle: string }[]) {
+  /**
+   * One-time, in-code migration of the legacy `social_media` table into `settings.social_media`.
+   * The old Receipt Editor wrote the table, but the printer, the tablet/TV server and cloud sync
+   * only ever read the setting, so accounts added in the editor never printed. Runs once per
+   * database (guarded by a marker setting); the legacy rows are left untouched.
+   */
+  migrateLegacySocialMedia() {
     const db = getDb()
+    const marker = db.prepare('SELECT value FROM settings WHERE key = ?').get(SOCIAL_MIGRATION_MARKER) as
+      | { value: string }
+      | undefined
+    if (marker?.value === '1') return
     db.transaction(() => {
-      db.prepare('DELETE FROM social_media').run()
-      const stmt = db.prepare(
-        'INSERT INTO social_media (platform, handle) VALUES (?, ?)'
-      )
-      for (const item of items) {
-        stmt.run(item.platform, item.handle)
+      const hasTable = db
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'social_media'")
+        .get()
+      if (hasTable) {
+        const current = settingsRepo.get('social_media')
+        const rows = db.prepare('SELECT platform, handle FROM social_media ORDER BY id').all()
+        const migrated = migrateLegacySocialRows(current, rows)
+        if (migrated !== null) settingsRepo.set('social_media', migrated)
       }
+      settingsRepo.set(SOCIAL_MIGRATION_MARKER, '1')
     })()
+  },
+
+  /** Social accounts — read from `settings.social_media`, the single source of truth. */
+  getAllSocialMedia(): SocialMediaEntry[] {
+    try {
+      receiptTemplatesRepo.migrateLegacySocialMedia()
+    } catch (err) {
+      console.error('[Receipt] social media migration failed:', err)
+    }
+    return parseSocialMedia(settingsRepo.get('social_media'))
+  },
+
+  /** Writes `settings.social_media` in the exact JSON format Settings > General writes. */
+  saveSocialMedia(items: unknown) {
+    settingsRepo.set('social_media', serializeSocialMedia(items))
   }
 }

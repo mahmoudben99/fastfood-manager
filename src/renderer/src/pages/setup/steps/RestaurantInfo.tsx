@@ -1,10 +1,9 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Upload, Image } from 'lucide-react'
 import { Input } from '../../../components/ui/Input'
 import { Select } from '../../../components/ui/Select'
-import { Button } from '../../../components/ui/Button'
 import { VirtualKeyboard } from '../../../components/VirtualKeyboard'
+import { LogoUploader } from '../../../components/LogoUploader'
 import type { SetupData } from '../SetupWizard'
 
 interface Props {
@@ -52,13 +51,6 @@ export function RestaurantInfo({ data, updateData }: Props) {
     }
   }
 
-  const handleUploadLogo = async () => {
-    const path = await window.api.settings.uploadLogo()
-    if (path) {
-      updateData({ logoPath: path })
-    }
-  }
-
   const handleCurrencyChange = (value: string) => {
     const curr = currencies.find((c) => c.value === value)
     updateData({
@@ -74,32 +66,8 @@ export function RestaurantInfo({ data, updateData }: Props) {
       </div>
 
       <div className="bg-white rounded-xl p-6 space-y-5 shadow-sm">
-        {/* Logo */}
-        <div className="flex flex-col items-center">
-          <div
-            className="w-24 h-24 rounded-xl bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center mb-3 overflow-hidden cursor-pointer hover:border-orange-400 transition-colors"
-            onClick={handleUploadLogo}
-          >
-            {data.logoPath ? (
-              <img
-                src={`file:///${data.logoPath.replace(/\\/g, '/')}`}
-                alt="Logo"
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  const img = e.target as HTMLImageElement
-                  img.src = `app-image://${data.logoPath}`
-                }}
-              />
-            ) : (
-              <Image className="h-8 w-8 text-gray-400" />
-            )}
-          </div>
-          <Button variant="ghost" size="sm" onClick={handleUploadLogo}>
-            <Upload className="h-4 w-4" />
-            {data.logoPath ? t('setup.restaurant.changeLogo') : t('setup.restaurant.uploadLogo')}
-          </Button>
-          <p className="text-xs text-gray-400">{t('setup.restaurant.logoOptional', { defaultValue: 'Optional — you can add this later in settings' })}</p>
-        </div>
+        {/* Logo — stored by the main process (contract C1), shown via a data URL, removable */}
+        <LogoUploader size="md" />
 
         <Input
           label={t('setup.restaurant.name')}

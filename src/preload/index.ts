@@ -326,8 +326,11 @@ const api = {
     updateTemplate: (id: number, input: any) => ipcRenderer.invoke('receipt:updateTemplate', id, input),
     deleteTemplate: (id: number) => ipcRenderer.invoke('receipt:deleteTemplate', id),
     setActive: (id: number) => ipcRenderer.invoke('receipt:setActive', id),
-    getSocialMedia: () => ipcRenderer.invoke('receipt:getSocialMedia'),
-    saveSocialMedia: (items: any[]) => ipcRenderer.invoke('receipt:saveSocialMedia', items),
+    /** Deactivate every template: receipts print with the built-in default layout. */
+    clearActive: (): Promise<void> => ipcRenderer.invoke('receipt:clearActive'),
+    /** Reads/writes settings.social_media (same list as Settings > General). */
+    getSocialMedia: (): Promise<{ platform: string; handle: string }[]> => ipcRenderer.invoke('receipt:getSocialMedia'),
+    saveSocialMedia: (items: { platform: string; handle: string }[]): Promise<void> => ipcRenderer.invoke('receipt:saveSocialMedia', items),
     getPresets: () => ipcRenderer.invoke('receipt:getPresets'),
     generateQR: (url: string) => ipcRenderer.invoke('receipt:generateQR', url)
   },

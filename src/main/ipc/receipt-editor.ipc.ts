@@ -1,5 +1,35 @@
 import { ipcMain } from 'electron'
+import { randomUUID } from 'crypto'
 import { receiptTemplatesRepo } from '../database/repositories/receipt-templates.repo'
+import { healBlockIds } from '../../shared/settings-rules'
+
+/**
+ * Validate a template payload coming from the renderer. Rejects an empty name or a `blocks`
+ * value that is not a JSON array, and re-ids duplicate block ids before anything is stored.
+ */
+function sanitizeTemplateInput(input: unknown, requireAll: boolean): { name?: string; blocks?: string; is_active?: number } {
+  if (!input || typeof input !== 'object') throw new Error('Invalid template')
+  const raw = input as { name?: unknown; blocks?: unknown; is_active?: unknown }
+  const out: { name?: string; blocks?: string; is_active?: number } = {}
+  if (raw.name !== undefined || requireAll) {
+    const name = String(raw.name ?? '').trim()
+    if (!name) throw new Error('Template name is required')
+    out.name = name.slice(0, 100)
+  }
+  if (raw.blocks !== undefined || requireAll) {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(String(raw.blocks ?? ''))
+    } catch {
+      throw new Error('Invalid template blocks')
+    }
+    if (!Array.isArray(parsed)) throw new Error('Invalid template blocks')
+    const objects = parsed.filter((b): b is Record<string, unknown> => !!b && typeof b === 'object')
+    out.blocks = JSON.stringify(healBlockIds(objects, randomUUID))
+  }
+  if (raw.is_active !== undefined) out.is_active = raw.is_active ? 1 : 0
+  return out
+}
 
 const presets = [
   {
@@ -71,6 +101,14 @@ const presets = [
 ]
 
 export function registerReceiptEditorHandlers(): void {
+  // Move social accounts saved by older versions of the editor into settings.social_media once,
+  // at startup, so they print even if nobody opens the editor again.
+  try {
+    receiptTemplatesRepo.migrateLegacySocialMedia()
+  } catch (err) {
+    console.error('[Receipt] social media migration failed:', err)
+  }
+
   ipcMain.handle('receipt:getTemplates', () => {
     return receiptTemplatesRepo.getAllTemplates()
   })
@@ -80,19 +118,25 @@ export function registerReceiptEditorHandlers(): void {
   })
 
   ipcMain.handle('receipt:saveTemplate', (_, input) => {
-    return receiptTemplatesRepo.saveTemplate(input)
+    const clean = sanitizeTemplateInput(input, true)
+    return receiptTemplatesRepo.saveTemplate({ name: clean.name!, blocks: clean.blocks!, is_active: clean.is_active })
   })
 
   ipcMain.handle('receipt:updateTemplate', (_, id, input) => {
-    return receiptTemplatesRepo.updateTemplate(id, input)
+    return receiptTemplatesRepo.updateTemplate(Number(id), sanitizeTemplateInput(input, false))
   })
 
   ipcMain.handle('receipt:deleteTemplate', (_, id) => {
-    return receiptTemplatesRepo.deleteTemplate(id)
+    return receiptTemplatesRepo.deleteTemplate(Number(id))
   })
 
   ipcMain.handle('receipt:setActive', (_, id) => {
-    return receiptTemplatesRepo.setActive(id)
+    return receiptTemplatesRepo.setActive(Number(id))
+  })
+
+  // "Use default receipt": no template active → the printer uses its built-in layout.
+  ipcMain.handle('receipt:clearActive', () => {
+    return receiptTemplatesRepo.clearActive()
   })
 
   ipcMain.handle('receipt:getSocialMedia', () => {

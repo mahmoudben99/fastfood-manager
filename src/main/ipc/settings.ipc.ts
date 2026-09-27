@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs'
 import { settingsRepo } from '../database/repositories/settings.repo'
 import { getLogoPath } from '../database/connection'
 import { syncAdminPassword, provisionOwnerCredential } from '../sync/owner-sync'
+import { normalizeOrderAlertMinutes, orderAlertMinutesOrDefault } from '../../shared/settings-rules'
 
 // Keys that can ONLY be set through proper activation/trial flows, never from renderer
 const PROTECTED_KEYS = new Set([
@@ -18,13 +19,34 @@ const PROTECTED_KEYS = new Set([
   '_integrity'
 ])
 
+/**
+ * Keys whose values are validated at this boundary. `order_alert_minutes` of 0 or a negative
+ * number made every order on the order screen show as late; invalid writes are refused and an
+ * invalid stored value reads back as the default.
+ */
+function sanitizeWrite(key: string, value: string): string | null {
+  if (key === 'order_alert_minutes') {
+    const minutes = normalizeOrderAlertMinutes(value)
+    return minutes === null ? null : String(minutes)
+  }
+  return value
+}
+
+function sanitizeRead(key: string, value: string | null): string | null {
+  if (key === 'order_alert_minutes') return String(orderAlertMinutesOrDefault(value))
+  return value
+}
+
 export function registerSettingsHandlers(): void {
   ipcMain.handle('settings:get', (_, key: string) => {
-    return settingsRepo.get(key)
+    return sanitizeRead(key, settingsRepo.get(key))
   })
 
   ipcMain.handle('settings:set', (_, key: string, value: string) => {
     if (PROTECTED_KEYS.has(key)) return false
+    const clean = sanitizeWrite(key, value)
+    if (clean === null) return false
+    value = clean
     settingsRepo.set(key, value)
     // Sync admin password hash to cloud whenever it's updated
     if (key === 'admin_password_hash') {
@@ -34,14 +56,18 @@ export function registerSettingsHandlers(): void {
   })
 
   ipcMain.handle('settings:getAll', () => {
-    return settingsRepo.getAll()
+    const all = settingsRepo.getAll()
+    all.order_alert_minutes = sanitizeRead('order_alert_minutes', all.order_alert_minutes ?? null) as string
+    return all
   })
 
   ipcMain.handle('settings:setMultiple', (_, settings: Record<string, string>) => {
     // Strip any protected keys from the batch
     const safe: Record<string, string> = {}
     for (const [k, v] of Object.entries(settings)) {
-      if (!PROTECTED_KEYS.has(k)) safe[k] = v
+      if (PROTECTED_KEYS.has(k)) continue
+      const clean = sanitizeWrite(k, v)
+      if (clean !== null) safe[k] = clean
     }
     settingsRepo.setMultiple(safe)
     // SetupWizard creates the first admin password through this batch path. Without this sync,
