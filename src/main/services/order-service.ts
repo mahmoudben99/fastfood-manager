@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3'
 import { normalizeAlgerianPhone } from '../domain/customer-phone'
+import { businessDateInAlgiers, orderEditRejection, type OrderEditRejection } from '../../shared/order-edit'
 import { recordAuditEvent } from './audit-events'
 import { totalRecipeDeduction } from './stock-units'
 
@@ -81,6 +82,8 @@ export type UpdateOrderResult =
         | 'line_edit_not_allowed'
         | 'db_failure'
       message: string
+      /** Set for not_found / line_edit_not_allowed so callers can explain the refusal. */
+      reason?: OrderEditRejection
     }
 
 export interface OrderServiceDeps {
@@ -142,7 +145,7 @@ const MAX_MONEY = 1_000_000_000
 
 /** Algeria is permanently UTC+1 and has no DST. */
 export function orderDateInAlgiers(date: Date): string {
-  return new Date(date.getTime() + 60 * 60_000).toISOString().slice(0, 10)
+  return businessDateInAlgiers(date)
 }
 
 /** The application stores cash amounts as whole Algerian dinars. */
@@ -500,10 +503,12 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
           captured.toISOString()
         ).lastInsertRowid)
 
+        // item_name* snapshot the sold name so later menu renames never rewrite history.
         const itemInsert = db.prepare(
           `INSERT INTO order_items
-           (order_id, menu_item_id, quantity, unit_price, total_price, notes, worker_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`
+           (order_id, menu_item_id, quantity, unit_price, total_price, notes, worker_id,
+            item_name, item_name_ar, item_name_fr)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         const deductionInsert = db.prepare(
           `INSERT INTO order_item_deductions
@@ -518,7 +523,10 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
             entry.unitPrice,
             entry.lineTotal,
             entry.line.note ?? null,
-            entry.workerId
+            entry.workerId,
+            entry.menu.name,
+            entry.menu.name_ar ?? null,
+            entry.menu.name_fr ?? null
           ).lastInsertRowid)
 
           if (input.source === 'pos' && entry.line.unitPriceOverride !== undefined && entry.unitPrice !== entry.menu.price) {
@@ -644,10 +652,14 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
 
   function updateOrderLines(input: UpdateOrderLinesInput): UpdateOrderResult {
     const order = current(input.orderId)
-    if (!order) return { ok: false, code: 'not_found', message: 'Order not found' }
+    if (!order) return { ok: false, code: 'not_found', message: 'Order not found', reason: 'not_found' }
     const captured = now()
-    if (order.order_date !== orderDateInAlgiers(captured) || order.status === 'completed' || order.status === 'cancelled') {
-      return { ok: false, code: 'line_edit_not_allowed', message: 'Only same-day non-finalized orders can have lines edited' }
+    const rejection = orderEditRejection(order, captured)
+    if (rejection) {
+      const message = rejection === 'past_day'
+        ? 'Only orders from the current business day can have lines edited'
+        : `A ${rejection} order cannot have lines edited`
+      return { ok: false, code: 'line_edit_not_allowed', message, reason: rejection }
     }
     try {
       validateEditLines(input.lines)
@@ -714,8 +726,9 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
         let rawSubtotal = 0
         const insertItem = db.prepare(
           `INSERT INTO order_items
-           (order_id, menu_item_id, quantity, unit_price, total_price, notes, worker_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`
+           (order_id, menu_item_id, quantity, unit_price, total_price, notes, worker_id,
+            item_name, item_name_ar, item_name_fr)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         const insertDeduction = db.prepare(
           `INSERT INTO order_item_deductions
@@ -807,7 +820,10 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
             unitPrice,
             lineTotal,
             line.note ?? null,
-            workerId
+            workerId,
+            menu.name,
+            menu.name_ar ?? null,
+            menu.name_fr ?? null
           ).lastInsertRowid)
           if (line.unitPriceOverride !== undefined && unitPrice !== menu.price) {
             recordAuditEvent(db, {

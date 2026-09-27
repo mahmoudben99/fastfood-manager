@@ -164,6 +164,37 @@
       "ready": "✅ Pret",
       "completed": "📦 Termine",
       "cancelled": "❌ Annule"
+    },
+    "orderError": {
+      "updateTitle": "Échec de la modification de la commande",
+      "placeTitle": "La commande n'a pas été enregistrée",
+      "cartKept": "Votre panier est conservé. Vérifiez les détails puis appuyez à nouveau sur le bouton de commande.",
+      "dismiss": "Fermer"
+    },
+    "editRejected": {
+      "past_day": "La commande n°{{number}} date d'une journée précédente (passée avant minuit) et ne peut plus être modifiée. Vos modifications n'ont PAS été enregistrées. Annulez la modification et saisissez les articles supplémentaires dans une nouvelle commande.",
+      "completed": "La commande n°{{number}} a déjà été terminée sur un autre écran. Vos modifications n'ont PAS été enregistrées.",
+      "cancelled": "La commande n°{{number}} a été annulée sur un autre écran. Vos modifications n'ont PAS été enregistrées.",
+      "not_found": "La commande n°{{number}} n'existe plus. Vos modifications n'ont PAS été enregistrées.",
+      "generic": "La commande n'a pas pu être modifiée : {{message}}"
+    },
+    "editLocked": {
+      "past_day": "Cette commande date d'une journée précédente (passée avant minuit) et ne peut plus être modifiée. Saisissez les ajouts dans une nouvelle commande.",
+      "completed": "Les commandes terminées ne peuvent pas être modifiées.",
+      "cancelled": "Les commandes annulées ne peuvent pas être modifiées.",
+      "not_found": "Cette commande n'existe plus."
+    },
+    "reprint": {
+      "receipt": "Reçu client",
+      "kitchen": "Ticket cuisine",
+      "workerTicket": "Imprimer le ticket de {{name}} ({{n}})",
+      "unassignedTicket": "Imprimer les autres articles, sans employé ({{n}})",
+      "unassignedShort": "Autres articles ({{n}})",
+      "sent": "{{document}} envoyé à {{printer}}",
+      "sentDefault": "{{document}} envoyé à l'imprimante",
+      "failed": "{{document}} n'a pas été imprimé : {{error}}",
+      "failedUnknown": "l'imprimante n'a pas indiqué pourquoi",
+      "dismiss": "Fermer"
     }
   },
   "menu": {

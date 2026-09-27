@@ -164,6 +164,37 @@
       "ready": "✅ Ready",
       "completed": "📦 Completed",
       "cancelled": "❌ Cancelled"
+    },
+    "orderError": {
+      "updateTitle": "Order update failed",
+      "placeTitle": "Order was not placed",
+      "cartKept": "Your cart is preserved. Check the details and press the order button to retry.",
+      "dismiss": "Dismiss"
+    },
+    "editRejected": {
+      "past_day": "Order #{{number}} is from a previous business day (placed before midnight) and can no longer be changed. Your changes were NOT saved. Cancel the edit and ring up the extra items as a new order.",
+      "completed": "Order #{{number}} was already completed on another screen. Your changes were NOT saved.",
+      "cancelled": "Order #{{number}} was cancelled on another screen. Your changes were NOT saved.",
+      "not_found": "Order #{{number}} no longer exists. Your changes were NOT saved.",
+      "generic": "The order could not be updated: {{message}}"
+    },
+    "editLocked": {
+      "past_day": "This order is from a previous business day (placed before midnight), so it can no longer be edited. Ring up any additions as a new order.",
+      "completed": "Completed orders cannot be edited.",
+      "cancelled": "Cancelled orders cannot be edited.",
+      "not_found": "This order no longer exists."
+    },
+    "reprint": {
+      "receipt": "Customer receipt",
+      "kitchen": "Kitchen ticket",
+      "workerTicket": "Print {{name}} ticket ({{n}})",
+      "unassignedTicket": "Print other items, no worker ({{n}})",
+      "unassignedShort": "Other items ({{n}})",
+      "sent": "{{document}} sent to {{printer}}",
+      "sentDefault": "{{document}} sent to the printer",
+      "failed": "{{document}} was not printed: {{error}}",
+      "failedUnknown": "the printer did not report why",
+      "dismiss": "Dismiss"
     }
   },
   "menu": {
