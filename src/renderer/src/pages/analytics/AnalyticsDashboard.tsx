@@ -1,298 +1,184 @@
-import { useState, useEffect, useMemo } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { TrendingUp, TrendingDown, DollarSign, ShoppingCart, CalendarRange } from 'lucide-react'
-import {
-  LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
-} from 'recharts'
-import { Card } from '../../components/ui/Card'
-import { Button } from '../../components/ui/Button'
-import { formatCurrency } from '../../utils/formatCurrency'
-import { removeRepeatedPrefix } from '../../utils/removeRepeatedPrefix'
+import { BarChart3, CalendarRange, Receipt, ShoppingCart, TrendingDown, TrendingUp, Truck, Wallet } from 'lucide-react'
+import { Button, Money, PageHeader, SegmentedControl, Skeleton, StatCard, cn, toast } from '../../components/ui'
 import { localToday } from '../../utils/localDate'
+import { addDays } from '../insights/shared/format'
+import { PaymentsCard } from './PaymentsCard'
+import { TopItemsList } from './TopItemsList'
+import { WorkersTable } from './WorkersTable'
+import type { AnalyticsData, TrendPoint } from './types'
 
-const COLORS = ['#f97316', '#3b82f6', '#22c55e', '#eab308', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6']
+// recharts is only pulled in with the chart cards (its own chunk, after the numbers show).
+const AnalyticsCharts = lazy(() => import('./AnalyticsCharts'))
 
 type PeriodType = 'today' | 'week' | 'month' | '3months' | 'custom'
+
+/** orders.order_date is the restaurant-LOCAL day (see utils/localDate). */
+function rangeFor(period: Exclude<PeriodType, 'custom'>): [string, string] {
+  const end = localToday()
+  if (period === 'today') return [end, end]
+  if (period === 'week') return [addDays(end, -6), end]
+  if (period === 'month') return [addDays(end, -29), end]
+  return [addDays(end, -89), end]
+}
+
+async function load(start: string, end: string): Promise<AnalyticsData> {
+  const single = start === end
+  const [summary, byDay, top, categories, workers, methods, methodConfig, hours, categoryList] = await Promise.all([
+    window.api.analytics.getProfitSummary(start, end),
+    single ? Promise.resolve([]) : window.api.analytics.getRevenueByDay(start, end),
+    window.api.analytics.getTopSellingItems(start, end, 8),
+    window.api.analytics.getRevenueByCategory(start, end),
+    window.api.analytics.getWorkerPerformance(start, end),
+    window.api.payments.salesByMethod(start, end).catch(() => []),
+    window.api.payments.getMethods().catch(() => []),
+    single ? window.api.insights.getRushHours(start, end).catch(() => null) : Promise.resolve(null),
+    window.api.categories.getAll().catch(() => []) as Promise<{ id: number; name: string }[]>
+  ])
+  const trend: TrendPoint[] = single
+    ? (hours?.byHour ?? []).map((h) => ({ key: String(h.hour), label: `${String(h.hour).padStart(2, '0')}:00`, revenue: h.revenue, orders: h.orders }))
+    : (byDay as { date: string; revenue: number; order_count: number }[]).map((d) => ({ key: d.date, label: d.date.slice(5).split('-').reverse().join('/'), revenue: d.revenue, orders: d.order_count }))
+  return { summary, trend, hourly: single, top, categories, workers, methods, methodLabels: Object.fromEntries(methodConfig.map((m) => [m.id, m.label ?? ''])),
+    categoryIds: Object.fromEntries(categoryList.map((c) => [c.name, c.id]))
+  }
+}
 
 export function AnalyticsDashboard() {
   const { t } = useTranslation()
   const [period, setPeriod] = useState<PeriodType>('month')
-  const [customStart, setCustomStart] = useState('')
-  const [customEnd, setCustomEnd] = useState('')
-  const [summary, setSummary] = useState<any>(null)
-  const [revenueData, setRevenueData] = useState<any[]>([])
-  const [topItems, setTopItems] = useState<any[]>([])
-  const [categoryData, setCategoryData] = useState<any[]>([])
-  const [workerPerf, setWorkerPerf] = useState<any[]>([])
+  const [custom, setCustom] = useState<[string, string]>(() => rangeFor('month'))
+  const [range, setRange] = useState<[string, string]>(() => rangeFor('month'))
+  const [data, setData] = useState<AnalyticsData | null>(null)
+  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    if (period !== 'custom') loadAnalytics()
-  }, [period])
-
-  const getDateRange = (): [string, string] => {
-    if (period === 'custom' && customStart && customEnd) {
-      return [customStart, customEnd]
+  const refresh = useCallback(async (start: string, end: string) => {
+    setLoading(true)
+    try {
+      setData(await load(start, end))
+    } catch (e) {
+      toast.error(t('analytics.loadError'), { description: e instanceof Error ? e.message : String(e) })
+    } finally {
+      setLoading(false)
     }
+  }, [t])
 
-    // orders.order_date is the restaurant-LOCAL day. Using the UTC day here meant that between
-    // local midnight and 01:00 (UTC+1) "Today" showed yesterday's figures and hid the late-night
-    // orders that had already rolled over — the busiest hour of a fast-food shop.
-    const today = new Date()
-    const end = localToday(today)
-    let start: string
+  useEffect(() => { void refresh(range[0], range[1]) }, [range, refresh])
 
-    if (period === 'today') {
-      start = end
-    } else if (period === 'week') {
-      const weekAgo = new Date(today)
-      weekAgo.setDate(weekAgo.getDate() - 7)
-      start = localToday(weekAgo)
-    } else if (period === '3months') {
-      const threeMonthsAgo = new Date(today)
-      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3)
-      start = localToday(threeMonthsAgo)
-    } else {
-      const monthAgo = new Date(today)
-      monthAgo.setMonth(monthAgo.getMonth() - 1)
-      start = localToday(monthAgo)
-    }
-    return [start, end]
+  const choose = (p: PeriodType) => {
+    setPeriod(p)
+    if (p !== 'custom') setRange(rangeFor(p))
   }
-
-  const loadAnalytics = async () => {
-    const [start, end] = getDateRange()
-    const [sum, rev, top, cat, perf] = await Promise.all([
-      window.api.analytics.getProfitSummary(start, end),
-      window.api.analytics.getRevenueByDay(start, end),
-      window.api.analytics.getTopSellingItems(start, end, 10),
-      window.api.analytics.getRevenueByCategory(start, end),
-      window.api.analytics.getWorkerPerformance(start, end)
-    ])
-    setSummary(sum)
-    setRevenueData(rev)
-    setTopItems(top)
-    setCategoryData(cat)
-    setWorkerPerf(perf)
-  }
-
-  const applyCustomRange = () => {
-    if (customStart && customEnd) {
-      loadAnalytics()
-    }
-  }
-
-  const periodButtons: { key: PeriodType; label: string }[] = [
-    { key: 'today', label: t('analytics.today') },
-    { key: 'week', label: t('analytics.thisWeek') },
-    { key: 'month', label: t('analytics.thisMonth') },
-    { key: '3months', label: t('analytics.last3Months', { defaultValue: 'Last 3 Months' }) },
-    { key: 'custom', label: t('analytics.custom', { defaultValue: 'Custom' }) }
-  ]
+  const customInvalid = !custom[0] || !custom[1] || custom[0] > custom[1]
+  const s = data?.summary
+  const avgTicket = s && s.order_count > 0 ? s.total_revenue / s.order_count : 0
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold text-gray-900">{t('analytics.title')}</h1>
-        <div className="flex gap-2">
-          {periodButtons.map((p) => (
-            <Button
-              key={p.key}
-              variant={period === p.key ? 'primary' : 'secondary'}
-              size="sm"
-              onClick={() => setPeriod(p.key)}
-            >
-              {p.key === 'custom' && <CalendarRange className="h-3.5 w-3.5" />}
-              {p.label}
-            </Button>
-          ))}
-        </div>
-      </div>
+    <div className="max-w-[1600px] space-y-6">
+      <PageHeader
+        icon={<BarChart3 />}
+        title={t('analytics.title')}
+        actions={
+          <SegmentedControl
+            value={period}
+            onChange={choose}
+            ariaLabel={t('analytics.dateRange')}
+            options={[
+              { value: 'today', label: t('analytics.today') },
+              { value: 'week', label: t('analytics.last7') },
+              { value: 'month', label: t('analytics.last30') },
+              { value: '3months', label: t('analytics.last90') },
+              { value: 'custom', label: t('analytics.custom'), icon: <CalendarRange /> }
+            ]}
+          />
+        }
+      />
 
-      {/* Custom date range picker */}
       {period === 'custom' && (
-        <div className="flex items-center gap-3 mb-4 bg-white border rounded-xl px-4 py-3">
-          <label className="text-sm text-gray-600 font-medium">{t('analytics.from', { defaultValue: 'From' })}:</label>
-          <input
-            type="date"
-            value={customStart}
-            onChange={(e) => setCustomStart(e.target.value)}
-            className="border rounded-lg px-3 py-1.5 text-sm"
-          />
-          <label className="text-sm text-gray-600 font-medium">{t('analytics.to', { defaultValue: 'To' })}:</label>
-          <input
-            type="date"
-            value={customEnd}
-            onChange={(e) => setCustomEnd(e.target.value)}
-            className="border rounded-lg px-3 py-1.5 text-sm"
-          />
-          <Button size="sm" onClick={applyCustomRange} disabled={!customStart || !customEnd}>
-            {t('analytics.apply', { defaultValue: 'Apply' })}
-          </Button>
+        <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-line bg-surface px-5 py-4 animate-fade-in">
+          {(['from', 'to'] as const).map((which, i) => (
+            <label key={which} className="text-sm font-medium text-ink-2">
+              <span className="block mb-1.5">{t(`analytics.${which}`)}</span>
+              <input
+                type="date"
+                data-ui="input"
+                value={custom[i]}
+                max={localToday()}
+                onChange={(e) => setCustom((c) => (i === 0 ? [e.target.value, c[1]] : [c[0], e.target.value]))}
+                className="min-h-11 rounded-xl border border-line-strong bg-surface dark:bg-surface-2 px-3 text-ink"
+              />
+            </label>
+          ))}
+          <Button disabled={customInvalid} onClick={() => setRange(custom)}>{t('analytics.apply')}</Button>
         </div>
       )}
 
-      {/* Summary cards */}
-      {summary && (
-        <div className="grid grid-cols-4 gap-4 mb-6">
-          <Card className="!p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <DollarSign className="h-5 w-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">{t('analytics.revenue')}</p>
-                <p className="text-lg font-bold">{formatCurrency(summary.total_revenue)}</p>
-              </div>
-            </div>
-          </Card>
-          <Card className="!p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-red-100 rounded-lg">
-                <TrendingDown className="h-5 w-5 text-red-600" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">{t('analytics.costs')}</p>
-                <p className="text-lg font-bold">
-                  {formatCurrency(summary.total_stock_cost + summary.total_worker_cost)}
-                </p>
-              </div>
-            </div>
-          </Card>
-          <Card className="!p-4">
-            <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-lg ${summary.net_profit >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
-                <TrendingUp className={`h-5 w-5 ${summary.net_profit >= 0 ? 'text-green-600' : 'text-red-600'}`} />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">{t('analytics.profit')}</p>
-                <p className={`text-lg font-bold ${summary.net_profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {formatCurrency(summary.net_profit)}
-                </p>
-              </div>
-            </div>
-          </Card>
-          <Card className="!p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <ShoppingCart className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">{t('analytics.orderCount')}</p>
-                <p className="text-lg font-bold">{summary.order_count}</p>
-              </div>
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {/* Charts */}
-      <div className="grid grid-cols-2 gap-6 mb-6">
-        {/* Revenue trend */}
-        <Card title={t('analytics.revenue')}>
-          {revenueData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={revenueData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Line type="monotone" dataKey="revenue" stroke="#f97316" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          ) : (
-            <p className="text-center text-gray-400 py-8">{t('analytics.noData')}</p>
-          )}
-        </Card>
-
-        {/* Revenue by category pie chart */}
-        <Card title={t('analytics.byCategory')}>
-          {categoryData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={250}>
-              <PieChart>
-                <Pie
-                  data={categoryData}
-                  dataKey="total_revenue"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={80}
-                  label={(entry) => entry.name}
-                >
-                  {categoryData.map((_, index) => (
-                    <Cell key={index} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <p className="text-center text-gray-400 py-8">{t('analytics.noData')}</p>
-          )}
-        </Card>
+      <div className={cn('grid grid-cols-2 xl:grid-cols-4 gap-4', loading && data && 'opacity-70')}>
+        <StatCard
+          label={t('analytics.revenue')}
+          value={<Money value={s?.total_revenue ?? 0} decimals={0} />}
+          icon={<TrendingUp />}
+          loading={!data}
+          deltaLabel={t('analytics.revenueHint')}
+          footer={
+            <span className="flex items-center gap-2">
+              <Truck className="h-4 w-4 text-faint" />
+              {t('analytics.deliveryFees')}
+              <Money value={s?.total_delivery_fees ?? 0} decimals={0} className="ms-auto font-semibold text-ink-2" />
+            </span>
+          }
+        />
+        <StatCard
+          label={t('analytics.costs')}
+          value={<Money value={(s?.total_stock_cost ?? 0) + (s?.total_worker_cost ?? 0)} decimals={0} />}
+          icon={<TrendingDown />}
+          tone="danger"
+          loading={!data}
+          footer={
+            <span className="flex flex-col gap-1">
+              <span className="flex items-center justify-between gap-2">{t('analytics.stockCost')} <Money value={s?.total_stock_cost ?? 0} decimals={0} className="font-semibold text-ink-2" /></span>
+              <span className="flex items-center justify-between gap-2">{t('analytics.workerCost')} <Money value={s?.total_worker_cost ?? 0} decimals={0} className="font-semibold text-ink-2" /></span>
+            </span>
+          }
+        />
+        <StatCard
+          label={t('analytics.profit')}
+          value={<Money value={s?.net_profit ?? 0} decimals={0} className={s && s.net_profit < 0 ? 'text-danger-ink' : undefined} />}
+          icon={<Wallet />}
+          tone={s && s.net_profit < 0 ? 'danger' : 'success'}
+          loading={!data}
+          deltaLabel={s && s.total_revenue > 0 ? t('analytics.marginHint', { pct: Math.round((s.net_profit / s.total_revenue) * 100) }) : undefined}
+        />
+        <StatCard
+          label={t('analytics.orderCount')}
+          value={String(s?.order_count ?? 0)}
+          icon={<ShoppingCart />}
+          tone="info"
+          loading={!data}
+          footer={
+            <span className="flex items-center gap-2">
+              <Receipt className="h-4 w-4 text-faint" />
+              {t('analytics.avgTicket')}
+              <Money value={avgTicket} decimals={0} className="ms-auto font-semibold text-ink-2" />
+            </span>
+          }
+        />
       </div>
 
-      {/* Top items */}
-      <div className="grid grid-cols-2 gap-6 mb-6">
-        <Card title={t('analytics.topItems')}>
-          {topItems.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={(() => {
-                // Simplify item names by removing repeated prefixes
-                const names = topItems.map(item => item.name)
-                const simplified = removeRepeatedPrefix(names, 0.4)
-                return topItems.map(item => ({
-                  ...item,
-                  displayName: simplified.get(item.name) || item.name,
-                  // Truncate if still too long (max 20 chars)
-                  name: (simplified.get(item.name) || item.name).length > 20
-                    ? (simplified.get(item.name) || item.name).substring(0, 17) + '...'
-                    : simplified.get(item.name) || item.name
-                }))
-              })()} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" tick={{ fontSize: 12 }} />
-                <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={140} />
-                <Tooltip formatter={(value, name, props) => [value, props.payload.displayName]} />
-                <Bar dataKey="total_quantity" fill="#f97316" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <p className="text-center text-gray-400 py-8">{t('analytics.noData')}</p>
-          )}
-        </Card>
-
-        {/* Worker performance */}
-        <Card title={t('analytics.workerPerformance')}>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="text-start px-3 py-2">{t('workers.name')}</th>
-                  <th className="text-start px-3 py-2">{t('workers.role')}</th>
-                  <th className="text-start px-3 py-2">{t('analytics.ordersHandled')}</th>
-                  <th className="text-start px-3 py-2">{t('analytics.revenue')}</th>
-                  <th className="text-start px-3 py-2">{t('analytics.totalPay')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {workerPerf.map((w: any) => (
-                  <tr key={w.id} className="border-t">
-                    <td className="px-3 py-2 font-medium">{w.name}</td>
-                    <td className="px-3 py-2">{t(`workers.roles.${w.role}`)}</td>
-                    <td className="px-3 py-2">{w.orders_handled || 0}</td>
-                    <td className="px-3 py-2">{formatCurrency(w.total_revenue || 0)}</td>
-                    <td className="px-3 py-2">{formatCurrency(w.total_pay || 0)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {workerPerf.length === 0 && (
-              <p className="text-center text-gray-400 py-8">{t('analytics.noData')}</p>
-            )}
+      {!data ? (
+        <Skeleton className="h-80 rounded-2xl" />
+      ) : (
+        <>
+          <Suspense fallback={<div className="grid xl:grid-cols-5 gap-4"><Skeleton className="xl:col-span-3 h-80 rounded-2xl" /><Skeleton className="xl:col-span-2 h-80 rounded-2xl" /></div>}>
+            <AnalyticsCharts data={data} />
+          </Suspense>
+          <div className="grid xl:grid-cols-5 gap-4 items-start">
+            <TopItemsList className="xl:col-span-3" items={data.top} categoryIds={data.categoryIds} />
+            <PaymentsCard className="xl:col-span-2" methods={data.methods} labels={data.methodLabels} />
           </div>
-        </Card>
-      </div>
+          <WorkersTable workers={data.workers} />
+        </>
+      )}
     </div>
   )
 }

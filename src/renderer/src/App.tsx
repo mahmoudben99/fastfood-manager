@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useState, type ReactNode } from 'react'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAppStore } from './store/appStore'
 import { ActivationPage } from './pages/activation/ActivationPage'
@@ -10,7 +10,6 @@ import { MenuManagement } from './pages/menu/MenuManagement'
 import { StockManagement } from './pages/stock/StockManagement'
 import { WorkerManagement } from './pages/workers/WorkerManagement'
 import { OrdersHistory } from './pages/orders-history/OrdersHistory'
-import { AnalyticsDashboard } from './pages/analytics/AnalyticsDashboard'
 import { ExcelImportExport } from './pages/excel/ExcelImportExport'
 import { BackupRestore } from './pages/backup/BackupRestore'
 import { SettingsPage } from './pages/settings/SettingsPage'
@@ -27,6 +26,11 @@ import { ApprovalHost } from './components/checkout'
 
 // v4 design-system reference (admin-only, lazy so it never weighs on POS start-up).
 const StyleGuide = lazy(() => import('./styleguide/StyleGuide').then((m) => ({ default: m.StyleGuide })))
+// v4 admin home + insights + analytics (recharts): lazy, admin-only.
+const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })))
+const InsightsPage = lazy(() => import('./pages/insights/InsightsPage').then((m) => ({ default: m.InsightsPage })))
+const AnalyticsDashboard = lazy(() => import('./pages/analytics/AnalyticsDashboard').then((m) => ({ default: m.AnalyticsDashboard })))
+const adminLazy = (node: ReactNode) => <Suspense fallback={<div className="h-64 rounded-2xl bg-surface-2 animate-pulse-soft" />}>{node}</Suspense>
 
 export default function App() {
   const [loading, setLoading] = useState(true)
@@ -189,12 +193,15 @@ export default function App() {
           }
         />
         <Route path="/admin" element={<AdminLayout />}>
-          <Route index element={<Navigate to="/admin/menu" replace />} />
+          <Route index element={<Navigate to="/admin/dashboard" replace />} />
+          <Route path="dashboard" element={adminLazy(<DashboardPage />)} />
+          <Route path="insights" element={<Navigate to="/admin/insights/profit" replace />} />
+          <Route path="insights/:tab" element={adminLazy(<InsightsPage />)} />
           <Route path="menu" element={<MenuManagement />} />
           <Route path="stock" element={<StockManagement />} />
           <Route path="workers" element={<WorkerManagement />} />
           <Route path="orders-history" element={<OrdersHistory />} />
-          <Route path="analytics" element={<AnalyticsDashboard />} />
+          <Route path="analytics" element={adminLazy(<AnalyticsDashboard />)} />
           <Route path="excel" element={<ExcelImportExport />} />
           <Route path="backup" element={<BackupRestore />} />
           <Route path="settings" element={<SettingsPage />} />

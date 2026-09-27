@@ -449,29 +449,45 @@
   },
   "analytics": {
     "title": "Analyses et rapports",
-    "dateRange": "Periode",
+    "dateRange": "Période",
     "today": "Aujourd'hui",
     "thisWeek": "Cette semaine",
     "thisMonth": "Ce mois",
-    "custom": "Personnalise",
-    "revenue": "Revenus",
-    "costs": "Couts",
-    "profit": "Benefice net",
+    "custom": "Personnalisé",
+    "revenue": "Chiffre d'affaires",
+    "costs": "Coûts",
+    "profit": "Bénéfice net",
     "orderCount": "Commandes",
-    "stockCost": "Cout du stock",
-    "workerCost": "Cout des employes",
+    "stockCost": "Coût du stock",
+    "workerCost": "Coût des employés",
     "topItems": "Articles les plus vendus",
     "worstItems": "Articles les moins vendus",
-    "byCategory": "Revenus par categorie",
-    "workerPerformance": "Performance des employes",
+    "byCategory": "Chiffre d'affaires par catégorie",
+    "workerPerformance": "Performance des employés",
     "monthlyTrends": "Tendances mensuelles",
-    "ordersHandled": "Commandes traitees",
+    "ordersHandled": "Commandes traitées",
     "totalPay": "Salaire total",
-    "noData": "Aucune donnee pour cette periode",
+    "noData": "Aucune donnée pour cette période",
     "last3Months": "3 derniers mois",
     "from": "Du",
     "to": "Au",
-    "apply": "Appliquer"
+    "apply": "Appliquer",
+    "last7": "7 jours",
+    "last30": "30 jours",
+    "loadError": "Impossible de charger les analyses",
+    "revenueHint": "Hors frais de livraison",
+    "deliveryFees": "Frais de livraison",
+    "marginHint": "{{pct}} % du chiffre d'affaires",
+    "avgTicket": "Panier moyen",
+    "trend": "Chiffre d'affaires par jour",
+    "trendHourly": "Chiffre d'affaires par heure",
+    "ordersN": "{{n}} commandes",
+    "noDataHint": "Essayez une période plus longue.",
+    "byMethod": "Paiements par moyen",
+    "byMethodSubtitle": "Remboursements déduits",
+    "noWorkers": "Aucun employé actif",
+    "noWorkersHint": "Ajoutez des employés pour les comparer.",
+    "last90": "90 jours"
   },
   "excel": {
     "updateDisabledBadge": "Suspendu par sécurité",
@@ -876,7 +892,10 @@
     "netProfit": "Bénéfice net",
     "orderTypes": "Types de commande",
     "topItems": "Top {{count}} articles",
-    "itemSold": "{{count}} vendus"
+    "itemSold": "{{count}} vendus",
+    "noOrdersHint": "Les commandes du jour seront résumées ici.",
+    "deliveryFees": "Frais de livraison (hors chiffre d'affaires) :",
+    "payments": "Paiements"
   },
   "trialLock": {
     "titleOfflineCountdown": "Pas de connexion — {{time}}",
@@ -992,6 +1011,328 @@
       "minimal": "Minimaliste",
       "fullFeatured": "Complet",
       "bilingual": "Bilingue (AR/FR)"
+    }
+  },
+  "dashboard": {
+    "nav": "Tableau de bord",
+    "greeting": {
+      "morning": "Bonjour",
+      "afternoon": "Bon après-midi",
+      "evening": "Bonsoir",
+      "night": "Bonne nuit",
+      "withName": "{{greeting}}, {{name}}"
+    },
+    "updated": "mis à jour à {{time}}",
+    "refresh": "Actualiser",
+    "loadError": "Impossible de charger le tableau de bord. Vérifiez l'application et réessayez.",
+    "deliveryFees": "Frais de livraison",
+    "kpi": {
+      "revenue": "Chiffre d'affaires du jour",
+      "orders": "Commandes du jour",
+      "avgTicket": "Panier moyen",
+      "expected": "Prévu aujourd'hui",
+      "vsLastWeek": "vs {{day}} dernier",
+      "noCompare": "Rien à comparer avec la semaine dernière",
+      "expectedOrders": "≈ {{n}} commandes",
+      "expectedNone": "Il faut quelques jours de ventes",
+      "reached": "Atteint jusqu'ici"
+    },
+    "hourly": {
+      "title": "Chiffre d'affaires par heure",
+      "subtitle": "Aujourd'hui comparé à un jour habituel",
+      "peak": "Pic {{hour}}",
+      "today": "Aujourd'hui",
+      "usual": "{{day}} habituel",
+      "tooltip": "{{orders}} commandes (habituellement {{usual}})",
+      "emptyTitle": "Pas encore de ventes aujourd'hui",
+      "emptyBody": "Les barres apparaissent dès les premières commandes."
+    },
+    "top": {
+      "title": "Meilleures ventes du jour",
+      "all": "Toutes les ventes",
+      "emptyTitle": "Rien de vendu pour l'instant",
+      "emptyBody": "Vos meilleures ventes du jour s’afficheront ici."
+    },
+    "status": {
+      "shift": "Session de caisse",
+      "shiftOpen": "Ouverte",
+      "shiftClosed": "Aucune session ouverte",
+      "shiftSince": "Depuis {{time}} · {{name}}",
+      "shiftHint": "À ouvrir sur la caisse",
+      "unpaid": "Commandes impayées",
+      "toCollect": "À encaisser :",
+      "allPaid": "Tout est payé",
+      "lowStock": "Articles en stock bas",
+      "lowStockHint": "Sous le seuil d'alerte",
+      "stockOk": "Tout va bien",
+      "kitchen": "Tickets cuisine",
+      "late": "{{n}} en retard",
+      "openTickets": "{{n}} en cours",
+      "kitchenDetail": "{{n}} en cours",
+      "kitchenIdle": "Rien en attente"
+    },
+    "alerts": {
+      "title": "À surveiller",
+      "settings": "Réglages"
+    },
+    "actions": {
+      "title": "Actions rapides",
+      "pos": "Ouvrir la caisse",
+      "print": "Imprimer la liste de préparation",
+      "send": "Envoyer la préparation",
+      "closeShift": "Clôturer la caisse",
+      "noShift": "Aucune session de caisse n'est ouverte."
+    },
+    "welcome": {
+      "title": "Bienvenue sur votre tableau de bord",
+      "titleNamed": "Bienvenue, {{name}}",
+      "body": "Ventes, préparation et courses apparaissent ici dès les premières commandes.",
+      "progress": "Pour bien démarrer",
+      "steps": {
+        "menu": {
+          "title": "Ajoutez votre menu",
+          "body": "Articles et prix",
+          "action": "Ouvrir le menu"
+        },
+        "stock": {
+          "title": "Ajoutez le stock et les recettes",
+          "body": "Pour les coûts et la liste de courses",
+          "action": "Ouvrir le stock"
+        },
+        "telegram": {
+          "title": "Connectez Telegram",
+          "body": "Préparation et alertes sur votre téléphone",
+          "action": "Configurer"
+        },
+        "order": {
+          "title": "Prenez votre première commande",
+          "body": "Cette page se remplit aussitôt",
+          "action": "Ouvrir la caisse"
+        }
+      }
+    },
+    "deliveryHint": "Hors chiffre d'affaires"
+  },
+  "insights": {
+    "nav": "Conseils",
+    "title": "Conseils",
+    "subtitle": "Rentabilité, préparation et heures de pointe",
+    "loadError": "Impossible de charger ce rapport",
+    "tabs": {
+      "profit": "Rentabilité du menu",
+      "prep": "Préparation et courses",
+      "rush": "Heures de pointe",
+      "alerts": "Alertes et Telegram"
+    },
+    "range": {
+      "label": "Période",
+      "7d": "7 jours",
+      "30d": "30 jours",
+      "90d": "90 jours",
+      "custom": "Personnalisé",
+      "from": "Du",
+      "to": "Au",
+      "apply": "Appliquer"
+    },
+    "units": {
+      "kg": "kg",
+      "liter": "L",
+      "unit": "pcs",
+      "g": "g",
+      "ml": "ml"
+    },
+    "alerts": {
+      "sent": "Envoyé sur Telegram",
+      "willSend": "Telegram activé",
+      "appOnly": "Dans l'application seulement",
+      "more": "+{{n}} autres",
+      "calmTitle": "Tout est calme",
+      "calmBody": "Rien d'inhabituel pour le moment.",
+      "actions": {
+        "orders": "Voir les commandes",
+        "rush": "Heures de pointe",
+        "shopping": "Liste de courses",
+        "profit": "Rentabilité"
+      }
+    },
+    "telegram": {
+      "sent": "Envoyé sur Telegram",
+      "notConfigured": "Telegram n'est pas connecté",
+      "notConfiguredHint": "Ajoutez le jeton du bot et l'ID du chat dans les Paramètres.",
+      "failed": "Telegram n'a pas reçu le message",
+      "failedHint": "Vérifiez la connexion internet et réessayez."
+    },
+    "profit": {
+      "stats": {
+        "avgMargin": "Marge moyenne",
+        "lowMargin": "Articles à marge faible",
+        "lowMarginHint": "Sous {{pct}} %",
+        "noRecipe": "Articles sans recette",
+        "costUp": "Coûts en hausse",
+        "costUpTop": "{{name}} {{pct}} en 30 jours",
+        "costUpNone": "Pas de forte hausse"
+      },
+      "chartTitle": "Carte du menu",
+      "chartSubtitle": "Popularité × bénéfice par vente",
+      "axisMargin": "Plus de bénéfice par vente",
+      "axisPopular": "Plus populaire",
+      "dotTitle": "{{sold}} vendus · {{margin}} DA de marge chacun",
+      "chartEmptyTitle": "Pas encore assez de ventes",
+      "chartEmptyBody": "Vendez d'abord quelques plats avec recette.",
+      "adviceTitle": "Que faire",
+      "quadrant": {
+        "star": {
+          "name": "Vedettes",
+          "advice": "Gardez-les visibles. Pas de remise."
+        },
+        "plowhorse": {
+          "name": "Chevaux de labour",
+          "advice": "Augmentez un peu le prix ou baissez le coût."
+        },
+        "puzzle": {
+          "name": "Énigmes",
+          "advice": "Mettez-les en avant, proposez-les au comptoir."
+        },
+        "dog": {
+          "name": "Poids morts",
+          "advice": "À revoir ou à retirer."
+        }
+      },
+      "tableTitle": "Articles du menu",
+      "filter": {
+        "all": "Tous",
+        "attention": "À surveiller",
+        "combos": "Menus"
+      },
+      "filterEmpty": "Rien à afficher avec ce filtre.",
+      "cols": {
+        "item": "Article",
+        "sold": "Vendus",
+        "price": "Prix",
+        "cost": "Coût",
+        "margin": "Marge",
+        "foodCost": "Coût matière",
+        "class": "Classe"
+      },
+      "flags": {
+        "combo": "Menu",
+        "lowMargin": "Marge faible",
+        "noRecipe": "Sans recette",
+        "costUp": "Coût {{pct}} · {{ingredient}}",
+        "unitMismatch": "Unité incompatible",
+        "missingCost": "Prix manquant"
+      },
+      "costIncreaseLine": "Coût {{pct}} en 30 jours — surtout {{ingredient}} ({{ingredientPct}}).",
+      "noRecipeHint": "Pas de recette : coût inconnu.",
+      "addRecipe": "Ajouter une recette",
+      "emptyTitle": "Aucun article au menu",
+      "emptyBody": "Ajoutez plats et recettes pour voir ce que chacun rapporte.",
+      "openMenu": "Ouvrir le menu"
+    },
+    "prep": {
+      "today": "Aujourd'hui",
+      "tomorrow": "Demain",
+      "print": "Imprimer la liste",
+      "send": "Envoyer sur Telegram",
+      "printed": "Liste de préparation envoyée à l'imprimante",
+      "printFailed": "Impossible d'imprimer la liste de préparation",
+      "noPrinter": "Aucune imprimante de tickets configurée",
+      "noPrinterHint": "Choisissez une imprimante de tickets dans Paramètres › Imprimantes.",
+      "basisWeekday": "Basé sur {{n}} jours comparables",
+      "basisDaily": "Basé sur les {{n}} derniers jours d'ouverture",
+      "basisNone": "Pas encore d'historique",
+      "expectedOrders": "Commandes prévues",
+      "expectedRevenue": "Chiffre d'affaires prévu",
+      "confidence": {
+        "high": "Prévision fiable",
+        "medium": "Prévision correcte",
+        "low": "Prévision approximative"
+      },
+      "trend": "Tendance récente {{pct}}",
+      "planTitle": "Plan de préparation",
+      "optionsTitle": "Suppléments prévus",
+      "noHistoryTitle": "Pas encore de prévision",
+      "noHistoryBody": "Les portions apparaissent après quelques jours de ventes.",
+      "shoppingTitle": "Liste de courses",
+      "estTotal": "Total estimé",
+      "cols": {
+        "ingredient": "Ingrédient",
+        "need": "Besoin",
+        "have": "En stock",
+        "toBuy": "À acheter",
+        "cost": "Coût estimé"
+      },
+      "critical": "Insuffisant",
+      "lowStock": "Stock bas",
+      "nothingTitle": "Rien à acheter",
+      "nothingBody": "Le stock couvre la prévision.",
+      "openStock": "Ouvrir le stock",
+      "warningsTitle": "Certaines lignes de recette ont été ignorées"
+    },
+    "rush": {
+      "busiestHour": "Heure la plus chargée",
+      "busiestDay": "Jour le plus chargé",
+      "average": "Commandes par jour d'ouverture",
+      "perDay": "≈ {{n}} commandes/jour",
+      "heatmapTitle": "La semaine d'un coup d'œil",
+      "heatmapSubtitle": "Commandes moyennes par heure",
+      "cellDetail": "≈ {{orders}} commandes",
+      "avgTicket": "panier moyen",
+      "quiet": "Calme",
+      "busy": "Chargé",
+      "bestTitle": "Heures les plus chargées",
+      "worstTitle": "Heures les plus calmes",
+      "worstNone": "Pas encore assez d'heures régulières.",
+      "staffingTitle": "Conseils d'organisation",
+      "staffingNone": "Pas encore de pic ni de creux net.",
+      "level": {
+        "peak": "Rush",
+        "quiet": "Creux"
+      },
+      "peakHint": "×{{factor}} plus chargé (≈ {{n}}/h) — une personne de plus",
+      "quietHint": "≈ {{n}}/h — pauses, nettoyage, préparation",
+      "emptyTitle": "Aucune commande sur cette période",
+      "emptyBody": "Choisissez une période plus longue."
+    },
+    "settings": {
+      "telegramOff": "Telegram non connecté — les alertes restent dans l'application.",
+      "openTelegram": "Connecter Telegram",
+      "morningTitle": "Message de préparation du matin",
+      "morningToggle": "Envoyer la liste de préparation du matin",
+      "time": "Heure",
+      "sendTest": "Envoyer maintenant",
+      "alertsTitle": "Alertes envoyées sur Telegram",
+      "alertsSubtitle": "Toujours visibles dans l'application",
+      "kinds": {
+        "cancellations": "Annulations inhabituelles",
+        "discounts": "Remises inhabituelles",
+        "slow_day": "Journée calme",
+        "low_stock": "Stock insuffisant pour aujourd'hui",
+        "margin": "Marge en baisse après un achat"
+      },
+      "kindsHint": {
+        "cancellations": "Plus que d'habitude",
+        "discounts": "Plus que d'habitude",
+        "slow_day": "Sous un jour habituel",
+        "low_stock": "Ne couvre pas la prévision du jour",
+        "margin": "Un nouveau prix réduit une marge"
+      },
+      "slowTime": "Vérifier à partir de",
+      "slowThreshold": "Alerter sous (% de l'habituel)",
+      "marginTitle": "Objectif de marge",
+      "marginSubtitle": "Signale les plats dans Rentabilité",
+      "marginLabel": "Marge minimale",
+      "errors": {
+        "time": "Saisissez une heure comme 09:00",
+        "pct": "Saisissez un nombre entier de {{min}} à {{max}}"
+      },
+      "fixErrors": "Corrigez les champs signalés",
+      "save": "Enregistrer",
+      "reset": "Annuler les modifications",
+      "saved": "Réglages enregistrés",
+      "saveFailed": "Les réglages n'ont pas été enregistrés",
+      "unsaved": "Modifications non enregistrées",
+      "nowTitle": "En ce moment"
     }
   }
 }
