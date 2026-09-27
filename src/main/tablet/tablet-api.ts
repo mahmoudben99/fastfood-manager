@@ -6,6 +6,7 @@ import { createCombosService } from '../services/combos'
 import { soldOutSql } from '../services/catalog-common'
 import { createOrderService } from '../services/order-service'
 import { computeAutoDiscount, sanitizeOrderItems } from '../services/order-promotions'
+import { resolveOrderChannel } from '../services/channels'
 import { orderReadiness } from '../services/kds/kds-query'
 
 /**
@@ -169,8 +170,8 @@ export type TabletQuote =
 export function quoteTabletOrder(db: Database.Database, raw: any): TabletQuote {
   const items = sanitizeOrderItems(raw?.items)
   if (items.length === 0) return { ok: false, code: 'invalid_input', message: 'No valid items' }
-  const discount = computeAutoDiscount(items, db)
   const orderType = (ORDER_TYPES as readonly string[]).includes(raw?.order_type) ? raw.order_type : 'takeout'
+  const discount = computeAutoDiscount(items, db, resolveOrderChannel(db, orderType, null))
   const phone = raw?.customer_phone ? String(raw.customer_phone).slice(0, 50) : undefined
   const name = raw?.customer_name ? String(raw.customer_name).slice(0, 100) : undefined
   const service = createOrderService({ db })

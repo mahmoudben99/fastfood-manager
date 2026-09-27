@@ -13,6 +13,7 @@ import { getDisplayHTML } from './display-ui'
 import { getBestLanIP } from './network'
 import { performAutoBackup } from '../ipc/backup.ipc'
 import { computeAutoDiscount, sanitizeOrderItems } from '../services/order-promotions'
+import { resolveOrderChannel } from '../services/channels'
 import { getLogoDataUrlSync } from '../services/logo'
 import { getDb } from '../database/connection'
 import { closeKdsStreams, handleKdsRequest, isKdsRoute } from './kds-http'
@@ -376,8 +377,8 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
         }
         // Apply the same active promotions the POS cart applies, so a tablet customer isn't
         // charged full price for a promoted item.
-        const discount = computeAutoDiscount(items)
         const orderType = ['local', 'takeout', 'delivery'].includes(raw?.order_type) ? raw.order_type : 'takeout'
+        const discount = computeAutoDiscount(items, undefined, resolveOrderChannel(getDb(), orderType, null))
         const tableNumber = raw?.table_number ? String(raw.table_number).slice(0, 50) : undefined
         const customerPhone = raw?.customer_phone ? String(raw.customer_phone).slice(0, 50) : undefined
         const customerName = raw?.customer_name ? String(raw.customer_name).slice(0, 100) : undefined

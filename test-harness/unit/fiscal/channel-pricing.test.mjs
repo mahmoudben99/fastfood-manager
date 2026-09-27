@@ -147,3 +147,17 @@ test('menu reads carry channel_prices and available_now', () => {
   assert.deepEqual(menuRepo.getById(1).channel_prices, { takeout: 450 })
   assert.equal(menuRepo.getActiveById(1).available_now, 1)
 })
+
+test('auto-promotions discount the channel price (tablet quote, POS guard and order use one base)', async () => {
+  const { computeAutoDiscount, resolveUnitPrice } = await load('src/main/services/order-promotions.ts')
+  const db = freshDb()
+  seedCatalog(db)
+  channels.setItemChannelPrices(db, 1, { takeout: 450, yassir: 650 })
+  db.prepare("INSERT INTO promotions (name, type, discount_value, applies_to, is_active) VALUES ('Ten', 'percentage', 10, 'all', 1)").run()
+  const line = [{ menu_item_id: 1, quantity: 2 }]
+  assert.equal(resolveUnitPrice(db, line[0]), 500, 'no channel = menu price')
+  assert.equal(resolveUnitPrice(db, line[0], 'takeout'), 450)
+  assert.equal(computeAutoDiscount(line, db, 'local').amount, 100)
+  assert.equal(computeAutoDiscount(line, db, 'takeout').amount, 90)
+  assert.equal(computeAutoDiscount(line, db, 'yassir').amount, 130)
+})

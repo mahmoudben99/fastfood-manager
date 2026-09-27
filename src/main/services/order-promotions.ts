@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3'
 import { getDb } from '../database/connection'
 import { catalogLang } from './catalog-common'
+import { channelBasePrice } from './channels'
 import {
   prepareCatalogLine, sanitizeCatalogFields, type OrderLineComboChildInput, type OrderLineModifierInput
 } from './order-catalog'
@@ -57,25 +58,28 @@ function activePromotions(db: Database.Database): ActivePromotion[] {
  * to the menu price (the order itself is refused later with the precise reason). null = the item
  * is not an active menu item.
  */
-export function resolveUnitPrice(db: Database.Database, line: PromotionLineInput): number | null {
+export function resolveUnitPrice(db: Database.Database, line: PromotionLineInput, channel: string | null = null): number | null {
   const menu = db.prepare('SELECT * FROM menu_items WHERE id = ? AND is_active = 1').get(line.menu_item_id) as
     | { id: number; price: number; name: string; is_combo?: number }
     | undefined
   if (!menu) return null
+  // v4: the channel price (dine-in / takeout / delivery / platform) is the base, as in order-service.
+  const base = channelBasePrice(db, menu, channel)
   try {
     const catalog = prepareCatalogLine(db, menu, { modifiers: line.modifiers, children: line.children }, {
       lang: catalogLang(db),
       fail: (_code, message) => new Error(message)
     })
-    return Math.max(0, menu.price + catalog.extrasPerUnit)
+    return Math.max(0, base + catalog.extrasPerUnit)
   } catch {
-    return Math.max(0, menu.price)
+    return Math.max(0, base)
   }
 }
 
 export function computeAutoDiscount(
   items: PromotionLineInput[],
-  database?: Database.Database
+  database?: Database.Database,
+  channel: string | null = null
 ): { amount: number; details: string } {
   if (items.length === 0) return { amount: 0, details: '' }
   let db: Database.Database
@@ -92,7 +96,7 @@ export function computeAutoDiscount(
   const priced: { menu_item_id: number; quantity: number; price: number }[] = []
   let subtotal = 0
   for (const item of items) {
-    const price = resolveUnitPrice(db, item)
+    const price = resolveUnitPrice(db, item, channel)
     if (price === null) continue
     priced.push({ menu_item_id: item.menu_item_id, quantity: item.quantity, price })
     subtotal += price * item.quantity
