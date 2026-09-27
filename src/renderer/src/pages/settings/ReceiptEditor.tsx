@@ -294,8 +294,9 @@ export function ReceiptEditor() {
   }
 
   const previewTemplate = useMemo(
-    () => (blocks.length > 0 ? { name: templateName.trim() || 'preview', blocks: JSON.stringify(blocks), is_active: 1 } : null),
-    [blocks, templateName]
+    // The name is not printed, so typing it must not re-render the preview.
+    () => (blocks.length > 0 ? { name: 'preview', blocks: JSON.stringify(blocks), is_active: 1 } : null),
+    [blocks]
   )
 
   const iconBtn = isTouch ? 'p-2' : 'p-1'
