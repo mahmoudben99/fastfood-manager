@@ -68,6 +68,64 @@ const api = {
       ipcRenderer.invoke('menu:restore', id),
     uploadImage: () => ipcRenderer.invoke('menu:uploadImage')
   },
+  // ─── v4 catalog: modifiers (options), combos, sold out. Errors reject with a message already
+  // in the app language. Order lines (orders.create items[] / orders.updateItems items[]) accept:
+  //   modifiers?: { option_id: number; quantity?: number }[]   // omit = defaults ([] = none;
+  //                                                              // existing line: omit = keep)
+  //   children?: { slot_id: number; menu_item_id: number; modifiers?: …same…; note?: string }[]
+  //                                                              // combos only; omit = default picks
+  // Prices always come from the DB; unit_price (POS only) is the FINAL unit price — omit it.
+  modifiers: {
+    listGroups: (opts?: { includeInactive?: boolean }): Promise<import('../shared/catalog-types').ModifierGroup[]> =>
+      ipcRenderer.invoke('modifiers:listGroups', opts),
+    getGroup: (groupId: number): Promise<import('../shared/catalog-types').ModifierGroup | null> => ipcRenderer.invoke('modifiers:getGroup', groupId),
+    createGroup: (input: import('../shared/catalog-types').ModifierGroupInput): Promise<import('../shared/catalog-types').ModifierGroup> => ipcRenderer.invoke('modifiers:createGroup', input),
+    updateGroup: (groupId: number, input: Partial<import('../shared/catalog-types').ModifierGroupInput>): Promise<import('../shared/catalog-types').ModifierGroup> =>
+      ipcRenderer.invoke('modifiers:updateGroup', groupId, input),
+    /** Hard delete (options + assignments go with it; sold orders keep their snapshots). */
+    deleteGroup: (groupId: number): Promise<boolean> => ipcRenderer.invoke('modifiers:deleteGroup', groupId),
+    createOption: (groupId: number, input: import('../shared/catalog-types').ModifierOptionInput): Promise<import('../shared/catalog-types').ModifierOption> =>
+      ipcRenderer.invoke('modifiers:createOption', groupId, input),
+    /** `ingredients` omitted = keep, [] = none. */
+    updateOption: (optionId: number, input: Partial<import('../shared/catalog-types').ModifierOptionInput>): Promise<import('../shared/catalog-types').ModifierOption> =>
+      ipcRenderer.invoke('modifiers:updateOption', optionId, input),
+    deleteOption: (optionId: number): Promise<boolean> => ipcRenderer.invoke('modifiers:deleteOption', optionId),
+    getItemAssignments: (menuItemId: number): Promise<Required<import('../shared/catalog-types').ModifierAssignmentInput>[]> =>
+      ipcRenderer.invoke('modifiers:getItemAssignments', menuItemId),
+    /** Replaces the item's own rows; `excluded: true` hides a category group for this item. */
+    setItemAssignments: (menuItemId: number, entries: import('../shared/catalog-types').ModifierAssignmentInput[]): Promise<Required<import('../shared/catalog-types').ModifierAssignmentInput>[]> =>
+      ipcRenderer.invoke('modifiers:setItemAssignments', menuItemId, entries),
+    getCategoryAssignments: (categoryId: number): Promise<{ group_id: number; sort_order: number }[]> =>
+      ipcRenderer.invoke('modifiers:getCategoryAssignments', categoryId),
+    setCategoryAssignments: (
+      categoryId: number,
+      entries: { group_id: number; sort_order?: number }[]
+    ): Promise<{ group_id: number; sort_order: number }[]> =>
+      ipcRenderer.invoke('modifiers:setCategoryAssignments', categoryId, entries),
+    /** Active groups/options that apply to the item (item rows override category rows), in order. */
+    getForMenuItem: (menuItemId: number): Promise<import('../shared/catalog-types').ResolvedModifierGroup[]> =>
+      ipcRenderer.invoke('modifiers:getForMenuItem', menuItemId)
+  },
+  combos: {
+    list: (): Promise<import('../shared/catalog-types').ComboDefinition[]> => ipcRenderer.invoke('combos:list'),
+    get: (menuItemId: number): Promise<import('../shared/catalog-types').ComboDefinition | null> => ipcRenderer.invoke('combos:get', menuItemId),
+    /** Flags the menu item as a combo (price = menu price) and replaces its slots. */
+    save: (menuItemId: number, input: { slots: import('../shared/catalog-types').ComboSlotInput[] }): Promise<import('../shared/catalog-types').ComboDefinition> =>
+      ipcRenderer.invoke('combos:save', menuItemId, input),
+    remove: (menuItemId: number): Promise<boolean> => ipcRenderer.invoke('combos:remove', menuItemId),
+    /** Order screen view (category choices expanded, sold_out flags); null = not a combo. */
+    getForMenuItem: (menuItemId: number): Promise<import('../shared/catalog-types').ResolvedCombo | null> =>
+      ipcRenderer.invoke('combos:getForMenuItem', menuItemId)
+  },
+  soldOut: {
+    /** Manual 86 toggle. `sold_out` is the effective state (also true when auto rule applies). */
+    set: (menuItemId: number, soldOut: boolean): Promise<{ id: number; is_sold_out: number; sold_out: number }> =>
+      ipcRenderer.invoke('soldOut:set', menuItemId, soldOut),
+    list: (): Promise<{ id: number; name: string; manual: boolean; auto: boolean }[]> => ipcRenderer.invoke('soldOut:list'),
+    /** Setting auto_sold_out: items with a recipe ingredient at 0 stock cannot be ordered. */
+    getAuto: (): Promise<boolean> => ipcRenderer.invoke('soldOut:getAuto'),
+    setAuto: (enabled: boolean): Promise<boolean> => ipcRenderer.invoke('soldOut:setAuto', enabled)
+  },
   stock: {
     getAll: () => ipcRenderer.invoke('stock:getAll'),
     getById: (id: number) => ipcRenderer.invoke('stock:getById', id),

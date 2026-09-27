@@ -31,7 +31,7 @@ function duplicateMatchesTabletPayload(
     customerPhone?: string
     customerName?: string
     notes?: string
-    items: { menu_item_id: number; quantity: number; notes?: string }[]
+    items: { menu_item_id: number; quantity: number; notes?: string; modifiers?: { option_id: number; quantity?: number }[] }[]
     discountAmount: number
   }
 ): boolean {
@@ -45,12 +45,17 @@ function duplicateMatchesTabletPayload(
       text(order.customer_name) !== text(input.customerName) ||
       text(order.notes) !== text(input.notes) ||
       Number(order.discount_amount) !== Math.round(input.discountAmount)) return false
-  const stored = Array.isArray(order.items) ? order.items : []
+  // v4 catalog: combo children are stored as extra rows under their combo line; compare the
+  // lines the tablet sent, and their options when it sent some.
+  const stored = (Array.isArray(order.items) ? order.items : []).filter((item: any) => item.parent_order_item_id == null)
   if (stored.length !== input.items.length) return false
+  const optionKey = (list: { option_id: number | null; quantity?: number }[]): string =>
+    list.map((m) => `${m.option_id}:${m.quantity ?? 1}`).sort().join(',')
   return input.items.every((item, index) => {
     const existing = stored[index]
     return existing && Number(existing.menu_item_id) === item.menu_item_id &&
-      Number(existing.quantity) === item.quantity && text(existing.notes) === text(item.notes)
+      Number(existing.quantity) === item.quantity && text(existing.notes) === text(item.notes) &&
+      (item.modifiers === undefined || optionKey(existing.modifiers || []) === optionKey(item.modifiers))
   })
 }
 
