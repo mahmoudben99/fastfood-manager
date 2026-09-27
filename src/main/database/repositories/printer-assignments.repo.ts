@@ -1,4 +1,5 @@
 import { getDb } from '../connection'
+import { fallbackPrinter, loadRoutingConfig, targetPrinters } from '../../services/print-routing'
 
 export interface PrinterAssignment {
   id: number
@@ -12,26 +13,22 @@ export interface PrinterAssignment {
   kitchen_font_size: string
 }
 
+type PrinterSettings = { paper_width: string; receipt_font_size: string; kitchen_font_size: string }
+
+// Routing (which printer gets what) lives in services/print-routing.ts so automatic jobs, manual
+// prints and these helpers agree. Every multi-row query orders by id: "LIMIT 1" without ORDER BY
+// picked an arbitrary row, so a task ticked on two printers printed on an unpredictable one.
 export const printerAssignmentsRepo = {
   // Get all active printer assignments
   getAll(): PrinterAssignment[] {
     return getDb()
-      .prepare('SELECT * FROM printer_assignments WHERE is_active = 1')
+      .prepare('SELECT * FROM printer_assignments WHERE is_active = 1 ORDER BY id')
       .all() as PrinterAssignment[]
   },
 
-  // Get printer for receipt printing (fallback to default if not found)
+  /** First printer for customer receipts (all of them: targetPrinters). */
   getReceiptPrinter(): string | null {
-    const assignment = getDb()
-      .prepare(
-        `SELECT printer_name FROM printer_assignments
-         WHERE assignment_type = 'receipt' AND is_active = 1
-         LIMIT 1`
-      )
-      .get() as { printer_name: string } | undefined
-
-    if (assignment) return assignment.printer_name
-    return this.getDefaultPrinter()
+    return targetPrinters(loadRoutingConfig(getDb()), { documentType: 'receipt', scope: 'all', workerId: null })[0] ?? null
   },
 
   // Get receipt printer settings (paper width, font size)
@@ -40,7 +37,7 @@ export const printerAssignmentsRepo = {
       .prepare(
         `SELECT paper_width, receipt_font_size FROM printer_assignments
          WHERE assignment_type = 'receipt' AND is_active = 1
-         LIMIT 1`
+         ORDER BY id LIMIT 1`
       )
       .get() as { paper_width: string; receipt_font_size: string } | undefined
     return assignment || null
@@ -52,85 +49,50 @@ export const printerAssignmentsRepo = {
       .prepare(
         `SELECT paper_width, kitchen_font_size FROM printer_assignments
          WHERE assignment_type IN ('kitchen_all', 'worker') AND is_active = 1
-         LIMIT 1`
+         ORDER BY id LIMIT 1`
       )
       .get() as { paper_width: string; kitchen_font_size: string } | undefined
     return assignment || null
   },
 
-  getSettingsForPrinter(
-    printerName: string,
-    type: 'receipt' | 'kitchen'
-  ): { paper_width: string; receipt_font_size: string; kitchen_font_size: string } | null {
-    const preferredTypes = type === 'receipt'
-      ? "('receipt', 'default')"
-      : "('worker', 'kitchen_all', 'default')"
+  /**
+   * Paper width / font sizes configured on THIS printer's card. Rows of the task being printed
+   * win; any other row of the same printer is next (the card's settings are shared by its rows),
+   * so a receipt routed to a kitchen-only printer is still laid out at that printer's width.
+   */
+  getSettingsForPrinter(printerName: string, type: 'receipt' | 'kitchen'): PrinterSettings | null {
+    const preferred = type === 'receipt' ? "('receipt')" : "('worker', 'kitchen_all')"
     const assignment = getDb()
       .prepare(
         `SELECT paper_width, receipt_font_size, kitchen_font_size
          FROM printer_assignments
-         WHERE printer_name = ? AND assignment_type IN ${preferredTypes} AND is_active = 1
-         ORDER BY CASE assignment_type
-           WHEN 'receipt' THEN 0
-           WHEN 'worker' THEN 0
-           WHEN 'kitchen_all' THEN 1
-           ELSE 2
-         END
+         WHERE printer_name = ? AND is_active = 1
+         ORDER BY CASE WHEN assignment_type IN ${preferred} THEN 0
+                       WHEN assignment_type = 'default' THEN 1 ELSE 2 END, id
          LIMIT 1`
       )
-      .get(printerName) as
-      | { paper_width: string; receipt_font_size: string; kitchen_font_size: string }
-      | undefined
+      .get(printerName) as PrinterSettings | undefined
     return assignment || null
   },
 
-  // Get printer for kitchen (all workers) - fallback to default
+  /** First printer for full kitchen tickets. */
   getKitchenAllPrinter(): string | null {
-    const assignment = getDb()
-      .prepare(
-        `SELECT printer_name FROM printer_assignments
-         WHERE assignment_type = 'kitchen_all' AND is_active = 1
-         LIMIT 1`
-      )
-      .get() as { printer_name: string } | undefined
-
-    if (assignment) return assignment.printer_name
-    return this.getDefaultPrinter()
+    return targetPrinters(loadRoutingConfig(getDb()), { documentType: 'kitchen', scope: 'all', workerId: null })[0] ?? null
   },
 
-  // Get printer for specific worker - fallback chain: worker → kitchen_all → default
+  /** First printer for a worker's tickets: worker rows → legacy workers.printer_name → kitchen chain. */
   getPrinterForWorker(workerId: number): string | null {
-    // Check workers table first for direct assignment
-    const worker = getDb()
-      .prepare('SELECT printer_name FROM workers WHERE id = ? AND is_active = 1')
-      .get(workerId) as { printer_name: string | null } | undefined
-
-    if (worker?.printer_name) return worker.printer_name
-
-    // Fallback to printer_assignments table
-    const assignment = getDb()
-      .prepare(
-        `SELECT printer_name FROM printer_assignments
-         WHERE assignment_type = 'worker' AND worker_id = ? AND is_active = 1
-         LIMIT 1`
-      )
-      .get(workerId) as { printer_name: string } | undefined
-
-    if (assignment) return assignment.printer_name
-    return this.getKitchenAllPrinter()
+    return targetPrinters(loadRoutingConfig(getDb()), { documentType: 'kitchen', scope: 'worker', workerId })[0] ?? null
   },
 
-  // Get default fallback printer
+  /**
+   * Fallback printer. A printer card with no task ticked is stored as a 'default' row so it
+   * persists in the UI; it used to catch every receipt/unassigned/worker ticket even in
+   * multi-printer setups (drinks on the office printer). It is now a fallback only when it is
+   * the ONLY configured printer — single-printer setups behave exactly as before.
+   */
   getDefaultPrinter(): string | null {
-    const assignment = getDb()
-      .prepare(
-        `SELECT printer_name FROM printer_assignments
-         WHERE assignment_type = 'default' AND is_active = 1
-         LIMIT 1`
-      )
-      .get() as { printer_name: string } | undefined
-
-    return assignment?.printer_name || null
+    return fallbackPrinter(loadRoutingConfig(getDb()))
   },
 
   // Save full printer configuration — clears everything and rebuilds

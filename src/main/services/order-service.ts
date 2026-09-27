@@ -224,58 +224,59 @@ function validateEditLines(lines: OrderLineEditInput[]): void {
   if (units > MAX_UNITS) throw new DomainError('invalid_input', `Order cannot contain more than ${MAX_UNITS} units`)
 }
 
+// Print routing + per-printer job columns (fix/print). Imported here rather than at the top of the
+// file to keep this change inside the print-enqueue section; hoist when convenient.
+import { ensurePrintJobColumns } from './print-queue'
+import {
+  diffKitchenLines,
+  loadRoutingConfig,
+  planPrintJobs,
+  serializeKitchenChanges,
+  type KitchenLineChange,
+  type KitchenLineSnapshot
+} from './print-routing'
+
 function printSetting(db: Database.Database, key: string): string | undefined {
   return (db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined)?.value
 }
 
+/**
+ * One durable job per (document, printer): a task ticked on two printers prints on both, each
+ * printer's own auto-print flag decides, and in split mode "All Items" printers still get the
+ * full ticket. Routing rules live in print-routing.ts (shared with manual prints).
+ * `lineChanges` (UPDATED events) are stored with the jobs so tickets mark ADDED/REMOVED/QTY.
+ */
 function enqueueAutomaticPrintJobs(
   db: Database.Database,
   orderId: number,
   items: { worker_id: number | null }[],
-  eventType: 'new' | 'updated' | 'cancelled' | 'restored'
+  eventType: 'new' | 'updated' | 'cancelled' | 'restored',
+  lineChanges?: KitchenLineChange[]
 ): number[] {
-  const assignment = (type: 'receipt' | 'kitchen_all' | 'worker', workerId?: number | null) =>
-    db.prepare(
-      workerId == null
-        ? 'SELECT auto_print FROM printer_assignments WHERE assignment_type = ? AND is_active = 1 LIMIT 1'
-        : 'SELECT auto_print FROM printer_assignments WHERE assignment_type = ? AND worker_id = ? AND is_active = 1 LIMIT 1'
-    ).get(...(workerId == null ? [type] : [type, workerId])) as { auto_print: number } | undefined
+  ensurePrintJobColumns(db)
+  const plan = planPrintJobs({
+    config: loadRoutingConfig(db),
+    split: printSetting(db, 'split_kitchen_tickets') === 'true',
+    autoReceipt: printSetting(db, 'auto_print_receipt') === 'true',
+    autoKitchen: printSetting(db, 'auto_print_kitchen') === 'true',
+    workerIds: items.map((item) => item.worker_id),
+    includeReceipt: eventType === 'new',
+    includeKitchen: true
+  })
 
   const eventSequence = (db.prepare(
     'SELECT COALESCE(MAX(event_sequence), 0) + 1 AS sequence FROM print_jobs WHERE order_id = ? AND event_type = ?'
   ).get(orderId, eventType) as { sequence: number }).sequence
   const insert = db.prepare(
     `INSERT OR IGNORE INTO print_jobs
-     (order_id, event_type, event_sequence, document_type, scope, worker_id, status)
-     VALUES (?, ?, ?, ?, ?, ?, 'pending')`
+     (order_id, event_type, event_sequence, document_type, scope, worker_id, printer_name, detail, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')`
   )
+  const detail = serializeKitchenChanges(lineChanges)
   const ids: number[] = []
-  const add = (documentType: 'receipt' | 'kitchen', scope: 'all' | 'worker' | 'unassigned', workerId: number | null) => {
-    const result = insert.run(orderId, eventType, eventSequence, documentType, scope, workerId)
+  for (const job of plan) {
+    const result = insert.run(orderId, eventType, eventSequence, job.documentType, job.scope, job.workerId, job.printerName, detail)
     if (result.changes === 1) ids.push(Number(result.lastInsertRowid))
-  }
-
-  if (eventType === 'new') {
-    const receipt = assignment('receipt')
-    const autoReceipt = receipt ? receipt.auto_print === 1 : printSetting(db, 'auto_print_receipt') === 'true'
-    if (autoReceipt) add('receipt', 'all', null)
-  }
-
-  const autoKitchenDefault = printSetting(db, 'auto_print_kitchen') === 'true'
-  const split = printSetting(db, 'split_kitchen_tickets') === 'true'
-  if (!split) {
-    const kitchen = assignment('kitchen_all')
-    if (kitchen ? kitchen.auto_print === 1 : autoKitchenDefault) add('kitchen', 'all', null)
-    return ids
-  }
-
-  const groups = new Set(items.map((item) => item.worker_id))
-  if (groups.size === 0) groups.add(null)
-  for (const workerId of groups) {
-    const direct = workerId == null ? undefined : assignment('worker', workerId)
-    const fallback = assignment('kitchen_all')
-    const auto = direct ? direct.auto_print === 1 : fallback ? fallback.auto_print === 1 : autoKitchenDefault
-    if (auto) add('kitchen', workerId == null ? 'unassigned' : 'worker', workerId)
   }
   return ids
 }
@@ -876,8 +877,20 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
         ).run(subtotal, discount, details, total, input.header?.orderType ?? order.order_type, input.orderId)
 
         if (kitchenRelevantChange) {
-          const workers = db.prepare('SELECT worker_id FROM order_items WHERE order_id = ?').all(input.orderId) as { worker_id: number | null }[]
-          enqueueAutomaticPrintJobs(db, input.orderId, workers, 'updated')
+          const newItems = db.prepare(
+            'SELECT id, menu_item_id, quantity, notes, worker_id FROM order_items WHERE order_id = ?'
+          ).all(input.orderId) as KitchenLineSnapshot[]
+          const lineChanges = diffKitchenLines(oldItems, newItems)
+          const headerChanged =
+            (input.header?.orderType !== undefined && input.header.orderType !== order.order_type) ||
+            (input.header?.tableNumber !== undefined && (input.header.tableNumber ?? null) !== (order.table_number ?? null)) ||
+            (input.header?.note !== undefined && (input.header.note ?? null) !== (order.notes ?? null))
+          // A station whose lines were all removed/moved only appears in oldItems: it must still get
+          // the UPDATED ticket or it cooks a cancelled item. Header changes concern every station.
+          const stations = headerChanged
+            ? [...oldItems, ...newItems].map((item) => ({ worker_id: item.worker_id }))
+            : lineChanges.map((change) => ({ worker_id: change.workerId }))
+          enqueueAutomaticPrintJobs(db, input.orderId, stations, 'updated', lineChanges)
         }
         enqueueOutbox(db, input.orderId, 'updated')
         return updateResult(current(input.orderId)!)

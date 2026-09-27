@@ -1,6 +1,6 @@
 import { app, BrowserWindow, shell, protocol, dialog, ipcMain, net, powerMonitor } from 'electron'
 import { join } from 'path'
-import { writeFileSync, appendFileSync } from 'fs'
+import { writeFileSync, appendFileSync, existsSync } from 'fs'
 import { autoUpdater } from 'electron-updater'
 import { initDatabase, closeDatabase } from './database/connection'
 import { registerAllHandlers } from './ipc'
@@ -22,6 +22,7 @@ import { startCloudSync, stopCloudSync } from './sync/cloud-sync'
 import { startRemoteOrderListener, stopRemoteOrderListener } from './sync/remote-order-listener'
 import { stopPrintJobProcessor } from './ipc/printer.ipc'
 import { startOrderEffectsRuntime, stopOrderEffectsRuntime } from './services/order-effects-runtime'
+import { resolveLogoFile } from './services/logo'
 
 // Enhanced logging function
 function log(message: string, isError = false): void {
@@ -110,6 +111,20 @@ function registerImageProtocol(): void {
   protocol.registerFileProtocol('app-image', (request, callback) => {
     const filePath = request.url.replace('app-image://', '')
     const decodedPath = decodeURIComponent(filePath)
+    // A logo path saved on another PC / before a restore no longer exists here: serve the logo
+    // re-materialized from the database instead of a broken image.
+    // Uploaded and materialized logos are all named logo_<id>.<ext>.
+    if (!existsSync(decodedPath) && /(^|[\\/])logo_[^\\/]*$/i.test(decodedPath)) {
+      try {
+        const logo = resolveLogoFile()
+        if (logo) {
+          callback({ path: logo })
+          return
+        }
+      } catch (error) {
+        log(`app-image: logo resolution failed: ${error instanceof Error ? error.message : String(error)}`, true)
+      }
+    }
     callback({ path: decodedPath })
   })
 }

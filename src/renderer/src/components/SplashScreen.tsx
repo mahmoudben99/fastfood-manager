@@ -15,15 +15,16 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
   // that AppState has never had, so the name always fell back and the logo never rendered.
   const storeName = useAppStore((s) => s.restaurantName)
   const [stage, setStage] = useState(0) // 0: emoji scatter, 1: logo/name, 2: welcome text, 3: fade out
-  const [logoPath, setLogoPath] = useState<string | null>(null)
+  const [logoSrc, setLogoSrc] = useState<string | null>(null)
 
   const restaurantName = storeName || 'Fast Food Manager'
 
   useEffect(() => {
+    // The logo is stored in the database (survives restore / new PC); a saved file path may not exist here.
     window.api.settings
-      .get('logo_path')
-      .then((p: string | null) => setLogoPath(p || null))
-      .catch(() => {})
+      .getLogoDataUrl()
+      .then((dataUrl) => setLogoSrc(dataUrl || null))
+      .catch((error: unknown) => console.warn('[Splash] Logo unavailable:', error))
   }, [])
 
   const foodEmojis = ['🍔', '🍕', '🍟', '🌭', '🥤', '🍗', '🌮', '🥗', '🍱', '🧆', '🥙', '🍜']
@@ -71,9 +72,9 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
         {/* Logo or Restaurant Name */}
         {stage >= 1 && (
           <div className="animate-pop-in mb-6">
-            {logoPath ? (
+            {logoSrc ? (
               <img
-                src={`app-image://${logoPath}`}
+                src={logoSrc}
                 alt="Logo"
                 className="w-32 h-32 object-contain drop-shadow-2xl"
               />
