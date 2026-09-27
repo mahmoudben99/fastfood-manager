@@ -10,6 +10,7 @@ import { TokenSwatches, Section } from './Swatches'
 import { ComponentsDemo } from './ComponentsDemo'
 import { OrderBlueprint } from './OrderBlueprint'
 import { DashboardBlueprint } from './DashboardBlueprint'
+import { CheckoutSection } from './sections/CheckoutSection'
 
 const JUMPS = ['surfaces', 'brand', 'categories', 'type', 'buttons', 'inputs', 'choice', 'feedback', 'blueprints'] as const
 
@@ -99,6 +100,7 @@ export function StyleGuide() {
             </div>
           </div>
         </Section>
+        <CheckoutSection />
       </main>
     </div>
   )
