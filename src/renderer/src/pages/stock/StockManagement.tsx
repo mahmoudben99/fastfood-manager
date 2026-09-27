@@ -1,466 +1,210 @@
-import { useState, useEffect } from 'react'
+import { ReactNode, useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Plus, AlertTriangle, Pencil, Wrench, SlidersHorizontal, ShoppingBag } from 'lucide-react'
+import { AlertTriangle, Ban, CheckCircle2, Package, PackageX, Pencil, Plus, Search, ShoppingBag, SlidersHorizontal, Wallet, Wrench, X } from 'lucide-react'
 import { useAppStore } from '../../store/appStore'
-import { Button } from '../../components/ui/Button'
-import { Input } from '../../components/ui/Input'
-import { Select } from '../../components/ui/Select'
-import { Modal } from '../../components/ui/Modal'
-import { Badge } from '../../components/ui/Badge'
-import { formatCurrency } from '../../utils/formatCurrency'
-import { VirtualKeyboard } from '../../components/VirtualKeyboard'
+import { Badge, Button, EmptyState, IconButton, Input, Money, PageHeader, Skeleton, StatCard, Tabs, cn, toast } from '../../components/ui'
 import { ipcErrorMessage } from '../../utils/ipcErrorMessage'
+import { useFoodName, useTouchKeyboard } from '../menu/catalogShared'
+import { StockAdjustModal } from './StockAdjustModal'
+import { StockItemForm } from './StockItemForm'
+import { formatQty, stockLevel, stockStatus, type AdjustKind, type StockItem, type StockStatus } from './stockShared'
 
-const UNIT_LABELS: Record<string, string> = {
-  kg: 'kg',
-  liter: 'L',
-  unit: 'pcs'
+type View = 'all' | 'restock'
+
+const STATUS_BADGE: Record<StockStatus, { variant: 'success' | 'warning' | 'danger'; icon: ReactNode }> = {
+  ok: { variant: 'success', icon: <CheckCircle2 /> },
+  low: { variant: 'warning', icon: <AlertTriangle /> },
+  out: { variant: 'danger', icon: <Ban /> }
 }
+const BAR: Record<StockStatus, string> = { ok: 'bg-success', low: 'bg-warning', out: 'bg-danger' }
 
 export function StockManagement() {
   const { t } = useTranslation()
-  const { language, foodLanguage, inputMode } = useAppStore()
-  const isTouch = inputMode === 'touchscreen'
-  const [items, setItems] = useState<any[]>([])
-  const [tab, setTab] = useState<'all' | 'low'>('all')
-  const [lowCount, setLowCount] = useState(0)
+  const getName = useFoodName()
+  const language = useAppStore((s) => s.language)
+  const kb = useTouchKeyboard()
+  const [items, setItems] = useState<StockItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [view, setView] = useState<View>('all')
+  const [search, setSearch] = useState('')
+  const [form, setForm] = useState<{ item: StockItem | null; key: number } | null>(null)
+  const [adjust, setAdjust] = useState<{ item: StockItem; kind: AdjustKind } | null>(null)
 
-  // Form state
-  const [showForm, setShowForm] = useState(false)
-  const [editItem, setEditItem] = useState<any>(null)
-  const [formName, setFormName] = useState('')
-  const [formNameAr, setFormNameAr] = useState('')
-  const [formNameFr, setFormNameFr] = useState('')
-  const [formUnitType, setFormUnitType] = useState('kg')
-  const [formPrice, setFormPrice] = useState('')
-  const [formThreshold, setFormThreshold] = useState('')
-  const [formError, setFormError] = useState('')
-  /** Active menu items whose recipe uses the edited stock item (locks the unit). */
-  const [recipeUsage, setRecipeUsage] = useState<{ menu_item_id: number; menu_item_name: string }[]>([])
-
-  // Adjustment modal
-  const [adjustModal, setAdjustModal] = useState<{
-    item: any
-    type: 'fix' | 'adjust' | 'purchase'
-  } | null>(null)
-  const [adjQuantity, setAdjQuantity] = useState('')
-  const [adjReason, setAdjReason] = useState('')
-  const [adjPrice, setAdjPrice] = useState('')
-  const [adjError, setAdjError] = useState('')
-  const [saving, setSaving] = useState(false)
-
-  // Virtual keyboard
-  const [keyboardTarget, setKeyboardTarget] = useState<{ field: string; type: 'numeric' | 'text' } | null>(null)
-
-  const getKeyboardValue = (): string => {
-    if (!keyboardTarget) return ''
-    switch (keyboardTarget.field) {
-      case 'formName': return formName
-      case 'formNameAr': return formNameAr
-      case 'formNameFr': return formNameFr
-      case 'formPrice': return formPrice
-      case 'formThreshold': return formThreshold
-      case 'adjQuantity': return adjQuantity
-      case 'adjReason': return adjReason
-      case 'adjPrice': return adjPrice
-      default: return ''
+  const loadData = useCallback(async () => {
+    try {
+      setItems(await window.api.stock.getAll())
+    } catch (err) {
+      toast.error(ipcErrorMessage(err, t('stock.loadFailed')))
+    } finally {
+      setLoading(false)
     }
-  }
-
-  const handleKeyboardChange = (val: string) => {
-    if (!keyboardTarget) return
-    switch (keyboardTarget.field) {
-      case 'formName': setFormName(val); break
-      case 'formNameAr': setFormNameAr(val); break
-      case 'formNameFr': setFormNameFr(val); break
-      case 'formPrice': setFormPrice(val); break
-      case 'formThreshold': setFormThreshold(val); break
-      case 'adjQuantity': setAdjQuantity(val); break
-      case 'adjReason': setAdjReason(val); break
-      case 'adjPrice': setAdjPrice(val); break
-    }
-  }
+  }, [t])
 
   useEffect(() => {
-    loadData()
-  }, [])
+    void loadData()
+  }, [loadData])
 
-  const loadData = async () => {
-    try {
-      const [all, count] = await Promise.all([
-        window.api.stock.getAll(),
-        window.api.stock.getLowStockCount()
-      ])
-      setItems(all)
-      setLowCount(count)
-    } catch (err) {
-      console.error('Failed to load stock:', err)
-    }
+  /** The name in the UI language, when it differs from the food-language name. */
+  const secondName = (item: StockItem): string => {
+    const ui = language === 'ar' ? item.name_ar : language === 'fr' ? item.name_fr : item.name
+    return ui && ui !== getName(item) ? ui : ''
   }
 
-  /** Accepts "12.5" and "12,5"; returns NaN for anything else (including empty). */
-  const parseAmount = (value: string): number => {
-    const trimmed = value.trim()
-    if (!trimmed) return Number.NaN
-    return Number(/^-?\d*,\d+$/.test(trimmed) ? trimmed.replace(',', '.') : trimmed)
-  }
-
-  const getName = (item: any) => {
-    let primary = item.name
-    if (foodLanguage === 'ar' && item.name_ar) primary = item.name_ar
-    else if (foodLanguage === 'fr' && item.name_fr) primary = item.name_fr
-
-    if (foodLanguage !== language) {
-      let translation = item.name
-      if (language === 'ar' && item.name_ar) translation = item.name_ar
-      else if (language === 'fr' && item.name_fr) translation = item.name_fr
-      if (translation !== primary) return `${primary} - (${translation})`
-    }
-    return primary
-  }
-
-  const getStatus = (item: any): 'ok' | 'low' | 'out' => {
-    if (item.quantity <= 0) return 'out'
-    if (item.quantity <= item.alert_threshold) return 'low'
-    return 'ok'
-  }
-
-  const formatQty = (item: any) => {
-    const unit = UNIT_LABELS[item.unit_type] || item.unit_type
-    if (item.unit_type === 'unit') {
-      return `${Math.round(item.quantity)} ${unit}`
-    }
-    return `${item.quantity.toFixed(2)} ${unit}`
-  }
-
-  const statusBadge = (status: string) => {
-    const map: Record<string, 'success' | 'warning' | 'danger'> = {
-      ok: 'success',
-      low: 'warning',
-      out: 'danger'
-    }
-    return <Badge variant={map[status]}>{t(`stock.${status}`)}</Badge>
-  }
-
-  const displayed = tab === 'low' ? items.filter((i) => i.quantity <= i.alert_threshold) : items
-
-  const openForm = (item?: any) => {
-    setFormError('')
-    setRecipeUsage([])
-    if (item) {
-      window.api.stock
-        .getRecipeUsage(item.id)
-        .then(setRecipeUsage)
-        .catch(() => setRecipeUsage([]))
-      setEditItem(item)
-      setFormName(item.name)
-      setFormNameAr(item.name_ar || '')
-      setFormNameFr(item.name_fr || '')
-      setFormUnitType(item.unit_type)
-      setFormPrice(String(item.price_per_unit))
-      setFormThreshold(String(item.alert_threshold))
-    } else {
-      setEditItem(null)
-      setFormName('')
-      setFormNameAr('')
-      setFormNameFr('')
-      setFormUnitType('kg')
-      setFormPrice('')
-      setFormThreshold('5')
-    }
-    setShowForm(true)
-  }
-
-  const handleSave = async () => {
-    if (saving) return
-    const price = parseAmount(formPrice)
-    const threshold = formThreshold.trim() ? parseAmount(formThreshold) : 0
-    if (!Number.isFinite(price) || price < 0) {
-      setFormError(t('stock.invalidPrice'))
-      return
-    }
-    if (!Number.isFinite(threshold) || threshold < 0) {
-      setFormError(t('stock.invalidThreshold'))
-      return
-    }
-    setFormError('')
-    setSaving(true)
-    const data = {
-      name: formName.trim(),
-      // null (not undefined) so a cleared translation is really removed.
-      name_ar: formNameAr.trim() || null,
-      name_fr: formNameFr.trim() || null,
-      unit_type: formUnitType,
-      price_per_unit: price,
-      alert_threshold: threshold
-    }
-    try {
-      if (editItem) {
-        await window.api.stock.update(editItem.id, data)
-      } else {
-        await window.api.stock.create(data)
-      }
-      setShowForm(false)
-      setKeyboardTarget(null)
-      await loadData()
-    } catch (err) {
-      setFormError(ipcErrorMessage(err, t('stock.saveFailed')))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleAdjustment = async () => {
-    if (!adjustModal || saving) return
-    const { item, type } = adjustModal
-    const quantity = parseAmount(adjQuantity)
-    const price = parseAmount(adjPrice)
-    if (type === 'purchase' ? !(quantity > 0) : !(quantity >= 0)) {
-      setAdjError(type === 'purchase' ? t('stock.invalidPurchaseQuantity') : t('stock.invalidQuantity'))
-      return
-    }
-    if (type === 'purchase' && !(price >= 0)) {
-      setAdjError(t('stock.invalidPrice'))
-      return
-    }
-    setAdjError('')
-    setSaving(true)
-    try {
-      if (type === 'fix') {
-        await window.api.stock.fix(item.id, quantity, adjReason)
-      } else if (type === 'adjust') {
-        await window.api.stock.adjust(item.id, quantity, adjReason)
-      } else if (type === 'purchase') {
-        await window.api.stock.addPurchase(item.id, quantity, price)
-      }
-      setAdjustModal(null)
-      setKeyboardTarget(null)
-      await loadData()
-    } catch (err) {
-      setAdjError(ipcErrorMessage(err, t('stock.adjustFailed')))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const openAdjust = (item: any, type: 'fix' | 'adjust' | 'purchase') => {
-    // Stock goes negative when more is sold than was recorded. A correction cannot be negative,
-    // so start from 0 and let the user type the real counted quantity.
-    setAdjQuantity(type === 'purchase' ? '' : String(Math.max(0, item.quantity)))
-    setAdjError('')
-    setAdjReason('')
-    setAdjPrice(String(item.price_per_unit))
-    setAdjustModal({ item, type })
-  }
+  const needs = items.filter((i) => stockStatus(i) !== 'ok')
+  const outCount = items.filter((i) => stockStatus(i) === 'out').length
+  const value = items.reduce((sum, i) => sum + Math.max(0, i.quantity) * i.price_per_unit, 0)
+  const needle = search.trim().toLowerCase()
+  const shown = (view === 'restock' ? needs : items)
+    .filter((i) => !needle || [i.name, i.name_ar, i.name_fr].some((n) => n?.toLowerCase().includes(needle)))
+    // Restock view: most urgent first (out, then lowest fill).
+    .sort((a, b) => (view === 'restock' ? stockLevel(a) - stockLevel(b) : 0))
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">{t('stock.title')}</h1>
-        <Button onClick={() => openForm()}>
-          <Plus className="h-4 w-4" />
-          {t('stock.addItem')}
-        </Button>
+      <PageHeader
+        icon={<Package />}
+        title={t('stock.page.title')}
+        actions={
+          <Button size="lg" icon={<Plus className="h-5 w-5" />} onClick={() => setForm({ item: null, key: Date.now() })}>
+            {t('stock.addItem')}
+          </Button>
+        }
+      />
+
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-3 mb-5">
+        <StatCard loading={loading} label={t('stock.stats.items')} value={items.length} icon={<Package />} tone="neutral" />
+        <StatCard loading={loading} label={t('stock.stats.low')} value={needs.length - outCount} icon={<AlertTriangle />} tone={needs.length - outCount ? 'warning' : 'success'} />
+        <StatCard loading={loading} label={t('stock.stats.out')} value={outCount} icon={<PackageX />} tone={outCount ? 'danger' : 'success'} />
+        <StatCard loading={loading} label={t('stock.stats.value')} value={<Money value={value} decimals={0} />} icon={<Wallet />} tone="primary" />
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 mb-4">
-        <button
-          onClick={() => setTab('all')}
-          className={`${isTouch ? 'px-5 py-3 text-base' : 'px-4 py-2 text-sm'} rounded-lg font-medium transition-colors ${
-            tab === 'all' ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600'
-          }`}
-        >
-          {t('stock.allStock')}
-        </button>
-        <button
-          onClick={() => setTab('low')}
-          className={`${isTouch ? 'px-5 py-3 text-base' : 'px-4 py-2 text-sm'} rounded-lg font-medium transition-colors flex items-center gap-2 ${
-            tab === 'low' ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600'
-          }`}
-        >
-          <AlertTriangle className="h-4 w-4" />
-          {t('stock.lowStock')}
-          {lowCount > 0 && (
-            <span className="bg-red-500 text-white text-xs rounded-full px-2 py-0.5">
-              {lowCount}
-            </span>
+      {needs.length > 0 && (
+        <div className="mb-5 rounded-2xl border border-warning/40 bg-warning-soft px-4 py-3 flex flex-wrap items-center gap-3">
+          <AlertTriangle className="h-6 w-6 text-warning-ink shrink-0" />
+          <div className="flex-1 min-w-[14rem]">
+            <p className="font-bold text-warning-ink">{t('stock.alert.title', { count: needs.length })}</p>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {needs.slice(0, 8).map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setAdjust({ item, kind: 'purchase' })}
+                  className="tap min-h-9 rounded-lg bg-surface px-2.5 flex items-center gap-1.5 text-xs font-semibold text-ink border border-line hover:border-line-strong"
+                >
+                  <span className={cn('h-2 w-2 rounded-full', BAR[stockStatus(item)])} />
+                  {getName(item)}
+                  <bdi dir="ltr" className="num text-muted">{formatQty(item)}</bdi>
+                </button>
+              ))}
+            </div>
+          </div>
+          {view !== 'restock' && (
+            <Button variant="secondary" size="lg" onClick={() => setView('restock')}>{t('stock.alert.show')}</Button>
           )}
-        </button>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <Tabs<View>
+          variant="pills"
+          value={view}
+          onChange={setView}
+          tabs={[
+            { id: 'all', label: t('stock.allStock'), count: items.length },
+            { id: 'restock', label: t('stock.lowStock'), icon: <AlertTriangle />, count: needs.length }
+          ]}
+        />
+        <div className="flex-1 min-w-[14rem]">
+          <Input
+            leading={<Search />}
+            placeholder={t('stock.search')}
+            aria-label={t('stock.search')}
+            trailing={search ? <IconButton size="sm" icon={<X />} label={t('common.close')} onClick={() => setSearch('')} /> : undefined}
+            {...kb.bind(search, setSearch)}
+          />
+        </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-xl border overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b">
-            <tr>
-              <th className="text-start px-4 py-3 font-medium text-gray-600">{t('stock.name')}</th>
-              <th className="text-start px-4 py-3 font-medium text-gray-600">{t('stock.currentQty')}</th>
-              <th className="text-start px-4 py-3 font-medium text-gray-600">{t('stock.pricePerUnit')}</th>
-              <th className="text-start px-4 py-3 font-medium text-gray-600">{t('stock.status')}</th>
-              <th className="text-end px-4 py-3 font-medium text-gray-600">{t('common.actions')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {displayed.map((item) => (
-              <tr key={item.id} className="border-b last:border-0">
-                <td className={`px-4 ${isTouch ? 'py-4' : 'py-3'} font-medium`}>{getName(item)}</td>
-                <td className={`px-4 ${isTouch ? 'py-4' : 'py-3'}`}>{formatQty(item)}</td>
-                <td className={`px-4 ${isTouch ? 'py-4' : 'py-3'}`}>{formatCurrency(item.price_per_unit)}</td>
-                <td className={`px-4 ${isTouch ? 'py-4' : 'py-3'}`}>{statusBadge(getStatus(item))}</td>
-                <td className={`px-4 ${isTouch ? 'py-4' : 'py-3'}`}>
-                  <div className="flex justify-end gap-1">
-                    <button onClick={() => openForm(item)} className={`${isTouch ? 'p-3' : 'p-1.5'} hover:bg-gray-100 rounded`} title={t('common.edit')}>
-                      <Pencil className={`${isTouch ? 'h-5 w-5' : 'h-4 w-4'} text-gray-500`} />
-                    </button>
-                    <button onClick={() => openAdjust(item, 'fix')} className={`${isTouch ? 'p-3' : 'p-1.5'} hover:bg-blue-50 rounded`} title={t('stock.fix')}>
-                      <Wrench className={`${isTouch ? 'h-5 w-5' : 'h-4 w-4'} text-blue-500`} />
-                    </button>
-                    <button onClick={() => openAdjust(item, 'adjust')} className={`${isTouch ? 'p-3' : 'p-1.5'} hover:bg-yellow-50 rounded`} title={t('stock.adjust')}>
-                      <SlidersHorizontal className={`${isTouch ? 'h-5 w-5' : 'h-4 w-4'} text-yellow-600`} />
-                    </button>
-                    <button onClick={() => openAdjust(item, 'purchase')} className={`${isTouch ? 'p-3' : 'p-1.5'} hover:bg-green-50 rounded`} title={t('stock.purchase')}>
-                      <ShoppingBag className={`${isTouch ? 'h-5 w-5' : 'h-4 w-4'} text-green-600`} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {displayed.length === 0 && (
-          <div className="text-center py-12 text-gray-400">{t('stock.noItems')}</div>
+      <div className="rounded-2xl bg-surface border border-line shadow-e1 overflow-hidden">
+        {loading ? (
+          <div className="p-5 space-y-3">{Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="h-12" />)}</div>
+        ) : shown.length === 0 ? (
+          <EmptyState
+            icon={view === 'restock' ? <CheckCircle2 /> : <Package />}
+            title={view === 'restock' ? t('stock.allGood') : items.length === 0 ? t('stock.noItems') : t('common.noResults')}
+            description={items.length === 0 ? t('stock.emptyBody') : undefined}
+            action={items.length === 0 ? <Button icon={<Plus className="h-4 w-4" />} onClick={() => setForm({ item: null, key: Date.now() })}>{t('stock.addItem')}</Button> : undefined}
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-surface-2 border-b border-line text-xs text-muted">
+                <tr>
+                  <th className="text-start font-semibold px-4 py-3">{t('stock.name')}</th>
+                  <th className="text-start font-semibold px-4 py-3">{t('stock.currentQty')}</th>
+                  <th className="text-end font-semibold px-4 py-3 hidden xl:table-cell">{t('stock.pricePerUnit')}</th>
+                  <th className="text-end font-semibold px-4 py-3 hidden 2xl:table-cell">{t('stock.value')}</th>
+                  <th className="text-start font-semibold px-4 py-3">{t('stock.status')}</th>
+                  <th className="text-end font-semibold px-4 py-3">{t('common.actions')}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {shown.map((item) => {
+                  const status = stockStatus(item)
+                  const badge = STATUS_BADGE[status]
+                  return (
+                    <tr key={item.id} className={cn(status === 'out' && 'bg-danger-soft/30', status === 'low' && 'bg-warning-soft/30')}>
+                      <td className="relative px-4 py-2.5">
+                        {status !== 'ok' && <span className={cn('absolute start-0 inset-y-2 w-1 rounded-e-full', BAR[status])} />}
+                        <p className="font-semibold text-ink">{getName(item)}</p>
+                        {secondName(item) && <p className="text-xs text-muted">{secondName(item)}</p>}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <p className={cn('num font-bold', item.quantity < 0 ? 'text-danger-ink' : 'text-ink')}>
+                          <bdi dir="ltr">{formatQty(item)}</bdi>
+                        </p>
+                        <div className="mt-1 h-1.5 w-32 rounded-full bg-surface-3 overflow-hidden">
+                          <div className={cn('h-full rounded-full', BAR[status])} style={{ width: `${stockLevel(item) * 100}%` }} />
+                        </div>
+                        <p className="mt-0.5 text-xs text-muted" title={t('stock.alertThreshold')}>
+                          ⚑ <bdi dir="ltr" className="num">{formatQty(item, item.alert_threshold)}</bdi>
+                        </p>
+                      </td>
+                      <td className="px-4 py-2.5 text-end text-ink-2 hidden xl:table-cell"><Money value={item.price_per_unit} /></td>
+                      <td className="px-4 py-2.5 text-end font-semibold text-ink hidden 2xl:table-cell"><Money value={Math.max(0, item.quantity) * item.price_per_unit} decimals={0} /></td>
+                      <td className="px-4 py-2.5">
+                        <Badge variant={badge.variant} icon={badge.icon}>{t(`stock.${status}`)}</Badge>
+                      </td>
+                      <td className="px-3 py-1.5">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant={status === 'ok' ? 'secondary' : 'soft'}
+                            size="md"
+                            className="min-h-11 whitespace-nowrap"
+                            icon={<ShoppingBag className="h-4 w-4" />}
+                            title={t('stock.restock')}
+                            aria-label={t('stock.restock')}
+                            onClick={() => setAdjust({ item, kind: 'purchase' })}
+                          >
+                            <span className="hidden xl:inline">{t('stock.restock')}</span>
+                          </Button>
+                          <IconButton icon={<SlidersHorizontal />} label={t('stock.adjust')} onClick={() => setAdjust({ item, kind: 'adjust' })} />
+                          <IconButton icon={<Wrench />} label={t('stock.fix')} onClick={() => setAdjust({ item, kind: 'fix' })} />
+                          <IconButton icon={<Pencil />} label={t('common.edit')} onClick={() => setForm({ item, key: Date.now() })} />
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
-      {/* Add/Edit Modal */}
-      <Modal isOpen={showForm} onClose={() => { setShowForm(false); setKeyboardTarget(null) }} title={editItem ? t('stock.editItem') : t('stock.addItem')}>
-        <div className="space-y-4">
-          <div className="grid grid-cols-3 gap-3">
-            <Input label={t('stock.name')} value={formName} readOnly={isTouch} onClick={isTouch ? () => setKeyboardTarget({ field: 'formName', type: 'text' }) : undefined} onChange={isTouch ? undefined : (e) => setFormName(e.target.value)} />
-            <Input label={t('menu.nameAr')} value={formNameAr} readOnly={isTouch} onClick={isTouch ? () => setKeyboardTarget({ field: 'formNameAr', type: 'text' }) : undefined} onChange={isTouch ? undefined : (e) => setFormNameAr(e.target.value)} dir="rtl" />
-            <Input label={t('menu.nameFr')} value={formNameFr} readOnly={isTouch} onClick={isTouch ? () => setKeyboardTarget({ field: 'formNameFr', type: 'text' }) : undefined} onChange={isTouch ? undefined : (e) => setFormNameFr(e.target.value)} />
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <Select
-              label={t('stock.unitType')}
-              value={formUnitType}
-              onChange={(e) => setFormUnitType(e.target.value)}
-              disabled={!!editItem && recipeUsage.length > 0}
-              options={[
-                { value: 'kg', label: t('stock.units.kg') },
-                { value: 'liter', label: t('stock.units.liter') },
-                { value: 'unit', label: t('stock.units.unit') }
-              ]}
-            />
-            <Input label={t('stock.pricePerUnit')} type={isTouch ? 'text' : 'number'} inputMode="numeric" value={formPrice} readOnly={isTouch} onClick={isTouch ? () => setKeyboardTarget({ field: 'formPrice', type: 'numeric' }) : undefined} onChange={isTouch ? undefined : (e) => setFormPrice(e.target.value)} step="0.01" />
-            <Input label={t('stock.alertThreshold')} type={isTouch ? 'text' : 'number'} inputMode="numeric" value={formThreshold} readOnly={isTouch} onClick={isTouch ? () => setKeyboardTarget({ field: 'formThreshold', type: 'numeric' }) : undefined} onChange={isTouch ? undefined : (e) => setFormThreshold(e.target.value)} />
-          </div>
-          {editItem && recipeUsage.length > 0 && (
-            <p className="text-xs text-gray-500 bg-gray-50 rounded-lg p-3">
-              {t('stock.unitLocked', {
-                items: recipeUsage.slice(0, 8).map((u) => u.menu_item_name).join(', ') +
-                  (recipeUsage.length > 8 ? ` (+${recipeUsage.length - 8})` : '')
-              })}
-            </p>
-          )}
-          {formError && (
-            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{formError}</p>
-          )}
-          <div className="flex gap-2 pt-4 border-t">
-            <Button variant="secondary" onClick={() => setShowForm(false)} disabled={saving} className="flex-1">{t('common.cancel')}</Button>
-            <Button onClick={handleSave} loading={saving} disabled={!formName.trim() || !formPrice} className="flex-1">{t('common.save')}</Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Adjustment Modal */}
-      {adjustModal && (
-        <Modal
-          isOpen
-          onClose={() => { setAdjustModal(null); setKeyboardTarget(null) }}
-          title={
-            adjustModal.type === 'fix' ? t('stock.fixTitle') :
-            adjustModal.type === 'adjust' ? t('stock.adjustTitle') :
-            t('stock.purchaseTitle')
-          }
-        >
-          <div className="space-y-4">
-            {adjustModal.type !== 'purchase' && (
-              <p className="text-sm text-gray-500 bg-gray-50 rounded-lg p-3">
-                {adjustModal.type === 'fix' ? t('stock.fixDesc') : t('stock.adjustDesc')}
-              </p>
-            )}
-            <p className="text-sm">
-              <span className="text-gray-500">{t('stock.currentQty')}:</span>{' '}
-              <strong>{formatQty(adjustModal.item)}</strong>
-            </p>
-            {adjustModal.type !== 'purchase' && adjustModal.item.quantity < 0 && (
-              <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
-                {t('stock.negativeStockNote', { qty: formatQty(adjustModal.item) })}
-              </p>
-            )}
-            <Input
-              label={adjustModal.type === 'purchase' ? t('stock.purchaseQty') : t('stock.newQuantity')}
-              type={isTouch ? 'text' : 'number'}
-              inputMode="numeric"
-              value={adjQuantity}
-              readOnly={isTouch}
-              onClick={isTouch ? () => setKeyboardTarget({ field: 'adjQuantity', type: 'numeric' }) : undefined}
-              onChange={isTouch ? undefined : (e) => setAdjQuantity(e.target.value)}
-              step="0.01"
-              min="0"
-            />
-            {adjustModal.type === 'purchase' && (
-              <>
-                <Input
-                  label={t('stock.purchasePrice')}
-                  type={isTouch ? 'text' : 'number'}
-                  inputMode="numeric"
-                  value={adjPrice}
-                  readOnly={isTouch}
-                  onClick={isTouch ? () => setKeyboardTarget({ field: 'adjPrice', type: 'numeric' }) : undefined}
-                  onChange={isTouch ? undefined : (e) => setAdjPrice(e.target.value)}
-                  step="0.01"
-                  min="0"
-                />
-                {adjQuantity && adjPrice && (
-                  <p className="text-sm font-medium">
-                    {t('stock.totalCost')}: {formatCurrency((parseAmount(adjQuantity) || 0) * (parseAmount(adjPrice) || 0))}
-                  </p>
-                )}
-              </>
-            )}
-            {adjustModal.type !== 'purchase' && (
-              <Input
-                label={t('stock.reason')}
-                value={adjReason}
-                readOnly={isTouch}
-                onClick={isTouch ? () => setKeyboardTarget({ field: 'adjReason', type: 'text' }) : undefined}
-                onChange={isTouch ? undefined : (e) => setAdjReason(e.target.value)}
-              />
-            )}
-            {adjError && (
-              <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{adjError}</p>
-            )}
-            <div className="flex gap-2 pt-4 border-t">
-              <Button variant="secondary" onClick={() => setAdjustModal(null)} disabled={saving} className="flex-1">{t('common.cancel')}</Button>
-              <Button onClick={handleAdjustment} loading={saving} className="flex-1">{t('common.confirm')}</Button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* Virtual Keyboard for touchscreen mode */}
-      {isTouch && keyboardTarget && (
-        <VirtualKeyboard
-          visible
-          type={keyboardTarget.type}
-          value={getKeyboardValue()}
-          onChange={handleKeyboardChange}
-          onClose={() => setKeyboardTarget(null)}
-        />
-      )}
+      {form && <StockItemForm key={form.key} item={form.item} onClose={() => setForm(null)} onSaved={loadData} />}
+      {adjust && <StockAdjustModal item={adjust.item} kind={adjust.kind} onClose={() => setAdjust(null)} onSaved={loadData} />}
+      {kb.keyboard}
     </div>
   )
 }

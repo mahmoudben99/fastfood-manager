@@ -1,37 +1,36 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronUp, ChevronDown, Pencil, Trash2, Plus } from 'lucide-react'
-import { Modal } from '../../components/ui/Modal'
-import { Button } from '../../components/ui/Button'
-import { Input } from '../../components/ui/Input'
-import { Badge } from '../../components/ui/Badge'
-import { VirtualKeyboard } from '../../components/VirtualKeyboard'
-import { ConfirmDialog } from './ConfirmDialog'
+import { Pencil, Plus, Trash2, X } from 'lucide-react'
+import { Badge, Button, IconButton, Input, Modal, cn, toast } from '../../components/ui'
+import { AvailabilityEditor } from '../../components/catalog-ext'
+import { categoryColor, categoryTint } from '../../theme/categoryColors'
 import { ipcErrorMessage } from '../../utils/ipcErrorMessage'
+import { InlineNotice, MoveButtons, SectionLabel, useFoodName, useTouchKeyboard } from './catalogShared'
+import type { CategoryRow, MenuRow } from './menuTypes'
 
 interface CategoryManagerProps {
   isOpen: boolean
   onClose: () => void
   /** Active categories in display order. */
-  categories: any[]
+  categories: CategoryRow[]
   /** Active menu items (used to count what each category still holds). */
-  items: any[]
-  onChanged: () => Promise<void>
-  isTouch: boolean
-  getName: (item: any) => string
+  items: MenuRow[]
+  onChanged: () => Promise<unknown>
 }
 
 type Field = 'name' | 'name_ar' | 'name_fr' | 'icon'
 const EMPTY_FORM: Record<Field, string> = { name: '', name_ar: '', name_fr: '', icon: '' }
 
-export function CategoryManager({ isOpen, onClose, categories, items, onChanged, isTouch, getName }: CategoryManagerProps) {
+/** Add, rename, reorder (fixed order = cashier muscle memory) and delete empty categories. */
+export function CategoryManager({ isOpen, onClose, categories, items, onChanged }: CategoryManagerProps) {
   const { t } = useTranslation()
+  const getName = useFoodName()
+  const kb = useTouchKeyboard()
   const [form, setForm] = useState(EMPTY_FORM)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const [confirmDelete, setConfirmDelete] = useState<any>(null)
-  const [keyboardField, setKeyboardField] = useState<Field | null>(null)
+  const [confirmId, setConfirmId] = useState<number | null>(null)
 
   const countItems = (categoryId: number) => items.filter((item) => item.category_id === categoryId).length
   const setField = (field: Field, value: string) => setForm((prev) => ({ ...prev, [field]: value }))
@@ -71,18 +70,17 @@ export function CategoryManager({ isOpen, onClose, categories, items, onChanged,
       () => (editingId ? window.api.categories.update(editingId, payload) : window.api.categories.create(payload)),
       t('menu.categories.saveFailed')
     )
-    if (ok) resetForm()
+    if (ok) {
+      toast.success(t('menu.categories.saved', { name: payload.name }))
+      resetForm()
+    }
   }
 
-  const startEdit = (category: any) => {
+  const startEdit = (category: CategoryRow) => {
     setEditingId(category.id)
     setError('')
-    setForm({
-      name: category.name || '',
-      name_ar: category.name_ar || '',
-      name_fr: category.name_fr || '',
-      icon: category.icon || ''
-    })
+    setConfirmId(null)
+    setForm({ name: category.name || '', name_ar: category.name_ar || '', name_fr: category.name_fr || '', icon: category.icon || '' })
   }
 
   const move = (index: number, direction: -1 | 1) => {
@@ -93,131 +91,97 @@ export function CategoryManager({ isOpen, onClose, categories, items, onChanged,
     void run(() => window.api.categories.reorder(ids), t('menu.categories.saveFailed'))
   }
 
-  const askDelete = (category: any) => {
+  const askDelete = (category: CategoryRow) => {
     const count = countItems(category.id)
     if (count > 0) {
       setError(t('menu.categories.notEmpty', { name: getName(category), count }))
       return
     }
     setError('')
-    setConfirmDelete(category)
+    setConfirmId(category.id)
   }
 
-  const doDelete = async () => {
-    if (!confirmDelete) return
-    const ok = await run(() => window.api.categories.delete(confirmDelete.id), t('menu.categories.deleteFailed'))
-    if (ok && editingId === confirmDelete.id) resetForm()
-    setConfirmDelete(null)
-  }
-
-  const textInput = (field: Field, label: string, extra: Record<string, unknown> = {}) => {
-    // Emoji cannot be typed on the virtual keyboard; the icon stays a plain (pasteable) field.
-    const touchField = isTouch && field !== 'icon'
-    return (
-      <Input
-        label={label}
-        value={form[field]}
-        readOnly={touchField}
-        onClick={touchField ? () => setKeyboardField(field) : undefined}
-        onChange={touchField ? undefined : (e) => setField(field, e.target.value)}
-        {...extra}
-      />
-    )
+  const doDelete = async (category: CategoryRow) => {
+    const ok = await run(() => window.api.categories.delete(category.id), t('menu.categories.deleteFailed'))
+    if (ok && editingId === category.id) resetForm()
+    if (ok) toast.success(t('menu.categories.deletedToast', { name: getName(category) }))
+    setConfirmId(null)
   }
 
   const close = () => {
     resetForm()
     setError('')
-    setKeyboardField(null)
+    setConfirmId(null)
+    kb.close()
     onClose()
   }
 
   return (
-    <>
-      <Modal isOpen={isOpen} onClose={close} title={t('menu.categories.title')} size="lg">
-        <div className="space-y-4">
-          {error && <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{error}</p>}
-
-          <div className="border rounded-lg divide-y">
-            {categories.length === 0 && (
-              <p className="text-sm text-gray-400 text-center py-6">{t('menu.categories.empty')}</p>
-            )}
-            {categories.map((category, index) => (
+    <Modal isOpen={isOpen} onClose={close} title={t('menu.categories.title')} size="xl" closeOnBackdrop={false}>
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] gap-6">
+        <div className="space-y-2 min-w-0">
+          {error && <InlineNotice>{error}</InlineNotice>}
+          {categories.length === 0 && (
+            <p className="rounded-xl border border-dashed border-line-strong py-8 text-center text-sm text-muted">{t('menu.categories.empty')}</p>
+          )}
+          {categories.map((category, index) => {
+            const confirming = confirmId === category.id
+            return (
               <div
                 key={category.id}
-                className={`flex items-center gap-2 px-3 py-2 ${editingId === category.id ? 'bg-orange-50' : ''}`}
+                className={cn(
+                  'relative flex items-center gap-2 rounded-2xl border ps-4 pe-2 py-1.5 overflow-hidden',
+                  editingId === category.id ? 'border-primary bg-primary-soft/40' : 'border-line bg-surface',
+                  confirming && 'border-danger bg-danger-soft/40'
+                )}
               >
-                <div className="flex flex-col">
-                  <button type="button" onClick={() => move(index, -1)} disabled={busy || index === 0}
-                    className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30" title={t('menu.categories.moveUp')}>
-                    <ChevronUp className="h-4 w-4" />
-                  </button>
-                  <button type="button" onClick={() => move(index, 1)} disabled={busy || index === categories.length - 1}
-                    className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30" title={t('menu.categories.moveDown')}>
-                    <ChevronDown className="h-4 w-4" />
-                  </button>
-                </div>
-                <span className="text-2xl w-8 text-center">{category.icon || ''}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-900 truncate">{getName(category)}</p>
-                  <p className="text-xs text-gray-400 truncate">
-                    {[category.name, category.name_fr, category.name_ar].filter(Boolean).join(' · ')}
-                  </p>
-                </div>
-                <Badge>{t('menu.categories.itemCount', { count: countItems(category.id) })}</Badge>
-                <Button variant="ghost" size={isTouch ? 'md' : 'sm'} onClick={() => startEdit(category)} title={t('common.edit')}>
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size={isTouch ? 'md' : 'sm'} onClick={() => askDelete(category)} title={t('common.delete')}>
-                  <Trash2 className="h-4 w-4 text-red-500" />
-                </Button>
+                <span className="absolute start-0 inset-y-0 w-1.5" style={{ background: categoryColor(category.id) }} />
+                <MoveButtons disabled={busy} canUp={index > 0} canDown={index < categories.length - 1} onUp={() => move(index, -1)} onDown={() => move(index, 1)} />
+                <span className="h-11 w-11 shrink-0 rounded-xl flex items-center justify-center text-2xl" style={{ background: categoryTint(category.id, 18) }}>
+                  {category.icon || ''}
+                </span>
+                {confirming ? (
+                  <>
+                    <p className="flex-1 min-w-0 text-sm font-semibold text-danger-ink">{t('menu.categories.deleteConfirm', { name: getName(category) })}</p>
+                    <Button variant="secondary" onClick={() => setConfirmId(null)} disabled={busy}>{t('common.cancel')}</Button>
+                    <Button variant="danger" onClick={() => void doDelete(category)} loading={busy}>{t('common.delete')}</Button>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-ink truncate">{getName(category)}</p>
+                      <p className="text-xs text-muted truncate">{[category.name, category.name_fr, category.name_ar].filter(Boolean).join(' · ')}</p>
+                    </div>
+                    <Badge variant="neutral">{t('menu.categories.itemCount', { count: countItems(category.id) })}</Badge>
+                    <IconButton icon={<Pencil />} label={t('common.edit')} onClick={() => startEdit(category)} />
+                    <IconButton icon={<Trash2 />} variant="danger" label={t('common.delete')} onClick={() => askDelete(category)} />
+                  </>
+                )}
               </div>
-            ))}
-          </div>
-
-          <div className="border-t pt-4 space-y-3">
-            <p className="text-sm font-semibold text-gray-700">
-              {editingId ? t('menu.categories.edit') : t('menu.categories.add')}
-            </p>
-            <div className="grid grid-cols-[4rem_1fr_1fr_1fr] gap-3">
-              {textInput('icon', t('menu.categories.icon'), { placeholder: '🍔', className: 'text-center text-xl' })}
-              {textInput('name', t('menu.name'))}
-              {textInput('name_ar', t('menu.nameAr'), { dir: 'rtl' })}
-              {textInput('name_fr', t('menu.nameFr'))}
-            </div>
-            <div className="flex gap-2 justify-end">
-              {editingId && (
-                <Button variant="secondary" onClick={resetForm} disabled={busy}>{t('common.cancel')}</Button>
-              )}
-              <Button onClick={save} loading={busy}>
-                {!editingId && <Plus className="h-4 w-4" />}
-                {editingId ? t('common.save') : t('menu.categories.add')}
-              </Button>
-            </div>
-          </div>
+            )
+          })}
         </div>
-      </Modal>
 
-      <ConfirmDialog
-        isOpen={!!confirmDelete}
-        title={t('menu.categories.deleteTitle')}
-        message={confirmDelete ? t('menu.categories.deleteConfirm', { name: getName(confirmDelete) }) : ''}
-        confirmLabel={t('common.delete')}
-        onConfirm={doDelete}
-        onCancel={() => setConfirmDelete(null)}
-        busy={busy}
-        zIndex={60}
-      />
-
-      {isTouch && keyboardField && (
-        <VirtualKeyboard
-          visible
-          type="text"
-          value={form[keyboardField]}
-          onChange={(value) => setField(keyboardField, value)}
-          onClose={() => setKeyboardField(null)}
-        />
-      )}
-    </>
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-line bg-surface-2/60 p-4 space-y-3">
+            <SectionLabel action={editingId ? <IconButton icon={<X />} label={t('common.cancel')} onClick={resetForm} /> : undefined}>
+              {editingId ? t('menu.categories.edit') : t('menu.categories.add')}
+            </SectionLabel>
+            <div className="grid grid-cols-[5rem_1fr] gap-3">
+              {/* Emoji cannot be typed on the virtual keyboard; the icon stays a plain (pasteable) field. */}
+              <Input label={t('menu.categories.icon')} value={form.icon} onChange={(e) => setField('icon', e.target.value)} placeholder="🍔" className="text-center" style={{ fontSize: '1.5rem' }} maxLength={8} />
+              <Input label={t('menu.name')} {...kb.bind(form.name, (v) => setField('name', v))} />
+            </div>
+            <Input label={t('menu.nameAr')} dir="rtl" {...kb.bind(form.name_ar, (v) => setField('name_ar', v), 'text', true)} />
+            <Input label={t('menu.nameFr')} {...kb.bind(form.name_fr, (v) => setField('name_fr', v))} />
+            <Button fullWidth size="lg" onClick={save} loading={busy} icon={editingId ? undefined : <Plus className="h-5 w-5" />}>
+              {editingId ? t('common.save') : t('menu.categories.add')}
+            </Button>
+          </div>
+          {editingId && <AvailabilityEditor target={{ kind: 'category', id: editingId }} />}
+        </div>
+      </div>
+      {kb.keyboard}
+    </Modal>
   )
 }

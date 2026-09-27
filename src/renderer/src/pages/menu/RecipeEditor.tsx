@@ -1,6 +1,8 @@
+import { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus, Trash2 } from 'lucide-react'
-import { Button } from '../../components/ui/Button'
+import { Button, IconButton, cn } from '../../components/ui'
+import { useTouchKeyboard } from './catalogShared'
 import {
   canonicalRecipeUnit,
   compatibleUnits,
@@ -23,7 +25,16 @@ interface RecipeEditorProps {
   getName: (item: any) => string
   /** Names of stock items that are referenced by the recipe but no longer active. */
   deletedStockNames: Record<number, string>
+  /** Heading override (option ingredients reuse this editor). */
+  title?: ReactNode
+  hint?: string
+  addLabel?: string
+  /** Shown instead of the rows when there are none. */
+  emptyText?: ReactNode
 }
+
+const selectClass =
+  'min-h-11 rounded-xl border border-line-strong bg-surface px-3 text-sm text-ink dark:bg-surface-2 focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/15 disabled:opacity-60 disabled:bg-surface-2'
 
 export function RecipeEditor({
   rows,
@@ -32,9 +43,14 @@ export function RecipeEditor({
   issues,
   showErrors,
   getName,
-  deletedStockNames
+  deletedStockNames,
+  title,
+  hint,
+  addLabel,
+  emptyText
 }: RecipeEditorProps) {
   const { t } = useTranslation()
+  const kb = useTouchKeyboard()
   const stockById = new Map(stockItems.map((stock) => [stock.id, stock]))
 
   const update = (index: number, patch: Partial<RecipeRow>) => {
@@ -72,18 +88,24 @@ export function RecipeEditor({
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-2">
-        <label className="text-sm font-medium text-gray-700">{t('menu.ingredients')}</label>
+      <div className="flex items-end justify-between gap-3 mb-2">
+        <div className="min-w-0">
+          <h3 className="text-base font-bold text-ink" title={hint ?? t('menu.recipe.unitHint')}>{title ?? t('menu.ingredients')}</h3>
+        </div>
         <Button
-          variant="ghost"
-          size="sm"
+          variant="soft"
+          size="md"
+          icon={<Plus className="h-4 w-4" />}
           onClick={() => onChange([...rows, { stock_item_id: 0, quantity: '', unit: '' }])}
         >
-          <Plus className="h-4 w-4" />
-          {t('menu.addIngredient')}
+          {addLabel ?? t('menu.addIngredient')}
         </Button>
       </div>
-      {rows.length > 0 && <p className="text-xs text-gray-400 mb-2">{t('menu.recipe.unitHint')}</p>}
+      {rows.length === 0 && (
+        <p className="rounded-xl border border-dashed border-line-strong px-4 py-5 text-center text-sm text-muted">
+          {emptyText ?? t('menu.recipe.empty')}
+        </p>
+      )}
       <div className="space-y-2">
         {rows.map((row, i) => {
           const stock = stockById.get(row.stock_item_id)
@@ -94,15 +116,17 @@ export function RecipeEditor({
           const unitOptions = unit && !allowed.includes(unit) ? [...allowed, unit] : allowed
           const issue = issues[i]
           const blocking = isBlockingIssue(issue)
-          const tone = blocking && showErrors ? 'text-red-600' : 'text-amber-600'
-          const border = blocking && showErrors ? 'border-red-300 bg-red-50' : ''
+          const errorTone = blocking && showErrors
+          const bad = errorTone ? 'border-danger bg-danger-soft/40' : ''
           return (
-            <div key={i}>
+            <div key={i} className="rounded-xl bg-surface-2/60 border border-line p-2">
               <div className="flex items-center gap-2">
                 <select
+                  data-ui="select"
                   value={row.stock_item_id}
                   onChange={(e) => pickStock(i, Number(e.target.value))}
-                  className={`flex-1 border rounded-lg px-2 py-1.5 text-sm ${border}`}
+                  className={cn(selectClass, 'flex-1 min-w-0', bad)}
+                  aria-label={t('menu.stockItem')}
                 >
                   <option value={0}>{t('menu.stockItem')}</option>
                   {row.stock_item_id > 0 && !stock && (
@@ -117,40 +141,44 @@ export function RecipeEditor({
                   ))}
                 </select>
                 <input
+                  data-ui="input"
                   type="text"
                   inputMode="decimal"
-                  value={row.quantity}
-                  onChange={(e) => update(i, { quantity: e.target.value })}
+                  {...kb.bind(row.quantity, (value) => update(i, { quantity: value }), 'numeric')}
                   placeholder={t('menu.quantity')}
-                  className={`w-24 border rounded-lg px-2 py-1.5 text-sm ${border}`}
+                  aria-label={t('menu.quantity')}
+                  className={cn(selectClass, 'num w-24 text-end', bad)}
                 />
                 <select
+                  data-ui="select"
                   value={unit}
                   onChange={(e) => update(i, { unit: e.target.value })}
                   disabled={!stock}
-                  className={`w-20 border rounded-lg px-2 py-1.5 text-sm disabled:bg-gray-100 ${border}`}
+                  className={cn(selectClass, 'w-20', bad)}
+                  aria-label={t('menu.unit')}
                 >
                   {!unit && <option value="">—</option>}
                   {unitOptions.map((u) => (
                     <option key={u} value={u}>{UNIT_LABELS[u] ?? u}</option>
                   ))}
                 </select>
-                <button
-                  type="button"
+                <IconButton
+                  icon={<Trash2 />}
+                  label={t('common.remove')}
+                  variant="danger"
                   onClick={() => onChange(rows.filter((_, idx) => idx !== i))}
-                  className="p-1 hover:bg-red-100 rounded text-gray-400 hover:text-red-500"
-                  title={t('common.remove')}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                />
               </div>
               {issue && (showErrors || !blocking || issue.kind === 'unit' || issue.kind === 'deletedStock') && (
-                <p className={`text-xs mt-1 ${tone}`}>{issueText(issue)}</p>
+                <p className={cn('text-xs font-medium mt-1.5 px-1', errorTone ? 'text-danger-ink' : 'text-warning-ink')}>
+                  {issueText(issue)}
+                </p>
               )}
             </div>
           )
         })}
       </div>
+      {kb.keyboard}
     </div>
   )
 }

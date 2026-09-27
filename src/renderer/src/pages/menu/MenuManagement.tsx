@@ -1,282 +1,273 @@
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Plus, Search, Pencil, Trash2, Tags, ArchiveRestore, X } from 'lucide-react'
-import { useAppStore } from '../../store/appStore'
-import { Button } from '../../components/ui/Button'
-import { Select } from '../../components/ui/Select'
-import { Badge } from '../../components/ui/Badge'
-import { formatCurrency } from '../../utils/formatCurrency'
+import { useSearchParams } from 'react-router-dom'
+import { PackageOpen, Plus, SlidersHorizontal, Tags, UtensilsCrossed } from 'lucide-react'
+import type { ComboDefinition, ModifierGroup } from '../../../../shared/catalog-types'
+import { Button, PageHeader, Tabs, toast } from '../../components/ui'
 import { ipcErrorMessage } from '../../utils/ipcErrorMessage'
-import { VirtualKeyboard } from '../../components/VirtualKeyboard'
-import { MenuItemForm, toRecipeRows } from './MenuItemForm'
+import { useFoodName } from './catalogShared'
 import { CategoryManager } from './CategoryManager'
-import { ConfirmDialog } from './ConfirmDialog'
+import { CombosManager } from './CombosManager'
+import { MenuItemForm, toRecipeRows, type FormTab } from './MenuItemForm'
+import { MenuItemsSection } from './MenuItemsSection'
+import type { CategoryRow, ItemFacts, MenuRow, MenuSection, StockRow } from './menuTypes'
+import { ModifiersManager } from './ModifiersManager'
 import { checkRecipeRows, isBlockingIssue } from './recipeUnits'
 
-type Notice = { tone: 'success' | 'warning' | 'error'; text: string } | null
-
-const NOTICE_STYLES = {
-  success: 'bg-green-50 border-green-200 text-green-800',
-  warning: 'bg-amber-50 border-amber-200 text-amber-800',
-  error: 'bg-red-50 border-red-200 text-red-700'
-}
+type FormState = { item: MenuRow | null; validate: boolean; combo: boolean; tab?: FormTab; key: number }
+const SECTIONS: MenuSection[] = ['items', 'groups', 'combos']
 
 export function MenuManagement() {
   const { t } = useTranslation()
-  const { foodLanguage, inputMode } = useAppStore()
-  const isTouch = inputMode === 'touchscreen'
-  const [items, setItems] = useState<any[]>([])
-  const [deletedItems, setDeletedItems] = useState<any[]>([])
-  const [categories, setCategories] = useState<any[]>([])
-  const [stockItems, setStockItems] = useState<any[]>([])
-  const [search, setSearch] = useState('')
-  const [filterCategory, setFilterCategory] = useState('')
+  const getName = useFoodName()
+  const [params, setParams] = useSearchParams()
+  const section: MenuSection = SECTIONS.includes(params.get('tab') as MenuSection) ? (params.get('tab') as MenuSection) : 'items'
+  const [loading, setLoading] = useState(true)
+  const [items, setItems] = useState<MenuRow[]>([])
+  const [deletedItems, setDeletedItems] = useState<MenuRow[]>([])
+  const [categories, setCategories] = useState<CategoryRow[]>([])
+  const [stockItems, setStockItems] = useState<StockRow[]>([])
+  const [groups, setGroups] = useState<ModifierGroup[]>([])
+  const [combos, setCombos] = useState<ComboDefinition[]>([])
+  const [facts, setFacts] = useState<Record<number, ItemFacts>>({})
+  const [autoSoldOut, setAutoSoldOut] = useState(false)
   const [showDeleted, setShowDeleted] = useState(false)
   const [showCategories, setShowCategories] = useState(false)
-  const [notice, setNotice] = useState<Notice>(null)
-  const [confirmDelete, setConfirmDelete] = useState<any>(null)
-  const [deleteError, setDeleteError] = useState('')
-  const [deleting, setDeleting] = useState(false)
-
+  const [groupRequest, setGroupRequest] = useState(0)
   // Add/edit form: remounted (fresh state) every time it opens.
-  const [form, setForm] = useState<{ item: any | null; validate: boolean; key: number } | null>(null)
+  const [form, setForm] = useState<FormState | null>(null)
 
-  // Virtual keyboard (search field; the form has its own)
-  const [searchKeyboard, setSearchKeyboard] = useState(false)
-
-  useEffect(() => {
-    loadData()
+  const loadFacts = useCallback(async (menuItems: MenuRow[], stock: StockRow[]) => {
+    const [resolvedGroups, usage] = await Promise.all([
+      Promise.all(menuItems.map((i) => window.api.modifiers.getForMenuItem(i.id).catch(() => []))),
+      Promise.all(stock.map((s) => window.api.stock.getRecipeUsage(s.id).catch(() => [])))
+    ])
+    const withRecipe = new Set(usage.flat().map((u) => u.menu_item_id))
+    setFacts(
+      Object.fromEntries(
+        menuItems.map((item, i) => [
+          item.id,
+          {
+            groups: resolvedGroups[i].length,
+            hasRecipe: withRecipe.has(item.id),
+            itemGroupIds: resolvedGroups[i].filter((g) => g.source === 'item').map((g) => g.id)
+          }
+        ])
+      )
+    )
   }, [])
 
-  const loadData = async (): Promise<any[]> => {
+  const loadData = useCallback(async (): Promise<StockRow[]> => {
     try {
-      const [menuItems, cats, stock, deleted] = await Promise.all([
+      const [menuItems, cats, stock, deleted, library, comboList, auto] = await Promise.all([
         window.api.menu.getAll(),
         window.api.categories.getAll(),
         window.api.stock.getAll(),
-        window.api.menu.getDeleted()
+        window.api.menu.getDeleted(),
+        window.api.modifiers.listGroups({ includeInactive: true }),
+        window.api.combos.list(),
+        window.api.soldOut.getAuto()
       ])
       setItems(menuItems)
       setCategories(cats)
       setStockItems(stock)
       setDeletedItems(deleted)
-      if (filterCategory && !cats.some((c: any) => String(c.id) === filterCategory)) setFilterCategory('')
+      setGroups(library)
+      setCombos(comboList)
+      setAutoSoldOut(auto)
+      void loadFacts(menuItems, stock)
       return stock
     } catch (err) {
-      setNotice({ tone: 'error', text: ipcErrorMessage(err, t('menu.loadFailed')) })
-      return stockItems
+      toast.error(ipcErrorMessage(err, t('menu.loadFailed')))
+      return []
+    } finally {
+      setLoading(false)
     }
+  }, [loadFacts, t])
+
+  useEffect(() => {
+    void loadData()
+  }, [loadData])
+
+  const setSection = (next: MenuSection) => {
+    setShowDeleted(false)
+    setParams(next === 'items' ? {} : { tab: next }, { replace: true })
   }
 
-  const getName = (item: any) => {
-    if (foodLanguage === 'ar' && item.name_ar) return item.name_ar
-    if (foodLanguage === 'fr' && item.name_fr) return item.name_fr
-    return item.name
-  }
-
-  const filtered = (showDeleted ? deletedItems : items).filter((item) => {
-    const matchSearch = getName(item).toLowerCase().includes(search.toLowerCase())
-    const matchCategory = !filterCategory || item.category_id === Number(filterCategory)
-    return matchSearch && matchCategory
-  })
-
-  const openForm = async (item?: any, validate = false) => {
+  const openForm = async (item?: MenuRow | null, opts: { validate?: boolean; combo?: boolean; tab?: FormTab } = {}) => {
     if (!item) {
-      setForm({ item: null, validate: false, key: Date.now() })
+      setForm({ item: null, validate: false, combo: !!opts.combo, tab: opts.tab, key: Date.now() })
       return
     }
     try {
       const full = await window.api.menu.getById(item.id)
-      if (full) setForm({ item: full, validate, key: Date.now() })
+      if (full) setForm({ item: full, validate: !!opts.validate, combo: false, tab: opts.tab, key: Date.now() })
     } catch (err) {
-      setNotice({ tone: 'error', text: ipcErrorMessage(err, t('menu.loadFailed')) })
+      toast.error(ipcErrorMessage(err, t('menu.loadFailed')))
     }
   }
 
-  const handleDelete = async () => {
-    if (!confirmDelete || deleting) return
-    setDeleting(true)
-    setDeleteError('')
-    try {
-      await window.api.menu.delete(confirmDelete.id)
-      setNotice({ tone: 'success', text: t('menu.deleted', { name: getName(confirmDelete) }) })
-      setConfirmDelete(null)
-      await loadData()
-    } catch (err) {
-      setDeleteError(ipcErrorMessage(err, t('menu.deleteFailed')))
-    } finally {
-      setDeleting(false)
-    }
-  }
-
-  const handleRestore = async (item: any) => {
+  const handleRestore = async (item: MenuRow) => {
     const name = getName(item)
     try {
       const { item: restored, categoryRestored } = await window.api.menu.restore(item.id)
       const stock = await loadData()
       const full = await window.api.menu.getById(restored.id)
       if (checkRecipeRows(toRecipeRows(full?.ingredients), stock).some(isBlockingIssue)) {
-        setNotice({ tone: 'warning', text: t('menu.restoredNeedsRecipeFix', { name }) })
-        await openForm(restored, true)
+        toast.warning(t('menu.restoredNeedsRecipeFix', { name }), { duration: 8000 })
+        await openForm(restored, { validate: true, tab: 'recipe' })
       } else {
-        setNotice({
-          tone: 'success',
-          text: categoryRestored
-            ? t('menu.restoredWithCategory', { name, category: restored.category_name })
-            : t('menu.restored', { name })
-        })
+        toast.success(
+          categoryRestored ? t('menu.restoredWithCategory', { name, category: restored.category_name }) : t('menu.restored', { name })
+        )
       }
     } catch (err) {
-      setNotice({ tone: 'error', text: ipcErrorMessage(err, t('menu.restoreFailed')) })
+      toast.error(ipcErrorMessage(err, t('menu.restoreFailed')))
     }
   }
 
-  const categoryOf = (item: any) => categories.find((c: any) => c.id === item.category_id)
+  const handleDelete = async (item: MenuRow) => {
+    try {
+      await window.api.menu.delete(item.id)
+      await loadData()
+      // Reversible (soft delete): an Undo toast instead of a confirmation dialog.
+      toast.info(t('menu.deletedUndo', { name: getName(item) }), {
+        action: { label: t('ui.undo'), onClick: () => void handleRestore(item) }
+      })
+    } catch (err) {
+      toast.error(ipcErrorMessage(err, t('menu.deleteFailed')))
+    }
+  }
+
+  const applySoldOut = (id: number, patch: Partial<MenuRow>) =>
+    setItems((prev) => prev.map((row) => (row.id === id ? { ...row, ...patch } : row)))
+
+  const handleSoldOut = async (item: MenuRow, soldOut: boolean, undo = true) => {
+    applySoldOut(item.id, { is_sold_out: soldOut ? 1 : 0, sold_out: soldOut ? 1 : item.sold_out })
+    try {
+      const result = await window.api.soldOut.set(item.id, soldOut)
+      applySoldOut(item.id, { is_sold_out: result.is_sold_out, sold_out: result.sold_out })
+      const name = getName(item)
+      const message = soldOut ? t('menu.soldOut.marked', { name }) : t('menu.soldOut.back', { name })
+      if (undo) toast.info(message, { id: `sold-${item.id}`, action: { label: t('ui.undo'), onClick: () => void handleSoldOut({ ...item, ...result }, !soldOut, false) } })
+      else toast.info(message, { id: `sold-${item.id}` })
+    } catch (err) {
+      applySoldOut(item.id, { is_sold_out: item.is_sold_out, sold_out: item.sold_out })
+      toast.error(ipcErrorMessage(err, t('menu.saveFailed')))
+    }
+  }
+
+  const handleAutoSoldOut = async (enabled: boolean) => {
+    setAutoSoldOut(enabled)
+    try {
+      await window.api.soldOut.setAuto(enabled)
+      await loadData()
+      toast.success(enabled ? t('menu.autoSoldOut.on') : t('menu.autoSoldOut.off'))
+    } catch (err) {
+      setAutoSoldOut(!enabled)
+      toast.error(ipcErrorMessage(err, t('menu.saveFailed')))
+    }
+  }
+
+  const activeCombos = combos.filter((c) => c.is_active === 1).length
+  const actions =
+    section === 'items' ? (
+      <>
+        <Button variant="secondary" size="lg" icon={<Tags className="h-5 w-5" />} onClick={() => setShowCategories(true)}>
+          {t('menu.categories.manage')}
+        </Button>
+        <Button size="lg" icon={<Plus className="h-5 w-5" />} onClick={() => void openForm()}>
+          {t('menu.addItem')}
+        </Button>
+      </>
+    ) : section === 'groups' ? (
+      <Button size="lg" icon={<Plus className="h-5 w-5" />} onClick={() => setGroupRequest((n) => n + 1)}>
+        {t('modifiers.newGroup')}
+      </Button>
+    ) : (
+      <Button size="lg" icon={<Plus className="h-5 w-5" />} onClick={() => void openForm(null, { combo: true })}>
+        {t('combos.newCombo')}
+      </Button>
+    )
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6 gap-2 flex-wrap">
-        <h1 className="text-2xl font-bold text-gray-900">{showDeleted ? t('menu.deletedTitle') : t('menu.title')}</h1>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => setShowCategories(true)}>
-            <Tags className="h-4 w-4" />
-            {t('menu.categories.manage')}
-          </Button>
-          <Button variant="secondary" onClick={() => setShowDeleted(!showDeleted)}>
-            <ArchiveRestore className="h-4 w-4" />
-            {showDeleted ? t('menu.hideDeleted') : t('menu.showDeleted', { count: deletedItems.length })}
-          </Button>
-          {!showDeleted && (
-            <Button onClick={() => openForm()}>
-              <Plus className="h-4 w-4" />
-              {t('menu.addItem')}
-            </Button>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        icon={<UtensilsCrossed />}
+        title={t('menu.page.title')}
+        subtitle={t('menu.page.subtitle', { items: items.length, categories: categories.length })}
+        actions={actions}
+      />
+      <Tabs<MenuSection>
+        className="mb-5"
+        value={section}
+        onChange={setSection}
+        tabs={[
+          { id: 'items', label: t('menu.tabs.items'), icon: <UtensilsCrossed />, count: items.length },
+          { id: 'groups', label: t('menu.tabs.groups'), icon: <SlidersHorizontal />, count: groups.length },
+          { id: 'combos', label: t('menu.tabs.combos'), icon: <PackageOpen />, count: activeCombos }
+        ]}
+      />
 
-      {notice && (
-        <div className={`flex items-start gap-3 mb-4 border rounded-lg p-3 text-sm ${NOTICE_STYLES[notice.tone]}`}>
-          <p className="flex-1">{notice.text}</p>
-          <button type="button" onClick={() => setNotice(null)} className="opacity-60 hover:opacity-100" title={t('common.close')}>
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      )}
-
-      {/* Filters */}
-      <div className="flex gap-3 mb-4">
-        <div className="relative flex-1">
-          <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <input
-            value={search}
-            readOnly={isTouch}
-            onClick={isTouch ? () => setSearchKeyboard(true) : undefined}
-            onChange={isTouch ? undefined : (e) => setSearch(e.target.value)}
-            placeholder={t('menu.search')}
-            className={`w-full ps-10 pe-3 ${isTouch ? 'py-3 text-base' : 'py-2 text-sm'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500`}
-          />
-        </div>
-        <Select
-          value={filterCategory}
-          onChange={(e) => setFilterCategory(e.target.value)}
-          options={[
-            { value: '', label: t('common.all') },
-            ...categories.map((c: any) => ({ value: String(c.id), label: `${c.icon ? c.icon + ' ' : ''}${getName(c)}` }))
-          ]}
-          className="w-48"
+      {section === 'items' && (
+        <MenuItemsSection
+          loading={loading}
+          items={items}
+          deletedItems={deletedItems}
+          categories={categories}
+          facts={facts}
+          autoSoldOut={autoSoldOut}
+          onAutoSoldOut={(v) => void handleAutoSoldOut(v)}
+          showDeleted={showDeleted}
+          setShowDeleted={setShowDeleted}
+          onAdd={() => void openForm()}
+          onOpen={(item) => void openForm(item)}
+          onDelete={(item) => void handleDelete(item)}
+          onRestore={(item) => void handleRestore(item)}
+          onSoldOut={(item, soldOut) => void handleSoldOut(item, soldOut)}
         />
-      </div>
-
-      {/* Items grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {filtered.map((item) => (
-          <div key={item.id} className={`bg-white rounded-xl border p-4 group ${showDeleted ? 'opacity-80' : ''}`}>
-            {item.image_path ? (
-              <div className="aspect-video rounded-lg bg-gray-100 mb-3 overflow-hidden">
-                <img src={`app-image://${item.image_path}`} alt={item.name} className="w-full h-full object-cover" />
-              </div>
-            ) : (
-              <div className="aspect-video rounded-lg bg-gradient-to-br from-orange-50 to-amber-50 mb-3 flex items-center justify-center">
-                <span className="text-4xl">{item.emoji || categoryOf(item)?.icon || '🍔'}</span>
-              </div>
-            )}
-            <h3 className="font-semibold text-gray-900">{getName(item)}</h3>
-            <div className="flex items-center justify-between mt-2 gap-2">
-              <span className="text-orange-600 font-bold">{formatCurrency(item.price)}</span>
-              <Badge variant={item.category_active === 0 ? 'warning' : 'default'}>
-                {categoryOf(item)?.icon || ''} {item.category_name}
-                {item.category_active === 0 ? ` (${t('menu.categoryDeleted')})` : ''}
-              </Badge>
-            </div>
-            {showDeleted ? (
-              <Button variant="secondary" size={isTouch ? 'md' : 'sm'} onClick={() => handleRestore(item)} className="mt-3 w-full">
-                <ArchiveRestore className="h-4 w-4" />
-                {t('menu.restore')}
-              </Button>
-            ) : (
-              <div className={`flex gap-2 mt-3 transition-opacity ${isTouch ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                <Button variant="ghost" size={isTouch ? 'md' : 'sm'} onClick={() => openForm(item)} title={t('common.edit')}>
-                  <Pencil className={isTouch ? 'h-5 w-5' : 'h-4 w-4'} />
-                </Button>
-                <Button variant="ghost" size={isTouch ? 'md' : 'sm'} onClick={() => { setDeleteError(''); setConfirmDelete(item) }} title={t('common.delete')}>
-                  <Trash2 className={`${isTouch ? 'h-5 w-5' : 'h-4 w-4'} text-red-500`} />
-                </Button>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {filtered.length === 0 && (
-        <div className="text-center py-16 text-gray-400">{showDeleted ? t('menu.noDeletedItems') : t('menu.noItems')}</div>
+      )}
+      {section === 'groups' && (
+        <ModifiersManager
+          groups={groups}
+          categories={categories}
+          items={items}
+          facts={facts}
+          stockItems={stockItems}
+          createRequest={groupRequest}
+          onChanged={loadData}
+        />
+      )}
+      {section === 'combos' && (
+        <CombosManager
+          combos={combos}
+          items={items}
+          categories={categories}
+          onCreate={() => void openForm(null, { combo: true })}
+          onEdit={(id) => {
+            const item = items.find((i) => i.id === id)
+            if (item) void openForm(item, { tab: 'combo' })
+          }}
+        />
       )}
 
       {form && (
         <MenuItemForm
           key={form.key}
           item={form.item}
+          startAsCombo={form.combo}
+          initialTab={form.tab}
           validateOnOpen={form.validate}
           categories={categories}
           stockItems={stockItems}
-          getName={getName}
-          isTouch={isTouch}
+          items={items}
+          library={groups}
           onClose={() => setForm(null)}
           onSaved={loadData}
         />
       )}
 
-      <ConfirmDialog
-        isOpen={!!confirmDelete}
-        title={t('menu.deleteTitle')}
-        message={confirmDelete ? t('menu.deleteConfirm', { name: getName(confirmDelete) }) : ''}
-        confirmLabel={t('common.delete')}
-        onConfirm={handleDelete}
-        onCancel={() => setConfirmDelete(null)}
-        busy={deleting}
-        error={deleteError}
-      />
-
-      <CategoryManager
-        isOpen={showCategories}
-        onClose={() => setShowCategories(false)}
-        categories={categories}
-        items={items}
-        onChanged={async () => { await loadData() }}
-        isTouch={isTouch}
-        getName={getName}
-      />
-
-      {/* Virtual Keyboard for touchscreen mode */}
-      {isTouch && searchKeyboard && (
-        <VirtualKeyboard
-          visible
-          type="text"
-          value={search}
-          onChange={setSearch}
-          onClose={() => setSearchKeyboard(false)}
-        />
-      )}
+      <CategoryManager isOpen={showCategories} onClose={() => setShowCategories(false)} categories={categories} items={items} onChanged={loadData} />
     </div>
   )
 }
