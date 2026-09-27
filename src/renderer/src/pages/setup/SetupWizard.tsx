@@ -20,7 +20,6 @@ export interface SetupData {
   address: string
   currency: string
   currencySymbol: string
-  logoPath: string
   password: string
   schedule: {
     day_of_week: number
@@ -52,7 +51,6 @@ export function SetupWizard() {
     address: '',
     currency: 'DZD',
     currencySymbol: 'DA',
-    logoPath: '',
     inputMode: 'keyboard',
     password: '',
     schedule: Array.from({ length: 7 }, (_, i) => ({
@@ -133,8 +131,9 @@ export function SetupWizard() {
         restaurant_phone2: data.phone2,
         restaurant_address: data.address,
         currency: data.currency,
-        currency_symbol: data.currencySymbol,
-        logo_path: data.logoPath,
+        currency_symbol: data.currencySymbol || 'DA',
+        // logo_path is written by settings:uploadLogo in the main process (contract C1). Writing
+        // it here wiped an existing logo when setup was re-run after logout.
         input_mode: data.inputMode,
         // admin_password_hash is stored by setAdminPassword above (which also provisions owner_credentials).
         // Commit the completion marker only after schedule/categories finish successfully.
