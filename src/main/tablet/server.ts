@@ -13,6 +13,7 @@ import { getDisplayHTML } from './display-ui'
 import { getBestLanIP } from './network'
 import { performAutoBackup } from '../ipc/backup.ipc'
 import { computeAutoDiscount, sanitizeOrderItems } from '../services/order-promotions'
+import { getLogoDataUrlSync } from '../services/logo'
 
 let server: http.Server | null = null
 let currentPort = 3333
@@ -63,14 +64,13 @@ function getDisplayInfoPayload(profile: string = 'default'): Record<string, unkn
   const dget = (suffix: string): string | undefined => settingsRepo.get(prefix + suffix) ?? undefined
 
   const name = settingsRepo.get('restaurant_name') || ''
-  const logoPath = settingsRepo.get('logo_path') || ''
   const currency = settingsRepo.get('currency_symbol') || settingsRepo.get('currency') || 'DA'
+  // The small stored PNG (survives restore / new PC; logo_path pointed at a missing file there).
   let logo = ''
-  if (logoPath) {
-    try {
-      const buf = readFileSync(logoPath)
-      logo = 'data:image/png;base64,' + buf.toString('base64')
-    } catch { /* logo file missing, skip */ }
+  try {
+    logo = getLogoDataUrlSync() || ''
+  } catch (error) {
+    console.warn('[Tablet] Logo unavailable for the display:', error)
   }
 
   const promos = promotionsRepo.getActivePromotions().map((p: any) => ({

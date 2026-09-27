@@ -1,11 +1,8 @@
 import { ipcMain, dialog, app } from 'electron'
-import { copyFileSync } from 'fs'
-import { join, extname } from 'path'
-import { randomUUID } from 'crypto'
 import bcrypt from 'bcryptjs'
 import { settingsRepo } from '../database/repositories/settings.repo'
-import { getLogoPath } from '../database/connection'
 import { syncAdminPassword, provisionOwnerCredential } from '../sync/owner-sync'
+import { getLogoDataUrl, importLogo, removeLogo, resolveLogoFile } from '../services/logo'
 
 // Keys that can ONLY be set through proper activation/trial flows, never from renderer
 const PROTECTED_KEYS = new Set([
@@ -19,6 +16,13 @@ const PROTECTED_KEYS = new Set([
 ])
 
 export function registerSettingsHandlers(): void {
+  // Migrate a legacy absolute logo_path into logo_data at startup, so the next backup carries it.
+  try {
+    resolveLogoFile()
+  } catch (error) {
+    console.error('[Logo] Startup logo check failed:', error)
+  }
+
   ipcMain.handle('settings:get', (_, key: string) => {
     return settingsRepo.get(key)
   })
@@ -89,6 +93,9 @@ export function registerSettingsHandlers(): void {
     return bcrypt.compareSync(password, hash)
   })
 
+  // The logo is stored as a small resized PNG inside the settings table (logo_data) so it survives
+  // a database-only backup/restore and a move to a new PC; logo_path is its materialized file.
+  // Copying the original upload (multi-MB photos) made every receipt fail to load. See services/logo.ts.
   ipcMain.handle('settings:uploadLogo', async () => {
     const result = await dialog.showOpenDialog({
       properties: ['openFile'],
@@ -96,16 +103,14 @@ export function registerSettingsHandlers(): void {
     })
 
     if (result.canceled || !result.filePaths[0]) return null
+    // Rejects with a readable message when the image cannot be decoded.
+    return importLogo(result.filePaths[0])
+  })
 
-    const sourcePath = result.filePaths[0]
-    const ext = extname(sourcePath)
-    const fileName = `logo_${randomUUID()}${ext}`
-    const destPath = join(getLogoPath(), fileName)
+  ipcMain.handle('settings:getLogoDataUrl', () => getLogoDataUrl())
 
-    copyFileSync(sourcePath, destPath)
-    settingsRepo.set('logo_path', destPath)
-
-    return destPath
+  ipcMain.handle('settings:removeLogo', () => {
+    removeLogo()
   })
 
   ipcMain.handle('settings:selectFolder', async () => {

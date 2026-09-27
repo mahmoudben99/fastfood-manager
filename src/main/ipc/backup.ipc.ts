@@ -10,6 +10,7 @@ import {
   startPrintJobProcessor,
   stopPrintJobProcessor
 } from './printer.ipc'
+import { resolveLogoFile } from '../services/logo'
 
 let scheduledBackupInterval: ReturnType<typeof setInterval> | null = null
 let lastScheduledBackupDate: string | null = null
@@ -270,7 +271,8 @@ export function registerBackupHandlers(): void {
       const rollback = validateBackupFile(rollbackPath)
       if (!rollback.ok) throw new Error(`Could not verify the safety backup: ${rollback.error}`)
 
-      stopPrintJobProcessor()
+      // Let any in-flight ticket finish before its database handle closes.
+      await stopPrintJobProcessor()
       closeDatabase()
       try {
         removeDatabaseFiles(dbPath)
@@ -281,6 +283,13 @@ export function registerBackupHandlers(): void {
         // Always overwrite these values, including empty ones, so a backup cannot inject an
         // activation into a currently unactivated machine.
         settingsRepo.setMultiple(activationSettings)
+
+        // The logo travels inside the database (logo_data): re-create its file for this PC now.
+        try {
+          resolveLogoFile()
+        } catch (logoError) {
+          console.error('[Backup] Restored database, but its logo could not be restored:', logoError)
+        }
       } catch (restoreError) {
         // Put the verified pre-restore snapshot back and reopen it before reporting failure.
         try { closeDatabase() } catch { /* not open */ }

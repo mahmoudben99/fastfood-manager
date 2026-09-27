@@ -10,6 +10,7 @@ import { createHash } from 'crypto'
 import { getLanIPs } from '../tablet/network'
 import { getCurrentPort } from '../tablet/server'
 import { getPairingCode } from '../tablet/pairing'
+import { LOGO_DATA_KEY, resolveLogoFile } from '../services/logo'
 
 function generateShortCode(): string {
   // 4-digit numeric code
@@ -109,12 +110,13 @@ export async function syncDisplaySettings(profileName: string = 'default'): Prom
 
     // Gather all display settings
     const allSettings = settingsRepo.getAll()
-    const displayKeys = Object.keys(allSettings).filter(k =>
+    // Whitelist; the base64 logo (LOGO_DATA_KEY) must never ride along — it is uploaded as media below.
+    const displayKeys = Object.keys(allSettings).filter(k => k !== LOGO_DATA_KEY && (
       (k.startsWith('display_') && !k.endsWith('_slideshow_images')) ||
       k === 'restaurant_name' || k === 'restaurant_phone' ||
       k === 'restaurant_phone2' || k === 'restaurant_address' ||
       k === 'social_media' || k === 'currency' || k === 'currency_symbol' || k === 'language'
-    )
+    ))
 
     const settings: Record<string, string> = {}
     for (const key of displayKeys) {
@@ -123,7 +125,14 @@ export async function syncDisplaySettings(profileName: string = 'default'): Prom
 
     // Store artwork outside the JSON row. Base64 settings made a cloud refresh allocate every
     // image in the TV WebView at once.
-    const logoPath = allSettings.logo_path
+    // The logo file is re-materialized from the stored PNG after a restore / new PC (logo_path
+    // alone pointed at a file that no longer existed there).
+    let logoPath: string | null = null
+    try {
+      logoPath = resolveLogoFile()
+    } catch (error) {
+      console.warn('[CloudSync] Could not resolve the logo file:', error)
+    }
     if (logoPath) {
       try {
         settings._logo_url = await uploadTvMedia(mediaAccessToken, machineId, profileName, 'logo', logoPath)
