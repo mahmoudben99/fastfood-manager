@@ -37,8 +37,11 @@ export interface SetupImportIngredient {
   menu_item_name: string
   stock_item_name: string
   quantity: number
-  unit: 'g' | 'kg' | 'ml' | 'l' | 'liter' | 'litre' | 'unit'
+  unit: SetupImportRecipeUnit
 }
+
+export type SetupImportStockUnit = 'kg' | 'liter' | 'unit'
+export type SetupImportRecipeUnit = 'g' | 'kg' | 'ml' | 'liter' | 'unit'
 
 export interface SetupImportPayload {
   categories: SetupImportCategory[]
@@ -72,8 +75,69 @@ export const SETUP_IMPORT_LIMITS = {
   ingredients: 25_000
 } as const
 
-const STOCK_UNITS = new Set(['kg', 'liter', 'unit'])
-const RECIPE_UNITS = new Set(['g', 'kg', 'ml', 'l', 'liter', 'litre', 'unit'])
+// Keep this module import-free: unit tests load it directly with Node's type stripping.
+const MASS_KG = ['kg', 'kgs', 'kilo', 'kilos', 'kilogram', 'kilograms', 'kilogramme', 'kilogrammes', 'كغ', 'كلغ', 'كيلو', 'كيلوغرام']
+const MASS_G = ['g', 'gr', 'grs', 'gram', 'grams', 'gramme', 'grammes', 'غ', 'غرام']
+const VOLUME_L = ['l', 'lt', 'ltr', 'liter', 'liters', 'litre', 'litres', 'لتر']
+const VOLUME_ML = ['ml', 'milliliter', 'milliliters', 'millilitre', 'millilitres', 'مل']
+const COUNT = ['unit', 'units', 'u', 'pc', 'pcs', 'piece', 'pieces', 'pièce', 'pièces', 'unité', 'unités', 'unite', 'unites', 'وحدة', 'قطعة', 'حبة']
+
+const STOCK_UNIT_ALIASES = new Map<string, SetupImportStockUnit>([
+  ...MASS_KG.map((alias) => [alias, 'kg'] as const),
+  ...VOLUME_L.map((alias) => [alias, 'liter'] as const),
+  ...COUNT.map((alias) => [alias, 'unit'] as const)
+])
+const RECIPE_UNIT_ALIASES = new Map<string, SetupImportRecipeUnit>([
+  ...MASS_G.map((alias) => [alias, 'g'] as const),
+  ...MASS_KG.map((alias) => [alias, 'kg'] as const),
+  ...VOLUME_ML.map((alias) => [alias, 'ml'] as const),
+  ...VOLUME_L.map((alias) => [alias, 'liter'] as const),
+  ...COUNT.map((alias) => [alias, 'unit'] as const)
+])
+
+function unitKey(value: string): string {
+  return value.trim().normalize('NFKC').toLocaleLowerCase('fr-FR').replace(/\.$/, '')
+}
+
+/** "KG", "Kilo", "litre", "L", "pcs", "pièce", "وحدة" … → kg | liter | unit. */
+export function normalizeStockUnit(value: string): SetupImportStockUnit | undefined {
+  return STOCK_UNIT_ALIASES.get(unitKey(value))
+}
+
+/** Recipe units additionally accept g and ml; litre spellings become "liter". */
+export function normalizeRecipeUnit(value: string): SetupImportRecipeUnit | undefined {
+  return RECIPE_UNIT_ALIASES.get(unitKey(value))
+}
+
+/** The recipe units a stock item tracked in `stockUnit` can be written in. */
+export function recipeUnitsForStock(stockUnit: SetupImportStockUnit): SetupImportRecipeUnit[] {
+  if (stockUnit === 'kg') return ['g', 'kg']
+  if (stockUnit === 'liter') return ['ml', 'liter']
+  return ['unit']
+}
+
+/**
+ * Parse a number typed into a spreadsheet cell. "0,5" (French/Arabic decimal comma) is accepted
+ * when unambiguous: one comma, no dot, and not shaped like a thousands group ("1,200" could be
+ * 1.2 or 1200, so it is refused rather than guessed).
+ */
+export function parseSetupImportNumber(value: unknown): number | 'ambiguous' | undefined {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  let normalized = trimmed
+  const commas = (trimmed.match(/,/g) || []).length
+  if (commas > 0) {
+    if (commas > 1 || trimmed.includes('.')) return undefined
+    if (/^[-+]?[1-9]\d{0,2},\d{3}$/.test(trimmed)) return 'ambiguous'
+    normalized = trimmed.replace(',', '.')
+  }
+  if (!/^[-+]?(\d+\.?\d*|\.\d+)$/.test(normalized)) return undefined
+  const parsed = Number(normalized)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
 const WORKER_ROLES = new Set(['cook', 'server', 'cleaner', 'cashier', 'other'])
 
 function record(value: unknown, label: string): Record<string, unknown> {
@@ -136,13 +200,8 @@ function assertUniqueNames(items: { name: string }[], label: string): void {
   }
 }
 
-function recipeUnitMatchesStock(recipeUnit: string, stockUnit: string): boolean {
-  if (stockUnit === 'kg') return recipeUnit === 'g' || recipeUnit === 'kg'
-  if (stockUnit === 'liter') {
-    return recipeUnit === 'ml' || recipeUnit === 'l' || recipeUnit === 'liter' || recipeUnit === 'litre'
-  }
-  return stockUnit === 'unit' && recipeUnit === 'unit'
-}
+const STOCK_UNIT_LABEL: Record<SetupImportStockUnit, string> = { kg: 'kg', liter: 'L (liter)', unit: 'unit (pcs)' }
+const RECIPE_UNIT_HINT: Record<SetupImportStockUnit, string> = { kg: 'g or kg', liter: 'ml or L', unit: 'unit' }
 
 /**
  * Treat every IPC payload as untrusted. This normalizes it and verifies every cross-sheet
@@ -189,16 +248,18 @@ export function validateSetupImportPayload(value: unknown): SetupImportPayload {
 
   const stockItems: SetupImportStockItem[] = rawStockItems.map((value, index) => {
     const row = record(value, `Stock Items row ${index + 2}`)
-    const unit = text(row.unit_type, `Stock Items row ${index + 2}: Unit_Type`, 20)!
-      .toLocaleLowerCase('en-US')
-    if (!STOCK_UNITS.has(unit)) {
-      throw new Error(`Stock Items row ${index + 2}: Unit_Type must be kg, liter or unit`)
+    const rawUnit = text(row.unit_type, `Stock Items row ${index + 2}: Unit_Type`, 20)!
+    const unit = normalizeStockUnit(rawUnit)
+    if (!unit) {
+      throw new Error(
+        `Stock Items row ${index + 2}: Unit_Type "${rawUnit}" is not recognised. Use kg, L (liter) or unit (pcs)`
+      )
     }
     return {
       name: text(row.name, `Stock Items row ${index + 2}: Name`)!,
       name_ar: text(row.name_ar, `Stock Items row ${index + 2}: Name_AR`, 200, true),
       name_fr: text(row.name_fr, `Stock Items row ${index + 2}: Name_FR`, 200, true),
-      unit_type: unit as SetupImportStockItem['unit_type'],
+      unit_type: unit,
       quantity: numberInRange(row.quantity, `Stock Items row ${index + 2}: Initial_Quantity`, 0),
       price_per_unit: numberInRange(
         row.price_per_unit,
@@ -306,12 +367,22 @@ export function validateSetupImportPayload(value: unknown): SetupImportPayload {
         `Ingredients row ${index + 2}: stock item "${stockName}" does not exist in Stock Items`
       )
     }
-    const unit = text(row.unit, `Ingredients row ${index + 2}: Unit`, 20)!
-      .toLocaleLowerCase('en-US')
-    if (!RECIPE_UNITS.has(unit)) {
-      throw new Error(`Ingredients row ${index + 2}: unsupported recipe unit "${unit}"`)
+    // Never guess a blank unit: "150" of a kg item used to be imported as 150 kg per sale.
+    // A blank unit is only unambiguous for items counted in pieces.
+    const rawUnit =
+      text(row.unit, `Ingredients row ${index + 2}: Unit`, 20, true) ??
+      (stock.unit_type === 'unit' ? 'unit' : undefined)
+    if (!rawUnit) {
+      throw new Error(
+        `Ingredients row ${index + 2}: Unit is required for "${stockName}" ` +
+          `(stock counted in ${STOCK_UNIT_LABEL[stock.unit_type]}). Write ${RECIPE_UNIT_HINT[stock.unit_type]}`
+      )
     }
-    if (!recipeUnitMatchesStock(unit, stock.unit_type)) {
+    const unit = normalizeRecipeUnit(rawUnit)
+    if (!unit) {
+      throw new Error(`Ingredients row ${index + 2}: unsupported recipe unit "${rawUnit}"`)
+    }
+    if (!recipeUnitsForStock(stock.unit_type).includes(unit)) {
       throw new Error(
         `Ingredients row ${index + 2}: ${unit} is incompatible with stock unit ${stock.unit_type}`
       )
@@ -327,7 +398,7 @@ export function validateSetupImportPayload(value: unknown): SetupImportPayload {
       menu_item_name: menuName,
       stock_item_name: stockName,
       quantity: numberInRange(row.quantity, `Ingredients row ${index + 2}: Quantity`, Number.MIN_VALUE),
-      unit: unit as SetupImportIngredient['unit']
+      unit
     }
   })
 
