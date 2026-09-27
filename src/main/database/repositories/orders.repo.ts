@@ -6,6 +6,8 @@ import {
   type OrderStatus
 } from '../../services/order-service'
 import { orderEditRejectedMessage } from '../../../shared/order-edit'
+import { attachCatalogDetails } from '../../services/order-catalog-effects'
+import type { OrderLineComboChildInput, OrderLineModifierInput } from '../../services/order-catalog'
 
 const ORDER_TYPES = new Set(['local', 'takeout', 'delivery'])
 
@@ -57,6 +59,34 @@ export interface OrderItem {
   menu_item_name_ar?: string | null
   menu_item_name_fr?: string | null
   worker_name?: string
+  /** v4 catalog (migration 021): 'item' | 'combo' (parent, the price paid) | 'combo_child'. */
+  line_kind?: string
+  parent_order_item_id?: number | null
+  combo_slot_id?: number | null
+  combo_upcharge?: number
+  /** Combo children: their share of the combo line total (for per-item reports). */
+  allocated_revenue?: number | null
+  /** Sale-time snapshot of the chosen options (order_item_modifiers rows). */
+  modifiers?: OrderItemModifier[]
+  /** Combo children: display name of their combo line. */
+  combo_name?: string | null
+}
+
+export interface OrderItemModifier {
+  id: number
+  order_item_id: number
+  option_id: number | null
+  group_id: number | null
+  group_name: string | null
+  name: string
+  name_ar: string | null
+  name_fr: string | null
+  kind: 'none' | 'extra' | 'light' | 'no'
+  /** Per unit of the option. */
+  price_delta: number
+  /** Units per ONE unit of the line. */
+  quantity: number
+  sort_order: number
 }
 
 /** Legacy renderer/server input, adapted into the one injected order core below. */
@@ -77,7 +107,12 @@ export interface CreateOrderInput {
     quantity: number
     notes?: string
     worker_id?: number
+    /** POS only: FINAL unit price (base + options). Omit to let the server price the line. */
     unit_price?: number
+    /** v4 catalog: omit = default options, [] = none. */
+    modifiers?: OrderLineModifierInput[]
+    /** v4 catalog, combos only: omit = default picks. */
+    children?: OrderLineComboChildInput[]
   }[]
 }
 
@@ -88,6 +123,9 @@ export interface UpdateOrderItemInput {
   notes?: string
   worker_id?: number | null
   unit_price?: number
+  /** v4 catalog: existing line — omit = keep; new line — omit = defaults. */
+  modifiers?: OrderLineModifierInput[]
+  children?: OrderLineComboChildInput[]
 }
 
 function serviceError(result: { code: string; message: string }): Error {
@@ -120,7 +158,9 @@ export const ordersRepo = {
         quantity: item.quantity,
         note: item.notes,
         workerId: item.worker_id,
-        unitPriceOverride: item.unit_price
+        unitPriceOverride: item.unit_price,
+        modifiers: item.modifiers,
+        children: item.children
       })),
       // Production callers pass the cart/server's promotion snapshot explicitly.
       applyAutoPromotions: input.discount_amount === undefined,
@@ -148,7 +188,8 @@ export const ordersRepo = {
   getOrderItems(orderId: number): OrderItem[] {
     // Lines show the name they were SOLD under (migration 019 snapshot). The localized variants
     // follow the same snapshot so a renamed/reused item never mixes old and new names.
-    return getDb().prepare(
+    // v4 catalog: combo children follow their combo line; every line carries its option snapshot.
+    return attachCatalogDetails(getDb(), getDb().prepare(
       `SELECT oi.*, COALESCE(oi.item_name, mi.name) AS menu_item_name,
               CASE WHEN oi.item_name IS NOT NULL THEN oi.item_name_ar ELSE mi.name_ar END AS menu_item_name_ar,
               CASE WHEN oi.item_name IS NOT NULL THEN oi.item_name_fr ELSE mi.name_fr END AS menu_item_name_fr,
@@ -156,8 +197,8 @@ export const ordersRepo = {
        FROM order_items oi
        LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
        LEFT JOIN workers w ON oi.worker_id = w.id
-       WHERE oi.order_id = ? ORDER BY oi.id`
-    ).all(orderId) as OrderItem[]
+       WHERE oi.order_id = ? ORDER BY COALESCE(oi.parent_order_item_id, oi.id), oi.id`
+    ).all(orderId) as OrderItem[]) as OrderItem[]
   },
 
   getByDate(date: string): Order[] {
@@ -255,7 +296,9 @@ export const ordersRepo = {
         quantity: item.quantity,
         note: item.notes,
         workerId: item.worker_id as number | undefined,
-        unitPriceOverride: item.unit_price
+        unitPriceOverride: item.unit_price,
+        modifiers: item.modifiers,
+        children: item.children
       })),
       discountAmount,
       discountDetails,

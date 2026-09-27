@@ -1,5 +1,6 @@
 import { menuRepo } from '../database/repositories/menu.repo'
 import { promotionsRepo } from '../database/repositories/promotions.repo'
+import { sanitizeCatalogFields, type OrderLineComboChildInput, type OrderLineModifierInput } from './order-catalog'
 
 /**
  * Server-side promotion pricing for orders that do NOT come from the POS renderer.
@@ -83,6 +84,9 @@ export interface SanitizedOrderItem {
   menu_item_id: number
   quantity: number
   notes?: string
+  /** v4 catalog: option / combo-pick ids only (prices are always read from the database). */
+  modifiers?: OrderLineModifierInput[]
+  children?: OrderLineComboChildInput[]
 }
 
 export function sanitizeOrderItems(rawItems: unknown): SanitizedOrderItem[] {
@@ -97,10 +101,13 @@ export function sanitizeOrderItems(rawItems: unknown): SanitizedOrderItem[] {
     if (!Number.isInteger(qty) || qty <= 0 || qty > MAX_ITEM_QUANTITY) return []
     totalUnits += qty
     if (totalUnits > MAX_ORDER_UNITS) return []
+    const catalog = sanitizeCatalogFields(it)
+    if (!catalog) return []
     out.push({
       menu_item_id: id,
       quantity: qty,
-      notes: typeof it?.notes === 'string' ? it.notes.slice(0, 500) : undefined
+      notes: typeof it?.notes === 'string' ? it.notes.slice(0, 500) : undefined,
+      ...catalog
     })
   }
   return out

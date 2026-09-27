@@ -12,6 +12,23 @@ import {
   type KitchenLineChange,
   type KitchenLineSnapshot
 } from './print-routing'
+// v4 catalog (modifiers + combos + sold out): validation in order-catalog, DB effects in
+// order-catalog-effects. order-service only calls them at a few marked points.
+import { catalogLang } from './catalog-common'
+import {
+  prepareCatalogLine,
+  type CatalogContext,
+  type OrderLineComboChildInput,
+  type OrderLineModifierInput
+} from './order-catalog'
+import {
+  applyCatalogLine,
+  applyExistingLineCatalogEdit,
+  kitchenModifierKeys,
+  kitchenSnapshots,
+  kitchenStations,
+  planExistingLineCatalogEdit
+} from './order-catalog-effects'
 
 export type OrderSource = 'pos' | 'tablet' | 'remote'
 export type OrderStatus = 'pending' | 'preparing' | 'completed' | 'cancelled'
@@ -19,9 +36,17 @@ export type OrderStatus = 'pending' | 'preparing' | 'completed' | 'cancelled'
 export interface OrderLineInput {
   menuItemId: number
   quantity: number
+  /**
+   * POS only: the FINAL unit price of the line (base + options [+ combo extras]). Omit it to let
+   * the server price the line from the database. Tablet/remote overrides are always ignored.
+   */
   unitPriceOverride?: number
   note?: string
   workerId?: number
+  /** v4 catalog: chosen options. Omitted = the item's default options; [] = none. */
+  modifiers?: OrderLineModifierInput[]
+  /** v4 catalog, combo items only: one entry per chosen item. Omitted = each slot's defaults. */
+  children?: OrderLineComboChildInput[]
 }
 
 export interface CreateOrderInput {
@@ -128,6 +153,9 @@ interface OrderItemRow {
   total_price: number
   notes: string | null
   worker_id: number | null
+  /** v4 catalog (migration 021). */
+  parent_order_item_id?: number | null
+  line_kind?: string | null
 }
 
 interface DeductionRow {
@@ -372,6 +400,11 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
     const row = db.prepare('SELECT * FROM orders WHERE source = ? AND source_request_id = ?').get(source, sourceRequestId) as OrderRow | undefined
     return row ? createResult(row, true) : undefined
   }
+  // v4 catalog: modifier/combo/sold-out refusals surface as this service's DomainError.
+  const catalogContext = (lineIndex?: number): CatalogContext => ({
+    lang: catalogLang(db),
+    fail: (code, message) => new DomainError(code, message, lineIndex)
+  })
 
   function createOrder(input: CreateOrderInput): CreateOrderResult {
     try {
@@ -425,12 +458,16 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
             }
           }
 
-          const unitPrice = input.source === 'pos' ? line.unitPriceOverride ?? menu.price : menu.price
+          // v4 catalog: sold-out check, options, combo picks (prices from the DB, never the client).
+          const catalog = prepareCatalogLine(db, menu, line, catalogContext(index))
+          if (catalog.isCombo) workerId = null // a combo parent is not cooked; its children route
+          const computedUnit = Math.max(0, menu.price + catalog.extrasPerUnit)
+          const unitPrice = input.source === 'pos' ? line.unitPriceOverride ?? computedUnit : computedUnit
           const lineTotal = unitPrice * line.quantity
           if (!Number.isFinite(lineTotal) || lineTotal < 0 || lineTotal > MAX_MONEY) {
             throw new DomainError('invalid_input', 'Order total is outside the supported range', index)
           }
-          return { line, menu, ingredients, workerId, unitPrice, lineTotal }
+          return { line, menu, ingredients, workerId, unitPrice, lineTotal, catalog, computedUnit }
         })
 
         const rawSubtotal = lines.reduce((sum, line) => sum + line.lineTotal, 0)
@@ -527,12 +564,12 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
             entry.menu.name_fr ?? null
           ).lastInsertRowid)
 
-          if (input.source === 'pos' && entry.line.unitPriceOverride !== undefined && entry.unitPrice !== entry.menu.price) {
+          if (input.source === 'pos' && entry.line.unitPriceOverride !== undefined && entry.unitPrice !== entry.computedUnit) {
             recordAuditEvent(db, {
               eventType: 'price_override',
               orderId,
               orderItemId: itemId,
-              originalValue: String(entry.menu.price),
+              originalValue: String(entry.computedUnit),
               newValue: String(entry.unitPrice),
               operator: input.operator?.trim() || 'POS',
               reason: 'POS price override'
@@ -563,9 +600,16 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
               `Order #${daily.last_order_num}`
             )
           }
+          // v4 catalog: option snapshots + their stock, combo children (+ recipes) and allocation.
+          applyCatalogLine(
+            db,
+            { orderId, adjustmentType: 'order_deduction', reason: `Order #${daily.last_order_num}` },
+            { itemId, prepared: entry.catalog, quantity: entry.line.quantity, lineTotal: entry.lineTotal }
+          )
         }
 
-        const workerGroups = lines.map((line) => ({ worker_id: line.workerId }))
+        // Combo children print at their own stations; the combo parent line never prints.
+        const workerGroups = kitchenStations(db, orderId)
         const ids = enqueueAutomaticPrintJobs(db, orderId, workerGroups, 'new')
         enqueueOutbox(db, orderId, 'created', true)
         return createResult(current(orderId)!, false, ids)
@@ -635,8 +679,7 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
       return db.transaction(() => {
         updateHeaderWithinTransaction(order, input)
         if (kitchenRelevantChange) {
-          const items = db.prepare('SELECT worker_id FROM order_items WHERE order_id = ?').all(input.orderId) as { worker_id: number | null }[]
-          enqueueAutomaticPrintJobs(db, input.orderId, items, 'updated')
+          enqueueAutomaticPrintJobs(db, input.orderId, kitchenStations(db, input.orderId), 'updated')
         }
         enqueueOutbox(db, input.orderId, 'updated')
         return updateResult(current(input.orderId)!)
@@ -672,8 +715,15 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
       return db.transaction(() => {
         const oldItems = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(input.orderId) as OrderItemRow[]
         const oldById = new Map(oldItems.map((item) => [item.id, item]))
+        // v4 catalog: combo children are managed through their parent line. Lines pointing at a
+        // child row (older clients send every row back) are ignored; children follow the parent.
+        const editLines = input.lines.filter((line) =>
+          line.orderItemId === undefined || oldById.get(line.orderItemId)?.parent_order_item_id == null)
+        if (editLines.length === 0) throw new DomainError('invalid_input', `Order must contain 1 to ${MAX_LINES} lines`)
+        const oldModifierKeys = kitchenModifierKeys(db, input.orderId)
+        let catalogKitchenChange = false
         const retained = new Set<number>()
-        for (const line of input.lines) {
+        for (const line of editLines) {
           if (line.orderItemId === undefined) continue
           const old = oldById.get(line.orderItemId)
           if (!old) throw new DomainError('invalid_input', 'An edited order line no longer exists')
@@ -682,9 +732,12 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
           }
           retained.add(old.id)
         }
+        for (const old of oldItems) {
+          if (old.parent_order_item_id != null && retained.has(old.parent_order_item_id)) retained.add(old.id)
+        }
         const kitchenRelevantChange =
           retained.size !== oldItems.length ||
-          input.lines.some((line) => {
+          editLines.some((line) => {
             if (line.orderItemId === undefined) return true
             const old = oldById.get(line.orderItemId)!
             const nextWorker = line.workerId === undefined ? old.worker_id : line.workerId
@@ -734,11 +787,16 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
            VALUES (?, ?, ?, ?)`
         )
 
-        for (const line of input.lines) {
+        const catalogWrite = { orderId: input.orderId, adjustmentType: 'order_edit' as const, reason: `Order #${order.daily_number} edit` }
+        for (const line of editLines) {
           if (line.orderItemId !== undefined) {
             const old = oldById.get(line.orderItemId)!
-            // Critical edit-safety invariant: absence of an explicit override preserves the snapshot price.
-            const unitPrice = line.unitPriceOverride ?? old.unit_price
+            // v4 catalog: a changed option set / combo pick set is validated first (no writes yet).
+            const catalogEdit = planExistingLineCatalogEdit(db, old, line, catalogContext())
+            if (catalogEdit.changed) catalogKitchenChange = true
+            // Critical edit-safety invariant: absence of an explicit override preserves the snapshot
+            // price (catalogEdit.computedUnit === old.unit_price unless options/picks changed).
+            const unitPrice = line.unitPriceOverride ?? catalogEdit.computedUnit
             const lineTotal = unitPrice * line.quantity
             if (!Number.isFinite(lineTotal) || lineTotal < 0 || rawSubtotal + lineTotal > MAX_MONEY) {
               throw new DomainError('invalid_input', 'Order total is outside the supported range')
@@ -778,12 +836,13 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
               old.id,
               input.orderId
             )
-            if (unitPrice !== old.unit_price) {
+            applyExistingLineCatalogEdit(db, catalogWrite, catalogEdit, { quantity: line.quantity, lineTotal })
+            if (unitPrice !== catalogEdit.computedUnit) {
               recordAuditEvent(db, {
                 eventType: 'price_override',
                 orderId: input.orderId,
                 orderItemId: old.id,
-                originalValue: String(old.unit_price),
+                originalValue: String(catalogEdit.computedUnit),
                 newValue: String(unitPrice),
                 operator: input.operator?.trim() || 'POS',
                 reason: 'Order line price edited'
@@ -795,7 +854,10 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
 
           const menu = db.prepare('SELECT * FROM menu_items WHERE id = ? AND is_active = 1').get(line.menuItemId) as any
           if (!menu) throw new DomainError('inactive_item', 'A newly added menu item is unavailable')
-          const unitPrice = line.unitPriceOverride ?? menu.price
+          // v4 catalog: sold-out check, options, combo picks for the added line.
+          const catalog = prepareCatalogLine(db, menu, line, catalogContext())
+          const computedUnit = Math.max(0, menu.price + catalog.extrasPerUnit)
+          const unitPrice = line.unitPriceOverride ?? computedUnit
           const lineTotal = unitPrice * line.quantity
           if (!Number.isFinite(lineTotal) || lineTotal < 0 || rawSubtotal + lineTotal > MAX_MONEY) {
             throw new DomainError('invalid_input', 'Order total is outside the supported range')
@@ -810,6 +872,7 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
                WHERE wc.category_id = ? AND w.is_active = 1 ORDER BY w.id LIMIT 1`
             ).get(menu.category_id) as { id: number } | undefined)?.id ?? null
           }
+          if (catalog.isCombo) workerId = null // a combo parent is not cooked; its children route
 
           const itemId = Number(insertItem.run(
             input.orderId,
@@ -823,12 +886,12 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
             menu.name_ar ?? null,
             menu.name_fr ?? null
           ).lastInsertRowid)
-          if (line.unitPriceOverride !== undefined && unitPrice !== menu.price) {
+          if (line.unitPriceOverride !== undefined && unitPrice !== computedUnit) {
             recordAuditEvent(db, {
               eventType: 'price_override',
               orderId: input.orderId,
               orderItemId: itemId,
-              originalValue: String(menu.price),
+              originalValue: String(computedUnit),
               newValue: String(unitPrice),
               operator: input.operator?.trim() || 'POS',
               reason: 'Price override on added order line'
@@ -850,6 +913,7 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
             adjustStock(ingredient.stock_item_id, -deduction, `Order #${order.daily_number} edit: added line`)
             insertDeduction.run(itemId, ingredient.stock_item_id, deduction, ingredient.price_per_unit)
           }
+          applyCatalogLine(db, catalogWrite, { itemId, prepared: catalog, quantity: line.quantity, lineTotal })
           rawSubtotal += lineTotal
         }
 
@@ -873,11 +937,13 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
            order_type = ? WHERE id = ?`
         ).run(subtotal, discount, details, total, input.header?.orderType ?? order.order_type, input.orderId)
 
-        if (kitchenRelevantChange) {
-          const newItems = db.prepare(
-            'SELECT id, menu_item_id, quantity, notes, worker_id FROM order_items WHERE order_id = ?'
-          ).all(input.orderId) as KitchenLineSnapshot[]
-          const lineChanges = diffKitchenLines(oldItems, newItems)
+        if (kitchenRelevantChange || catalogKitchenChange) {
+          // v4 catalog: combo parents are not kitchen lines; option changes count as changes.
+          const newItems = kitchenSnapshots(db.prepare(
+            'SELECT id, menu_item_id, quantity, notes, worker_id, line_kind FROM order_items WHERE order_id = ?'
+          ).all(input.orderId) as KitchenLineSnapshot[], kitchenModifierKeys(db, input.orderId))
+          const oldKitchenItems = kitchenSnapshots(oldItems, oldModifierKeys)
+          const lineChanges = diffKitchenLines(oldKitchenItems, newItems)
           const headerChanged =
             (input.header?.orderType !== undefined && input.header.orderType !== order.order_type) ||
             (input.header?.tableNumber !== undefined && (input.header.tableNumber ?? null) !== (order.table_number ?? null)) ||
@@ -885,7 +951,7 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
           // A station whose lines were all removed/moved only appears in oldItems: it must still get
           // the UPDATED ticket or it cooks a cancelled item. Header changes concern every station.
           const stations = headerChanged
-            ? [...oldItems, ...newItems].map((item) => ({ worker_id: item.worker_id }))
+            ? [...oldKitchenItems, ...newItems].map((item) => ({ worker_id: item.worker_id }))
             : lineChanges.map((change) => ({ worker_id: change.workerId }))
           enqueueAutomaticPrintJobs(db, input.orderId, stations, 'updated', lineChanges)
         }
@@ -919,8 +985,8 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
 
     try {
       return db.transaction(() => {
-        const items = db.prepare('SELECT id, worker_id FROM order_items WHERE order_id = ?').all(orderId) as
-          { id: number; worker_id: number | null }[]
+        const items = db.prepare('SELECT id, worker_id, line_kind FROM order_items WHERE order_id = ?').all(orderId) as
+          { id: number; worker_id: number | null; line_kind: string }[]
         if (status === 'cancelled') {
           for (const item of items) {
             const deductions = db.prepare(
@@ -965,7 +1031,8 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
           : status === 'preparing' && (order.status === 'cancelled' || order.status === 'completed')
             ? 'restored'
             : null
-        if (event) enqueueAutomaticPrintJobs(db, orderId, items, event)
+        // v4 catalog: a combo parent never prints (its children do, at their stations).
+        if (event) enqueueAutomaticPrintJobs(db, orderId, items.filter((item) => item.line_kind !== 'combo'), event)
         enqueueOutbox(db, orderId, event === 'restored' ? 'restored' : status === 'cancelled' ? 'cancelled' : 'updated')
         return updateResult(current(orderId)!)
       })()

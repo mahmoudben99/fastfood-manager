@@ -2,6 +2,7 @@ import {
   currencySymbol, esc, fontSizes, logoImgHTML, orderTypeLabel, printableWidth, receiptLabels,
   receiptLang, reprintBannerHTML, type ReceiptLabels
 } from './print-format'
+import { receiptRows, receiptSubLinesHTML } from './print-catalog'
 
 /** Everything about the destination printer / run that is not part of the order or settings. */
 export interface ReceiptContext {
@@ -124,8 +125,10 @@ export async function buildFromTemplate(
         }
         case 'items_table':
           body += '<div style="margin:8px 0;">'
-          for (const item of items) {
+          // v4 catalog: combo children print under their combo; options (with prices) under their line.
+          for (const item of receiptRows(items) as any[]) {
             body += `<div style="display:flex;justify-content:${justify};font-size:${size}px;${bold}padding:2px 0;"><span>${esc(item.quantity)}x ${esc(item.menu_item_name)}</span><span>${money(item.total_price)}</span></div>`
+            body += receiptSubLinesHTML(item, items, lang, { fontSize: base - 2, money: (value) => `${value.toLocaleString()} ${currency}`, color: '#444' })
             if (cfg.language === 'bilingual' && item.menu_item_name_ar) {
               body += `<div style="font-size:${base - 3}px;color:#888;direction:rtl;padding:0 0 2px 0;">${esc(item.quantity)}x ${esc(item.menu_item_name_ar)}</div>`
             }

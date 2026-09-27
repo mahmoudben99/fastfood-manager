@@ -6,6 +6,14 @@ import { getDb } from '../connection'
  * reusing a menu item does not rewrite history. SQLite documents that with exactly one max()
  * aggregate, bare columns come from the row holding that max — hence last_line_id.
  */
+/**
+ * v4 catalog: per-item reports count combo CHILDREN as item sales at their allocated share of the
+ * combo price, and skip the combo parent line (a container), so item revenue still sums to the
+ * order totals. Ordinary lines have allocated_revenue NULL and keep total_price.
+ */
+const ITEM_REVENUE = 'COALESCE(oi.allocated_revenue, oi.total_price)'
+const ITEM_LINE = "oi.line_kind <> 'combo'"
+
 const SOLD_NAME_COLUMNS = `MAX(oi.id) AS last_line_id,
                 COALESCE(oi.item_name, mi.name) AS name,
                 CASE WHEN oi.item_name IS NOT NULL THEN oi.item_name_ar ELSE mi.name_ar END AS name_ar,
@@ -96,13 +104,13 @@ export const analyticsRepo = {
       .prepare(
         `SELECT ${SOLD_NAME_COLUMNS},
                 SUM(oi.quantity) as total_quantity,
-                SUM(oi.total_price) as total_revenue,
+                SUM(${ITEM_REVENUE}) as total_revenue,
                 COALESCE(c.name, 'Uncategorized') as category_name
          FROM order_items oi
          JOIN menu_items mi ON oi.menu_item_id = mi.id
          LEFT JOIN categories c ON mi.category_id = c.id
          JOIN orders o ON oi.order_id = o.id
-         WHERE o.order_date BETWEEN ? AND ? AND o.status != 'cancelled'
+         WHERE o.order_date BETWEEN ? AND ? AND o.status != 'cancelled' AND ${ITEM_LINE}
          GROUP BY oi.menu_item_id
          ORDER BY total_quantity DESC
          LIMIT ?`
@@ -115,13 +123,13 @@ export const analyticsRepo = {
       .prepare(
         `SELECT ${SOLD_NAME_COLUMNS},
                 SUM(oi.quantity) as total_quantity,
-                SUM(oi.total_price) as total_revenue,
+                SUM(${ITEM_REVENUE}) as total_revenue,
                 COALESCE(c.name, 'Uncategorized') as category_name
          FROM order_items oi
          JOIN menu_items mi ON oi.menu_item_id = mi.id
          LEFT JOIN categories c ON mi.category_id = c.id
          JOIN orders o ON oi.order_id = o.id
-         WHERE o.order_date BETWEEN ? AND ? AND o.status != 'cancelled'
+         WHERE o.order_date BETWEEN ? AND ? AND o.status != 'cancelled' AND ${ITEM_LINE}
          GROUP BY oi.menu_item_id
          ORDER BY total_quantity ASC
          LIMIT ?`
@@ -133,13 +141,13 @@ export const analyticsRepo = {
     return getDb()
       .prepare(
         `SELECT COALESCE(c.name, 'Uncategorized') as name, c.name_ar, c.name_fr,
-                SUM(oi.total_price) as total_revenue,
+                SUM(${ITEM_REVENUE}) as total_revenue,
                 SUM(oi.quantity) as total_quantity
          FROM order_items oi
          JOIN menu_items mi ON oi.menu_item_id = mi.id
          LEFT JOIN categories c ON mi.category_id = c.id
          JOIN orders o ON oi.order_id = o.id
-         WHERE o.order_date BETWEEN ? AND ? AND o.status != 'cancelled'
+         WHERE o.order_date BETWEEN ? AND ? AND o.status != 'cancelled' AND ${ITEM_LINE}
          GROUP BY mi.category_id
          ORDER BY total_revenue DESC`
       )
@@ -151,7 +159,7 @@ export const analyticsRepo = {
       .prepare(
         `SELECT w.id, w.name, w.role,
                 COUNT(DISTINCT oi.order_id) as orders_handled,
-                COALESCE(SUM(oi.total_price), 0) as total_revenue,
+                COALESCE(SUM(${ITEM_REVENUE}), 0) as total_revenue,
                 (SELECT COALESCE(SUM(pay_amount), 0) FROM worker_attendance
                  WHERE worker_id = w.id AND date BETWEEN ? AND ?) as total_pay
          FROM workers w

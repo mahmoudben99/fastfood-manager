@@ -1,6 +1,7 @@
 import { getDb } from '../connection'
 import { validateRecipeIngredientAgainstStock } from '../../services/recipe-validation'
 import { canonicalUnit } from '../../services/stock-units'
+import { soldOutSql } from '../../services/catalog-common'
 
 export interface MenuItem {
   id: number
@@ -17,6 +18,12 @@ export interface MenuItem {
   category_name?: string
   category_active?: number
   ingredients?: MenuItemIngredient[]
+  /** v4 catalog (migration 021). */
+  is_combo?: number
+  /** Manual 86 flag (soldOut.set). */
+  is_sold_out?: number
+  /** Effective: 86'd by hand, or auto_sold_out on and a recipe ingredient has no stock. */
+  sold_out?: number
 }
 
 export interface MenuItemIngredient {
@@ -131,7 +138,7 @@ function insertRecipe(menuItemId: number, ingredients: RecipeIngredientInput[]):
 }
 
 const SELECT_WITH_CATEGORY = `
-  SELECT mi.*, c.name as category_name, c.is_active as category_active
+  SELECT mi.*, c.name as category_name, c.is_active as category_active, ${soldOutSql('mi')} AS sold_out
   FROM menu_items mi
   LEFT JOIN categories c ON mi.category_id = c.id`
 

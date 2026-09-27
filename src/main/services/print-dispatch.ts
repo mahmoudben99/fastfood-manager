@@ -8,7 +8,9 @@ import { printerAssignmentsRepo } from '../database/repositories/printer-assignm
 import { workersRepo } from '../database/repositories/workers.repo'
 import { receiptTemplatesRepo } from '../database/repositories/receipt-templates.repo'
 import { getDb } from '../database/connection'
-import { changesForTicket, loadRoutingConfig, targetPrinters, type KitchenLineChange, type PrintScope, type PrintTarget } from './print-routing'
+import {
+  changesForTicket, isKitchenLine, loadRoutingConfig, targetPrinters, type KitchenLineChange, type PrintScope, type PrintTarget
+} from './print-routing'
 import { printHtml, type PrintResult } from './print-window'
 import { buildDefaultReceiptHTML, buildKitchenHTML, buildSampleOrder, markAsTestPrint, type PrintEventType } from './print-documents'
 import { buildFromTemplate, type ReceiptContext } from './receipt-template'
@@ -103,7 +105,8 @@ export async function printKitchenOn(
   const order = ordersRepo.getById(orderId)
   if (!order) return { success: false, error: 'Order not found', printerName }
 
-  const allItems = order.items || []
+  // A combo parent is not a kitchen line (its children are, at their own stations).
+  const allItems = (order.items || []).filter(isKitchenLine)
   const items = target.scope === 'worker'
     ? allItems.filter((item) => item.worker_id === target.workerId)
     : target.scope === 'unassigned'

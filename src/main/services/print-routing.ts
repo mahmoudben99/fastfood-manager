@@ -199,6 +199,13 @@ export interface KitchenLineSnapshot {
   quantity: number
   notes: string | null
   worker_id: number | null
+  /** v4 catalog: signature of the line's options; a different value is a kitchen change. */
+  modifier_key?: string | null
+}
+
+/** A combo parent line (line_kind 'combo') is a container: only its children are cooked/printed. */
+export function isKitchenLine(item: { line_kind?: string | null }): boolean {
+  return item.line_kind !== 'combo'
 }
 
 export interface KitchenLineChange {
@@ -211,6 +218,8 @@ export interface KitchenLineChange {
   previousQuantity?: number
   notes?: string | null
   noteChanged?: boolean
+  /** v4 catalog: the chosen options changed (only present when true). */
+  modifiersChanged?: boolean
 }
 
 /** Line-level difference between an order before and after an edit (price changes ignored). */
@@ -235,8 +244,14 @@ export function diffKitchenLines(before: KitchenLineSnapshot[], after: KitchenLi
       changes.push(entry('removed', old), entry('added', next))
     } else {
       const noteChanged = (next.notes ?? null) !== (old.notes ?? null)
-      if (next.quantity !== old.quantity || noteChanged) {
-        changes.push({ ...entry('changed', next), previousQuantity: old.quantity, noteChanged })
+      const modifiersChanged = (next.modifier_key ?? '') !== (old.modifier_key ?? '')
+      if (next.quantity !== old.quantity || noteChanged || modifiersChanged) {
+        changes.push({
+          ...entry('changed', next),
+          previousQuantity: old.quantity,
+          noteChanged,
+          ...(modifiersChanged ? { modifiersChanged: true } : {})
+        })
       }
     }
   }

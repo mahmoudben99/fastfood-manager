@@ -6,7 +6,7 @@ import { workersRepo } from '../database/repositories/workers.repo'
 import { getDb } from '../database/connection'
 import { createPrintQueueWorker, ensurePrintJobColumns } from '../services/print-queue'
 import {
-  configuredPrinters, parseKitchenChanges, planPrintJobs, targetPrinters, type PrintScope, type PrintTarget
+  configuredPrinters, isKitchenLine, parseKitchenChanges, planPrintJobs, targetPrinters, type PrintScope, type PrintTarget
 } from '../services/print-routing'
 import { cleanupStalePrintFiles, printHtml, type PrintResult } from '../services/print-window'
 import { buildSampleOrder, type PrintEventType } from '../services/print-documents'
@@ -224,7 +224,7 @@ export function registerPrinterHandlers(): void {
       split: settingsRepo.get('split_kitchen_tickets') === 'true',
       autoReceipt: false,
       autoKitchen: false,
-      workerIds: (order.items || []).map((item) => item.worker_id),
+      workerIds: (order.items || []).filter(isKitchenLine).map((item) => item.worker_id),
       includeReceipt: false,
       includeKitchen: true,
       manual: true

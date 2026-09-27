@@ -2,7 +2,10 @@ import {
   currencySymbol, esc, fontSizes, logoImgHTML, orderTypeLabel, printableWidth, receiptLabels,
   receiptLang, reprintBannerHTML
 } from './print-format'
-import type { KitchenLineChange } from './print-routing'
+import { isKitchenLine, type KitchenLineChange } from './print-routing'
+import {
+  isComboChild, kitchenCatalogCSS, kitchenComboHeaderHTML, kitchenModifiersHTML, receiptRows, receiptSubLinesHTML
+} from './print-catalog'
 import type { ReceiptContext } from './receipt-template'
 
 export type PrintEventType = 'new' | 'updated' | 'cancelled' | 'restored'
@@ -52,12 +55,13 @@ export function buildDefaultReceiptHTML(order: any, settings: Record<string, str
   ${order.table_number ? `<div>${esc(L.table)}: ${esc(order.table_number)}</div>` : ''}
   ${order.customer_phone ? `<div>${esc(L.phone)}: ${esc(order.customer_phone)}</div>` : ''}
   <div class="line"></div>
-  ${items.map((item: any) => `
+  ${receiptRows(items).map((item: any) => `
     <div class="item">
       <div class="row">
         <span>${esc(item.quantity)}x ${esc(item.menu_item_name || 'Item')}</span>
         <span>${Number(item.total_price || 0).toFixed(2)}</span>
       </div>
+      ${receiptSubLinesHTML(item, items, lang, { fontSize: sizes.body - 1, money: (value) => value.toFixed(2) })}
     </div>
   `).join('')}
   <div class="line"></div>
@@ -119,8 +123,11 @@ export function buildKitchenHTML(order: any, items: any[], settings: Record<stri
       marks.push(mark(`QTY ${change.previousQuantity} -> ${change.quantity}`))
     }
     if (change.noteChanged) marks.push(mark('NOTE CHANGED'))
+    if (change.modifiersChanged) marks.push(mark('OPTIONS CHANGED'))
     return marks.join(' ')
   }
+  // v4 catalog: a combo parent is a container; its children print with a "COMBO:" header.
+  const lines = items.filter(isKitchenLine)
 
   return `<!DOCTYPE html><html dir="${isRTL ? 'rtl' : 'ltr'}">
 <head><meta charset="utf-8">
@@ -138,6 +145,7 @@ export function buildKitchenHTML(order: any, items: any[], settings: Record<stri
   .mark { background: #000; color: #fff; padding: 0 4px; font-weight: bold; font-size: ${sizes.itemNotes}px; }
   .removed .item-name, .removed .qty { text-decoration: line-through; }
   .worker-badge { background: #000; color: #fff; padding: 4px 8px; display: inline-block; margin: 4px 0; font-weight: bold; }
+  ${kitchenCatalogCSS(sizes)}
 </style></head>
 <body>
   ${ctx.reprint ? reprintBannerHTML('REPRINT', sizes.big) : ''}
@@ -149,11 +157,13 @@ export function buildKitchenHTML(order: any, items: any[], settings: Record<stri
   ${order.customer_name ? `<div class="center">${esc(String(order.customer_name).toUpperCase())}</div>` : ''}
   ${ctx.workerName ? `<div class="center"><div class="worker-badge">FOR: ${esc(ctx.workerName.toUpperCase())}</div></div>` : ''}
   <div class="line"></div>
-  ${items.map((item: any) => `
-    <div class="item">
+  ${lines.map((item: any, index: number) => `
+    ${kitchenComboHeaderHTML(item, lines[index - 1])}
+    <div class="item${isComboChild(item) ? ' combo-child' : ''}">
       ${markFor(item.id)}
       <span class="qty">${esc(item.quantity)}x</span>
       <span class="item-name">${esc(item.menu_item_name || 'Item')}</span>
+      ${kitchenModifiersHTML(item.modifiers, settings.language)}
       ${item.notes ? `<div class="item-notes">${esc(item.notes)}</div>` : ''}
     </div>
   `).join('')}
