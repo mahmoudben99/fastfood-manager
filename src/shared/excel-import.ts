@@ -305,7 +305,7 @@ export function validateSetupImportPayload(value: unknown): SetupImportPayload {
       .toLocaleLowerCase('en-US')
     if (!WORKER_ROLES.has(role)) {
       throw new Error(
-        `Workers row ${index + 2}: Role must be cook, server, cleaner, cashier or other`
+        `Workers row ${index + 2}: Role must be cook, server, cleaner, cashier, driver or other`
       )
     }
     const categoryValues = array(
