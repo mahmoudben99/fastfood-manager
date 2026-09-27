@@ -359,7 +359,8 @@
       "duplicateStockItem": "{{name}} is already in this recipe. Use one row per stock item.",
       "incompatibleUnit": "{{unit}} does not match {{name}}, which is counted in {{stockUnit}}. Choose {{options}}. Sales of this item fail until this is fixed.",
       "largeQuantity": "{{quantity}} {{unit}} per item looks very large. Did you mean g or ml?",
-      "fixErrors": "Fix the highlighted ingredient rows before saving."
+      "fixErrors": "Fix the highlighted ingredient rows before saving.",
+      "empty": "No ingredients yet. Add them to deduct stock on every sale."
     },
     "categories": {
       "manage": "Categories",
@@ -376,7 +377,75 @@
       "nameRequired": "Enter a category name.",
       "saveFailed": "Could not save the category.",
       "deleteFailed": "Could not delete the category.",
-      "empty": "No categories yet. Add one below."
+      "empty": "No categories yet. Add one below.",
+      "saved": "Category \"{{name}}\" saved",
+      "deletedToast": "Category \"{{name}}\" deleted"
+    },
+    "page": {
+      "title": "Menu",
+      "subtitle": "{{items}} items · {{categories}} categories"
+    },
+    "tabs": {
+      "items": "Items",
+      "groups": "Option groups",
+      "combos": "Combos"
+    },
+    "rail": {
+      "all": "All items",
+      "label": "Categories",
+      "deleted": "Deleted"
+    },
+    "filters": {
+      "soldOut": "Sold out",
+      "noRecipe": "No recipe"
+    },
+    "badges": {
+      "combo": "Combo",
+      "soldOut": "Sold out",
+      "outOfStock": "Out of stock",
+      "noRecipe": "No recipe",
+      "options_one": "{{count}} option group",
+      "options_other": "{{count}} option groups"
+    },
+    "card": {
+      "available": "Available"
+    },
+    "autoSoldOut": {
+      "label": "Auto sold-out",
+      "hint": "Items whose recipe uses an ingredient at 0 stock can't be ordered until you restock.",
+      "on": "Auto sold-out is on",
+      "off": "Auto sold-out is off"
+    },
+    "soldOut": {
+      "marked": "\"{{name}}\" is sold out",
+      "back": "\"{{name}}\" is available again"
+    },
+    "deletedUndo": "\"{{name}}\" was removed from the menu.",
+    "emptyBody": "Add your first item: burgers, drinks, desserts… The cashier sees them right away.",
+    "ui": {
+      "increase": "Increase",
+      "decrease": "Decrease",
+      "moveUp": "Move up",
+      "moveDown": "Move down"
+    },
+    "form": {
+      "tabs": {
+        "details": "Details",
+        "recipe": "Recipe",
+        "options": "Options",
+        "channels": "Prices & hours",
+        "combo": "Combo parts"
+      },
+      "nameRequired": "Enter a name.",
+      "comboPrice": "Combo price",
+      "changePhoto": "Change photo",
+      "removePhoto": "Remove photo",
+      "isCombo": "This item is a combo",
+      "isComboHint": "One price for several parts, e.g. burger + side + drink. Set the parts in \"Combo parts\".",
+      "uncomboWarning": "Saving removes the combo parts.",
+      "comboRecipeHint": "Each pick uses its own recipe. Add only extras (box, bag…).",
+      "untitled": "New item",
+      "saved": "\"{{name}}\" saved"
     }
   },
   "stock": {
@@ -420,7 +489,37 @@
     "invalidQuantity": "Enter a quantity of 0 or more.",
     "invalidPurchaseQuantity": "Enter a purchase quantity greater than 0.",
     "invalidPrice": "Enter a price of 0 or more.",
-    "invalidThreshold": "Enter an alert threshold of 0 or more."
+    "invalidThreshold": "Enter an alert threshold of 0 or more.",
+    "page": {
+      "title": "Stock"
+    },
+    "stats": {
+      "items": "Stock items",
+      "low": "Running low",
+      "out": "Out of stock",
+      "value": "Stock value"
+    },
+    "alert": {
+      "title_one": "{{count}} item needs restocking",
+      "title_other": "{{count}} items need restocking",
+      "show": "Show them"
+    },
+    "search": "Search stock…",
+    "value": "Value",
+    "restock": "Restock",
+    "allGood": "Nothing to restock. All good!",
+    "emptyBody": "Add the ingredients you buy (meat, bread, oil…) so every sale deducts them.",
+    "loadFailed": "Could not load the stock.",
+    "saved": "\"{{name}}\" saved",
+    "pricePerUnitOf": "Price per {{unit}}",
+    "alertHint": "Warn me when stock falls to this amount.",
+    "afterChange": "After this change",
+    "reasonPlaceholder": "e.g. burnt, dropped, counted",
+    "done": {
+      "fix": "\"{{name}}\" corrected",
+      "adjust": "\"{{name}}\" adjusted",
+      "purchase": "Purchase added to \"{{name}}\""
+    }
   },
   "workers": {
     "title": "Worker Management",
@@ -435,16 +534,51 @@
     "attendance": "Attendance",
     "noWorkers": "No workers yet",
     "roles": {
-      "cook": "Cook",
+      "cook": "Kitchen station",
       "server": "Server",
       "cleaner": "Cleaner",
       "cashier": "Cashier",
-      "other": "Other"
+      "other": "Other",
+      "driver": "Driver"
     },
     "shifts": {
       "full": "Full Day",
       "half": "Half Day",
       "absent": "Absent"
+    },
+    "page": {
+      "title": "Workers",
+      "subtitle_one": "{{count}} person on the team",
+      "subtitle_other": "{{count}} people on the team"
+    },
+    "team": "Team",
+    "roleDesc": {
+      "cook": "Gets the kitchen tickets of its stations",
+      "cashier": "Takes orders and payments",
+      "server": "Serves the tables",
+      "driver": "Delivers orders; appears in the driver list",
+      "cleaner": "Keeps the place clean",
+      "other": "Any other job"
+    },
+    "noStations": "No station yet: this person gets no kitchen tickets.",
+    "noDrivers": "No driver yet: add one to assign deliveries",
+    "emptyBody": "Add your cooks, cashiers, servers and drivers to track attendance and pay.",
+    "saved": "\"{{name}}\" saved",
+    "deleted": "\"{{name}}\" removed from the team",
+    "deleteTitle": "Remove this worker?",
+    "deleteConfirm": "\"{{name}}\" will be removed from the team and from the attendance list. Past attendance stays in the reports.",
+    "scheduleStatus": "Schedule",
+    "date": "Date",
+    "prevDay": "Previous day",
+    "nextDay": "Next day",
+    "today": "Today",
+    "presentToday": "Present",
+    "payToday": "Pay for the day",
+    "errors": {
+      "name": "Enter a name.",
+      "pay": "Enter pay amounts of 0 or more.",
+      "saveFailed": "Could not save the worker.",
+      "loadFailed": "Could not load the team."
     }
   },
   "analytics": {
@@ -1424,6 +1558,172 @@
       "result": "Last result",
       "cancelled": "Cancelled",
       "demoPin": "Demo PIN:"
+    }
+  },
+  "modifiers": {
+    "newGroup": "New option group",
+    "newTitle": "New option group",
+    "editTitle": "Edit option group",
+    "search": "Search option groups…",
+    "viewLibrary": "Groups",
+    "viewCategories": "By category",
+    "emptyTitle": "No option groups yet",
+    "emptyBody": "Create groups like \"Sauce\" or \"Extras\", then show them on categories or single items.",
+    "groupName": "Group name",
+    "namePlaceholder": "e.g. Sauce",
+    "rules": "Selection rules",
+    "optional": "Optional",
+    "required": "Required",
+    "minLabel": "At least",
+    "maxLabel": "At most",
+    "noLimit": "No limit",
+    "allowQuantity": "Same option several times (×2)",
+    "active": "Active",
+    "inactive": "Off",
+    "options": "Options",
+    "addOption": "Add option",
+    "showOn": "Show on categories",
+    "shownOn": "Shown on:",
+    "onItems_one": "{{count}} item",
+    "onItems_other": "{{count}} items",
+    "nowhere": "not shown anywhere yet",
+    "noActiveOptions": "No active options",
+    "categoryEmpty": "No option groups on this category.",
+    "addToCategory": "Add an option group",
+    "removeFromCategory": "Remove from this category",
+    "deleteGroup": "Delete group",
+    "noDefaultWarning": "Required with no default: tablet and online orders will be refused.",
+    "confirmDelete": "Delete \"{{name}}\" and all its options? Past orders keep their options.",
+    "saved": "Option group \"{{name}}\" saved",
+    "deleted": "Option group \"{{name}}\" deleted",
+    "rule": {
+      "requiredExactly_one": "Required · choose {{count}}",
+      "requiredExactly_other": "Required · choose {{count}}",
+      "requiredAtLeast": "Required · at least {{min}}",
+      "requiredRange": "Required · choose {{min}} to {{max}}",
+      "optionalAny": "Optional",
+      "optionalUpTo": "Optional · up to {{max}}"
+    },
+    "kind": {
+      "none": "Normal",
+      "extra": "Extra",
+      "light": "Light",
+      "no": "No"
+    },
+    "option": {
+      "untitled": "New option",
+      "defaultShort": "Default",
+      "hidden": "Hidden",
+      "free": "Free",
+      "remove": "Remove option",
+      "kindLabel": "Type",
+      "priceLabel": "Price change",
+      "adds": "Adds",
+      "takesOff": "Takes off",
+      "default": "Selected by default",
+      "active": "Available",
+      "ingredients": "Stock used by this option",
+      "ingredientsHint": "Deducted each time the option is chosen, on top of the item's recipe.",
+      "noIngredients": "No stock is deducted for this option.",
+      "noStock": "No stock deducted."
+    },
+    "errors": {
+      "groupName": "Enter a group name.",
+      "noOptions": "Add at least one option.",
+      "optionName": "Every option needs a name.",
+      "optionPrice": "Enter a valid price change.",
+      "rules": "The maximum must be at least the minimum.",
+      "tooManyDefaults": "More options are selected by default than the maximum allows.",
+      "optionIngredients": "Fix the stock rows of \"{{option}}\".",
+      "saveFailed": "Could not save the option group.",
+      "loadFailed": "Could not load the option groups."
+    },
+    "preview": {
+      "heading": "What the cashier sees",
+      "title": "Preview",
+      "groupOnly": "This option group",
+      "empty": "No options to show yet.",
+      "needs": "Choose in \"{{group}}\" to continue",
+      "total": "Item total",
+      "extras": "Options",
+      "add": "Add to order"
+    },
+    "item": {
+      "fromCategory": "From the category {{category}}",
+      "shown": "Shown",
+      "hidden": "Hidden",
+      "optionCount_one": "{{count}} option",
+      "optionCount_other": "{{count}} options",
+      "noCategoryGroups": "This category has no option groups. Add them in Option groups → By category.",
+      "own": "Only for this item",
+      "remove": "Remove from this item",
+      "noLibrary": "No option groups yet. Create them in the Option groups tab."
+    }
+  },
+  "combos": {
+    "newCombo": "New combo",
+    "emptyTitle": "No combos yet",
+    "emptyBody": "Sell a menu for one price: a burger, a side and a drink. Customers pick each part.",
+    "parts": {
+      "main": "Main",
+      "side": "Side",
+      "drink": "Drink",
+      "dessert": "Dessert"
+    },
+    "builder": {
+      "partName": "Part name",
+      "removePart": "Remove part",
+      "min": "Picks at least",
+      "max": "Picks at most",
+      "ruleExactly_one": "Exactly {{count}}",
+      "ruleExactly_other": "Exactly {{count}}",
+      "ruleRange": "{{min}} to {{max}}",
+      "ruleOptional": "Optional, up to {{max}}",
+      "wholeCategory": "Any item from {{category}}",
+      "categoryCount_one": "{{count}} item now",
+      "categoryCount_other": "{{count}} items now",
+      "missingChoice": "Deleted item",
+      "upcharge": "Upcharge",
+      "default": "Default",
+      "addChoices": "Add choices",
+      "offers_one": "{{count}} item to choose from",
+      "offers_other": "{{count}} items to choose from",
+      "addPart": "Add a part",
+      "firstPart": "Start with the first part",
+      "customPart": "Other part",
+      "noDefaultWarning": "No default: tablet and online orders will be refused."
+    },
+    "picker": {
+      "search": "Search items…",
+      "done": "Done",
+      "wholeCategory": "Offer every item of {{category}}",
+      "wholeCategoryHint": "new items join automatically"
+    },
+    "preview": {
+      "title": "Price split",
+      "withDefaults": "Default choices (or the first ones)",
+      "withFirst": "Example with the first choices",
+      "empty": "Add parts and choices to see the price split.",
+      "pick": "Pick",
+      "alone": "Alone",
+      "share": "In combo",
+      "total": "Total",
+      "saves": "Customers save",
+      "noSaving": "The combo costs as much as its parts or more.",
+      "splitHint": "Reports split the combo price between its items like this. Upcharges stay with their item."
+    },
+    "card": {
+      "saves": "saves",
+      "noDefault": "no default",
+      "edit": "Edit combo"
+    },
+    "errors": {
+      "noSlots": "Add at least one part to the combo.",
+      "slotName": "Every part needs a name.",
+      "noChoices": "\"{{slot}}\" needs at least one choice.",
+      "rules": "Check the pick counts of \"{{slot}}\".",
+      "upcharge": "Check the upcharges of \"{{slot}}\" (0 or more).",
+      "defaults": "\"{{slot}}\" has more default choices than its maximum ({{max}})."
     }
   }
 }

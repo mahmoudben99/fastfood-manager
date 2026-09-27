@@ -359,7 +359,8 @@
       "duplicateStockItem": "{{name}} figure déjà dans cette recette. Utilisez une seule ligne par article du stock.",
       "incompatibleUnit": "{{unit}} ne correspond pas à {{name}}, compté en {{stockUnit}}. Choisissez {{options}}. Les ventes de cet article échouent tant que ce n'est pas corrigé.",
       "largeQuantity": "{{quantity}} {{unit}} par article semble très élevé. Vouliez-vous dire g ou ml ?",
-      "fixErrors": "Corrigez les lignes d'ingrédients signalées avant d'enregistrer."
+      "fixErrors": "Corrigez les lignes d'ingrédients signalées avant d'enregistrer.",
+      "empty": "Aucun ingrédient. Ajoutez-en pour déduire le stock à chaque vente."
     },
     "categories": {
       "manage": "Catégories",
@@ -376,7 +377,75 @@
       "nameRequired": "Saisissez un nom de catégorie.",
       "saveFailed": "Impossible d'enregistrer la catégorie.",
       "deleteFailed": "Impossible de supprimer la catégorie.",
-      "empty": "Aucune catégorie. Ajoutez-en une ci-dessous."
+      "empty": "Aucune catégorie. Ajoutez-en une ci-dessous.",
+      "saved": "Catégorie « {{name}} » enregistrée",
+      "deletedToast": "Catégorie « {{name}} » supprimée"
+    },
+    "page": {
+      "title": "Menu",
+      "subtitle": "{{items}} articles · {{categories}} catégories"
+    },
+    "tabs": {
+      "items": "Articles",
+      "groups": "Groupes d'options",
+      "combos": "Menus combo"
+    },
+    "rail": {
+      "all": "Tous les articles",
+      "label": "Catégories",
+      "deleted": "Supprimés"
+    },
+    "filters": {
+      "soldOut": "Épuisés",
+      "noRecipe": "Sans recette"
+    },
+    "badges": {
+      "combo": "Combo",
+      "soldOut": "Épuisé",
+      "outOfStock": "Rupture de stock",
+      "noRecipe": "Sans recette",
+      "options_one": "{{count}} groupe d'options",
+      "options_other": "{{count}} groupes d'options"
+    },
+    "card": {
+      "available": "Disponible"
+    },
+    "autoSoldOut": {
+      "label": "Épuisé auto",
+      "hint": "Un article dont la recette utilise un ingrédient à 0 ne peut plus être commandé jusqu'au réapprovisionnement.",
+      "on": "Épuisement automatique activé",
+      "off": "Épuisement automatique désactivé"
+    },
+    "soldOut": {
+      "marked": "« {{name}} » est épuisé",
+      "back": "« {{name}} » est de nouveau disponible"
+    },
+    "deletedUndo": "« {{name}} » a été retiré du menu.",
+    "emptyBody": "Ajoutez votre premier article : burgers, boissons, desserts… La caisse les voit tout de suite.",
+    "ui": {
+      "increase": "Augmenter",
+      "decrease": "Diminuer",
+      "moveUp": "Monter",
+      "moveDown": "Descendre"
+    },
+    "form": {
+      "tabs": {
+        "details": "Détails",
+        "recipe": "Recette",
+        "options": "Options",
+        "channels": "Prix et horaires",
+        "combo": "Parties du combo"
+      },
+      "nameRequired": "Saisissez un nom.",
+      "comboPrice": "Prix du combo",
+      "changePhoto": "Changer la photo",
+      "removePhoto": "Retirer la photo",
+      "isCombo": "Cet article est un menu combo",
+      "isComboHint": "Un seul prix pour plusieurs parties, par ex. burger + accompagnement + boisson. Définissez les parties dans « Parties du combo ».",
+      "uncomboWarning": "L'enregistrement supprime les parties du combo.",
+      "comboRecipeHint": "Chaque choix utilise sa propre recette. N'ajoutez que le reste (boîte, sac…).",
+      "untitled": "Nouvel article",
+      "saved": "« {{name}} » enregistré"
     }
   },
   "stock": {
@@ -420,7 +489,37 @@
     "invalidQuantity": "Saisissez une quantité supérieure ou égale à 0.",
     "invalidPurchaseQuantity": "Saisissez une quantité achetée supérieure à 0.",
     "invalidPrice": "Saisissez un prix supérieur ou égal à 0.",
-    "invalidThreshold": "Saisissez un seuil d'alerte supérieur ou égal à 0."
+    "invalidThreshold": "Saisissez un seuil d'alerte supérieur ou égal à 0.",
+    "page": {
+      "title": "Stock"
+    },
+    "stats": {
+      "items": "Articles en stock",
+      "low": "Stock bas",
+      "out": "En rupture",
+      "value": "Valeur du stock"
+    },
+    "alert": {
+      "title_one": "{{count}} article à réapprovisionner",
+      "title_other": "{{count}} articles à réapprovisionner",
+      "show": "Les afficher"
+    },
+    "search": "Rechercher dans le stock…",
+    "value": "Valeur",
+    "restock": "Racheter",
+    "allGood": "Rien à racheter. Tout va bien !",
+    "emptyBody": "Ajoutez les ingrédients que vous achetez (viande, pain, huile…) pour que chaque vente les déduise.",
+    "loadFailed": "Impossible de charger le stock.",
+    "saved": "« {{name}} » enregistré",
+    "pricePerUnitOf": "Prix par {{unit}}",
+    "alertHint": "Me prévenir quand le stock descend à cette quantité.",
+    "afterChange": "Après ce changement",
+    "reasonPlaceholder": "ex. brûlé, tombé, inventaire",
+    "done": {
+      "fix": "« {{name}} » corrigé",
+      "adjust": "« {{name}} » ajusté",
+      "purchase": "Achat ajouté à « {{name}} »"
+    }
   },
   "workers": {
     "title": "Gestion des employes",
@@ -435,16 +534,51 @@
     "attendance": "Presence",
     "noWorkers": "Aucun employe",
     "roles": {
-      "cook": "Cuisinier",
+      "cook": "Poste cuisine",
       "server": "Serveur",
       "cleaner": "Nettoyeur",
       "cashier": "Caissier",
-      "other": "Autre"
+      "other": "Autre",
+      "driver": "Livreur"
     },
     "shifts": {
       "full": "Journee complete",
       "half": "Demi-journee",
       "absent": "Absent"
+    },
+    "page": {
+      "title": "Employés",
+      "subtitle_one": "{{count}} personne dans l'équipe",
+      "subtitle_other": "{{count}} personnes dans l'équipe"
+    },
+    "team": "Équipe",
+    "roleDesc": {
+      "cook": "Reçoit les tickets cuisine de ses postes",
+      "cashier": "Prend les commandes et les paiements",
+      "server": "Sert les tables",
+      "driver": "Livre les commandes ; apparaît dans la liste des livreurs",
+      "cleaner": "Garde le restaurant propre",
+      "other": "Tout autre poste"
+    },
+    "noStations": "Aucun poste : cette personne ne reçoit aucun ticket cuisine.",
+    "noDrivers": "Aucun livreur : ajoutez-en un pour attribuer les livraisons",
+    "emptyBody": "Ajoutez vos cuisiniers, caissiers, serveurs et livreurs pour suivre présence et salaires.",
+    "saved": "« {{name}} » enregistré",
+    "deleted": "« {{name}} » retiré de l'équipe",
+    "deleteTitle": "Retirer cet employé ?",
+    "deleteConfirm": "« {{name}} » sera retiré de l'équipe et de la liste de présence. Les présences passées restent dans les rapports.",
+    "scheduleStatus": "Horaires",
+    "date": "Date",
+    "prevDay": "Jour précédent",
+    "nextDay": "Jour suivant",
+    "today": "Aujourd'hui",
+    "presentToday": "Présents",
+    "payToday": "Salaires du jour",
+    "errors": {
+      "name": "Saisissez un nom.",
+      "pay": "Saisissez des salaires de 0 ou plus.",
+      "saveFailed": "Impossible d'enregistrer l'employé.",
+      "loadFailed": "Impossible de charger l'équipe."
     }
   },
   "analytics": {
@@ -1428,6 +1562,172 @@
       "result": "Dernier résultat",
       "cancelled": "Annulé",
       "demoPin": "Code démo :"
+    }
+  },
+  "modifiers": {
+    "newGroup": "Nouveau groupe d'options",
+    "newTitle": "Nouveau groupe d'options",
+    "editTitle": "Modifier le groupe d'options",
+    "search": "Rechercher un groupe d'options…",
+    "viewLibrary": "Groupes",
+    "viewCategories": "Par catégorie",
+    "emptyTitle": "Aucun groupe d'options",
+    "emptyBody": "Créez des groupes comme « Sauce » ou « Suppléments », puis affichez-les sur des catégories ou des articles.",
+    "groupName": "Nom du groupe",
+    "namePlaceholder": "ex. Sauce",
+    "rules": "Règles de choix",
+    "optional": "Facultatif",
+    "required": "Obligatoire",
+    "minLabel": "Au moins",
+    "maxLabel": "Au plus",
+    "noLimit": "Sans limite",
+    "allowQuantity": "Même option plusieurs fois (×2)",
+    "active": "Actif",
+    "inactive": "Désactivé",
+    "options": "Options",
+    "addOption": "Ajouter une option",
+    "showOn": "Afficher sur les catégories",
+    "shownOn": "Affiché sur :",
+    "onItems_one": "{{count}} article",
+    "onItems_other": "{{count}} articles",
+    "nowhere": "affiché nulle part pour l'instant",
+    "noActiveOptions": "Aucune option active",
+    "categoryEmpty": "Aucun groupe d'options sur cette catégorie.",
+    "addToCategory": "Ajouter un groupe d'options",
+    "removeFromCategory": "Retirer de cette catégorie",
+    "deleteGroup": "Supprimer le groupe",
+    "noDefaultWarning": "Obligatoire sans défaut : les commandes tablette et en ligne seront refusées.",
+    "confirmDelete": "Supprimer « {{name}} » et toutes ses options ? Les commandes passées gardent leurs options.",
+    "saved": "Groupe d'options « {{name}} » enregistré",
+    "deleted": "Groupe d'options « {{name}} » supprimé",
+    "rule": {
+      "requiredExactly_one": "Obligatoire · {{count}} choix",
+      "requiredExactly_other": "Obligatoire · {{count}} choix",
+      "requiredAtLeast": "Obligatoire · au moins {{min}}",
+      "requiredRange": "Obligatoire · de {{min}} à {{max}}",
+      "optionalAny": "Facultatif",
+      "optionalUpTo": "Facultatif · jusqu'à {{max}}"
+    },
+    "kind": {
+      "none": "Normal",
+      "extra": "Plus",
+      "light": "Léger",
+      "no": "Sans"
+    },
+    "option": {
+      "untitled": "Nouvelle option",
+      "defaultShort": "Par défaut",
+      "hidden": "Masquée",
+      "free": "Gratuit",
+      "remove": "Supprimer l'option",
+      "kindLabel": "Type",
+      "priceLabel": "Variation de prix",
+      "adds": "Ajoute",
+      "takesOff": "Retire",
+      "default": "Sélectionnée par défaut",
+      "active": "Disponible",
+      "ingredients": "Stock utilisé par cette option",
+      "ingredientsHint": "Déduit à chaque fois que l'option est choisie, en plus de la recette de l'article.",
+      "noIngredients": "Aucun stock n'est déduit pour cette option.",
+      "noStock": "Aucun stock déduit."
+    },
+    "errors": {
+      "groupName": "Saisissez un nom de groupe.",
+      "noOptions": "Ajoutez au moins une option.",
+      "optionName": "Chaque option doit avoir un nom.",
+      "optionPrice": "Saisissez une variation de prix valide.",
+      "rules": "Le maximum doit être au moins égal au minimum.",
+      "tooManyDefaults": "Plus d'options sont cochées par défaut que le maximum autorisé.",
+      "optionIngredients": "Corrigez les lignes de stock de « {{option}} ».",
+      "saveFailed": "Impossible d'enregistrer le groupe d'options.",
+      "loadFailed": "Impossible de charger les groupes d'options."
+    },
+    "preview": {
+      "heading": "Ce que voit la caisse",
+      "title": "Aperçu",
+      "groupOnly": "Ce groupe d'options",
+      "empty": "Aucune option à afficher pour l'instant.",
+      "needs": "Choisissez dans « {{group}} » pour continuer",
+      "total": "Total de l'article",
+      "extras": "Options",
+      "add": "Ajouter à la commande"
+    },
+    "item": {
+      "fromCategory": "De la catégorie {{category}}",
+      "shown": "Affiché",
+      "hidden": "Masqué",
+      "optionCount_one": "{{count}} option",
+      "optionCount_other": "{{count}} options",
+      "noCategoryGroups": "Cette catégorie n'a aucun groupe d'options. Ajoutez-en dans Groupes d'options → Par catégorie.",
+      "own": "Uniquement pour cet article",
+      "remove": "Retirer de cet article",
+      "noLibrary": "Aucun groupe d'options. Créez-en dans l'onglet Groupes d'options."
+    }
+  },
+  "combos": {
+    "newCombo": "Nouveau combo",
+    "emptyTitle": "Aucun menu combo",
+    "emptyBody": "Vendez un menu à prix unique : un burger, un accompagnement et une boisson. Le client choisit chaque partie.",
+    "parts": {
+      "main": "Plat",
+      "side": "Accompagnement",
+      "drink": "Boisson",
+      "dessert": "Dessert"
+    },
+    "builder": {
+      "partName": "Nom de la partie",
+      "removePart": "Supprimer la partie",
+      "min": "Choix minimum",
+      "max": "Choix maximum",
+      "ruleExactly_one": "Exactement {{count}}",
+      "ruleExactly_other": "Exactement {{count}}",
+      "ruleRange": "De {{min}} à {{max}}",
+      "ruleOptional": "Facultatif, jusqu'à {{max}}",
+      "wholeCategory": "N'importe quel article de {{category}}",
+      "categoryCount_one": "{{count}} article actuellement",
+      "categoryCount_other": "{{count}} articles actuellement",
+      "missingChoice": "Article supprimé",
+      "upcharge": "Supplément",
+      "default": "Par défaut",
+      "addChoices": "Ajouter des choix",
+      "offers_one": "{{count}} article au choix",
+      "offers_other": "{{count}} articles au choix",
+      "addPart": "Ajouter une partie",
+      "firstPart": "Commencez par la première partie",
+      "customPart": "Autre partie",
+      "noDefaultWarning": "Pas de défaut : les commandes tablette et en ligne seront refusées."
+    },
+    "picker": {
+      "search": "Rechercher un article…",
+      "done": "Terminé",
+      "wholeCategory": "Proposer tous les articles de {{category}}",
+      "wholeCategoryHint": "les nouveaux articles s'ajoutent automatiquement"
+    },
+    "preview": {
+      "title": "Répartition du prix",
+      "withDefaults": "Choix par défaut (sinon les premiers)",
+      "withFirst": "Exemple avec les premiers choix",
+      "empty": "Ajoutez des parties et des choix pour voir la répartition.",
+      "pick": "Choix",
+      "alone": "Seul",
+      "share": "Dans le combo",
+      "total": "Total",
+      "saves": "Le client économise",
+      "noSaving": "Le combo coûte autant ou plus que ses parties.",
+      "splitHint": "Les rapports répartissent ainsi le prix du combo entre ses articles. Les suppléments restent à leur article."
+    },
+    "card": {
+      "saves": "économise",
+      "noDefault": "pas de choix par défaut",
+      "edit": "Modifier le combo"
+    },
+    "errors": {
+      "noSlots": "Ajoutez au moins une partie au combo.",
+      "slotName": "Chaque partie doit avoir un nom.",
+      "noChoices": "« {{slot}} » doit proposer au moins un choix.",
+      "rules": "Vérifiez le nombre de choix de « {{slot}} ».",
+      "upcharge": "Vérifiez les suppléments de « {{slot}} » (0 ou plus).",
+      "defaults": "« {{slot}} » a plus de choix par défaut que son maximum ({{max}})."
     }
   }
 }
