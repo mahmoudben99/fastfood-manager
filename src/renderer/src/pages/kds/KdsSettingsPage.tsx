@@ -11,6 +11,7 @@ interface WorkerRow {
   id: number
   name: string
   is_active?: number
+  role?: string | null
 }
 
 /** Admin → Kitchen Display: timers, alerts, paper replacement, PIN, LAN links, second screens. */
@@ -25,7 +26,7 @@ export function KdsSettingsPage() {
 
   useEffect(() => {
     void window.api.kds.getSettings().then(setSettings)
-    void window.api.workers.getAll().then((rows: WorkerRow[]) => setWorkers(rows.filter((row) => row.is_active !== 0)))
+    void window.api.workers.getAll().then((rows: WorkerRow[]) => setWorkers(rows.filter((row) => row.is_active !== 0 && (!row.role || row.role === 'cook'))))
     void window.api.kds.getDisplays().then((list) => {
       setDisplays(list)
       setDisplayId((list.find((display) => !display.primary) ?? list[0])?.id)
