@@ -41,6 +41,10 @@ function log(message: string, isError = false): void {
 }
 
 // Catch any uncaught errors and write to a log file
+// Algeria writes dates day/month/year: without this, Chromium's en-US default shows native date
+// fields as 09/27/2026 and prints receipts in US order. Must run before the app is ready.
+app.commandLine.appendSwitch('lang', 'en-GB')
+
 process.on('uncaughtException', (err) => {
   try {
     const logPath = join(app.getPath('userData'), 'crash.log')
