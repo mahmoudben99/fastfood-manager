@@ -1,6 +1,19 @@
 import { useTranslation } from 'react-i18next'
-import { Type, Image, ListOrdered, Hash, QrCode, Share2, Minus, Sparkles } from 'lucide-react'
-import { Input } from '../../components/ui/Input'
+import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
+  Hash,
+  Image,
+  ListOrdered,
+  Minus,
+  Pencil,
+  QrCode,
+  Share2,
+  Sparkles,
+  Type
+} from 'lucide-react'
+import { Button, Field, Input, SegmentedControl, Select, Toggle } from '../../components/ui'
 import type { SocialMediaEntry } from '../../../../shared/settings-rules'
 
 export interface BlockConfig {
@@ -51,16 +64,19 @@ interface ReceiptBlockConfigProps {
   onRequestKeyboard: (field: BlockTextField) => void
 }
 
-const selectCls = 'border rounded px-1 py-0.5 text-xs'
+type FontSize = NonNullable<BlockConfig['fontSize']>
+type Alignment = NonNullable<BlockConfig['alignment']>
 
+/** Expanded options of one receipt block (inside the block list). */
 export function ReceiptBlockConfig({ block, onChange, socialMedia, logoDataUrl, onEditSocial, isTouch, onRequestKeyboard }: ReceiptBlockConfigProps) {
   const { t } = useTranslation()
   const { type, config } = block
 
   // Touch mode: fields are read-only and open the on-screen keyboard instead.
-  const textInput = (field: BlockTextField, placeholder: string, extra?: { dir?: string }) => (
+  const textInput = (field: BlockTextField, label: string, extra?: { dir?: string; placeholder?: string }) => (
     <Input
-      placeholder={placeholder}
+      label={label}
+      placeholder={extra?.placeholder}
       value={config[field] || ''}
       readOnly={isTouch}
       onClick={isTouch ? () => onRequestKeyboard(field) : undefined}
@@ -69,106 +85,115 @@ export function ReceiptBlockConfig({ block, onChange, socialMedia, logoDataUrl, 
     />
   )
 
+  const styleSelect = (fallback: string, values: string[]) => (
+    <div className="max-w-xs">
+      <Select
+        label={t('receiptEditor.style')}
+        value={config.decorationType || fallback}
+        onChange={(e) => onChange('decorationType', e.target.value)}
+        options={values.map((v) => ({ value: v, label: t(`receiptEditor.styles.${v === 'none' ? 'line' : v === 'food-emoji' ? 'foodEmoji' : v}`) }))}
+      />
+    </div>
+  )
+
   return (
-    <div className="p-3 bg-gray-50 border-t space-y-2">
+    <div className="space-y-4 rounded-b-xl border-t border-line bg-surface-2 p-4">
       {/* Common options — hidden for types that don't use them */}
       {!['divider', 'edge_decoration', 'logo'].includes(type) && (
-        <div className="flex gap-3 flex-wrap">
-          <label className="flex items-center gap-1 text-xs text-gray-600">
-            {t('receiptEditor.size')}:
-            <select className={selectCls} value={config.fontSize || 'medium'} onChange={(e) => onChange('fontSize', e.target.value)}>
-              <option value="small">{t('settings.fontSmall')}</option>
-              <option value="medium">{t('settings.fontMedium')}</option>
-              <option value="large">{t('settings.fontLarge')}</option>
-            </select>
-          </label>
-          <label className="flex items-center gap-1 text-xs text-gray-600">
-            {t('receiptEditor.align')}:
-            {/* The printer centres blocks with no alignment set, so the select must show that too. */}
-            <select className={selectCls} value={config.alignment || 'center'} onChange={(e) => onChange('alignment', e.target.value)}>
-              <option value="left">{t('receiptEditor.alignLeft')}</option>
-              <option value="center">{t('receiptEditor.alignCenter')}</option>
-              <option value="right">{t('receiptEditor.alignRight')}</option>
-            </select>
-          </label>
-          {type !== 'qr_code' && (
-            <label className="flex items-center gap-1 text-xs text-gray-600">
-              <input type="checkbox" checked={config.bold || false} onChange={(e) => onChange('bold', e.target.checked)} />
-              {t('receiptEditor.bold')}
-            </label>
-          )}
-          {(type === 'order_details' || type === 'items_table') && (
-            <label className="flex items-center gap-1 text-xs text-gray-600">
-              <input
-                type="checkbox"
-                checked={config.language === 'bilingual'}
-                onChange={(e) => onChange('language', e.target.checked ? 'bilingual' : undefined)}
+        <>
+          <div className="grid gap-4 sm:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+            <Field label={t('receiptEditor.size')}>
+              <SegmentedControl<FontSize>
+                fullWidth
+                size={isTouch ? 'md' : 'sm'}
+                ariaLabel={t('receiptEditor.size')}
+                value={config.fontSize || 'medium'}
+                onChange={(v) => onChange('fontSize', v)}
+                options={[
+                  { value: 'small', label: t('settings.fontSmall') },
+                  { value: 'medium', label: t('settings.fontMedium') },
+                  { value: 'large', label: t('settings.fontLarge') }
+                ]}
               />
-              {t('receiptEditor.bilingual')}
-            </label>
-          )}
-        </div>
+            </Field>
+            <Field label={t('receiptEditor.align')}>
+              {/* Paper alignment (not reading direction): icons are never mirrored. The printer centres
+                  blocks with no alignment set, so the control must show that too. */}
+              <SegmentedControl<Alignment>
+                fullWidth
+                size={isTouch ? 'md' : 'sm'}
+                ariaLabel={t('receiptEditor.align')}
+                value={config.alignment || 'center'}
+                onChange={(v) => onChange('alignment', v)}
+                options={[
+                  { value: 'left', label: null, icon: <AlignLeft />, ariaLabel: t('receiptEditor.alignLeft') },
+                  { value: 'center', label: null, icon: <AlignCenter />, ariaLabel: t('receiptEditor.alignCenter') },
+                  { value: 'right', label: null, icon: <AlignRight />, ariaLabel: t('receiptEditor.alignRight') }
+                ]}
+              />
+            </Field>
+          </div>
+          <div className="grid gap-x-6 sm:grid-cols-2">
+            {type !== 'qr_code' && (
+              <Toggle size="md" checked={config.bold || false} onChange={(v) => onChange('bold', v)} label={t('receiptEditor.bold')} />
+            )}
+            {(type === 'order_details' || type === 'items_table') && (
+              <Toggle
+                size="md"
+                checked={config.language === 'bilingual'}
+                onChange={(v) => onChange('language', v ? 'bilingual' : undefined)}
+                label={t('receiptEditor.bilingual')}
+              />
+            )}
+          </div>
+        </>
       )}
 
       {type === 'logo' && (
-        <div className="flex items-center gap-3 text-xs text-gray-500">
-          {logoDataUrl ? (
-            <img src={logoDataUrl} alt="" className="h-12 w-12 object-contain rounded border bg-white" />
-          ) : null}
+        <div className="flex items-center gap-4 text-sm text-muted">
+          {logoDataUrl && (
+            <span className="receipt-paper h-14 w-14 shrink-0 rounded-xl border border-line p-1.5">
+              <img src={logoDataUrl} alt="" className="h-full w-full object-contain" />
+            </span>
+          )}
           <span>{logoDataUrl ? t('receiptEditor.logoFromSettings') : t('receiptEditor.noLogo')}</span>
         </div>
       )}
 
       {type === 'custom_text' && (
-        <div className="space-y-1">
+        <div className="grid gap-3">
           {textInput('text', t('receiptEditor.textMain'))}
           {textInput('textAr', t('receiptEditor.textAr'), { dir: 'rtl' })}
           {textInput('textFr', t('receiptEditor.textFr'))}
         </div>
       )}
 
-      {type === 'divider' && (
-        <label className="flex items-center gap-1 text-xs text-gray-600">
-          {t('receiptEditor.style')}:
-          <select className={selectCls} value={config.decorationType || 'none'} onChange={(e) => onChange('decorationType', e.target.value)}>
-            <option value="none">{t('receiptEditor.styles.line')}</option>
-            <option value="dots">{t('receiptEditor.styles.dots')}</option>
-            <option value="stars">{t('receiptEditor.styles.stars')}</option>
-            <option value="food-emoji">{t('receiptEditor.styles.foodEmoji')}</option>
-          </select>
-        </label>
-      )}
-
-      {type === 'edge_decoration' && (
-        <label className="flex items-center gap-1 text-xs text-gray-600">
-          {t('receiptEditor.style')}:
-          <select className={selectCls} value={config.decorationType || 'food-emoji'} onChange={(e) => onChange('decorationType', e.target.value)}>
-            <option value="food-emoji">{t('receiptEditor.styles.foodEmoji')}</option>
-            <option value="stars">{t('receiptEditor.styles.stars')}</option>
-            <option value="dots">{t('receiptEditor.styles.dots')}</option>
-            <option value="fire">{t('receiptEditor.styles.fire')}</option>
-            <option value="hearts">{t('receiptEditor.styles.hearts')}</option>
-          </select>
-        </label>
-      )}
+      {type === 'divider' && styleSelect('none', ['none', 'dots', 'stars', 'food-emoji'])}
+      {type === 'edge_decoration' && styleSelect('food-emoji', ['food-emoji', 'stars', 'dots', 'fire', 'hearts'])}
 
       {type === 'qr_code' && (
-        <div className="space-y-1">
-          {textInput('qrUrl', t('receiptEditor.qrUrlPlaceholder'), { dir: 'ltr' })}
-          {config.qrContent === 'phone' && !config.qrUrl && (
-            <p className="text-xs text-gray-500">{t('receiptEditor.qrPhoneHint')}</p>
-          )}
+        <div className="space-y-2">
+          {textInput('qrUrl', t('receiptEditor.v4.qrLink'), { dir: 'ltr', placeholder: t('receiptEditor.qrUrlPlaceholder') })}
+          {config.qrContent === 'phone' && !config.qrUrl && <p className="text-xs text-muted">{t('receiptEditor.qrPhoneHint')}</p>}
         </div>
       )}
 
       {type === 'social_media' && (
-        <div className="text-xs text-gray-500">
-          {socialMedia.length === 0
-            ? t('receiptEditor.noSocial')
-            : socialMedia.map((s) => `${s.platform}: ${s.handle}`).join(', ')}
-          <button className={`ms-2 text-orange-500 underline ${isTouch ? 'py-2' : ''}`} onClick={onEditSocial}>
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="min-w-0 flex-1 text-sm text-ink-2">
+            {socialMedia.length === 0 ? (
+              <span className="text-muted">{t('receiptEditor.noSocial')}</span>
+            ) : (
+              socialMedia.map((s) => (
+                <span key={`${s.platform}-${s.handle}`} className="me-3 inline-block">
+                  <span className="text-muted">{s.platform}:</span> <bdi dir="ltr">{s.handle}</bdi>
+                </span>
+              ))
+            )}
+          </p>
+          <Button variant="soft" size={isTouch ? 'lg' : 'sm'} icon={<Pencil className="h-4 w-4" />} onClick={onEditSocial}>
             {t('common.edit')}
-          </button>
+          </Button>
         </div>
       )}
     </div>
