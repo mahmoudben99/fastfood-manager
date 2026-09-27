@@ -7,6 +7,10 @@ interface VirtualKeyboardProps {
   onClose: () => void
   type: 'numeric' | 'text'
   visible: boolean
+  /** Text keyboard only: adds a symbols row (@ . / : …) and an Arabic/Latin layout toggle. */
+  extended?: boolean
+  /** Text keyboard only: layout shown first (Arabic requires `extended` to switch back). */
+  initialLayout?: 'latin' | 'arabic'
 }
 
 const NUM_ROWS = [
@@ -24,8 +28,24 @@ const LETTER_ROWS = [
   ['SPACE', 'DONE']
 ]
 
-export function VirtualKeyboard({ value, onChange, onClose, type, visible }: VirtualKeyboardProps) {
+const ARABIC_ROWS = [
+  ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
+  ['ض', 'ص', 'ث', 'ق', 'ف', 'غ', 'ع', 'ه', 'خ', 'ح', 'ج'],
+  ['ش', 'س', 'ي', 'ب', 'ل', 'ا', 'ت', 'ن', 'م', 'ك', 'ط'],
+  ['أ', 'إ', 'آ', 'ئ', 'ء', 'ؤ', 'ر', 'ى', 'ة', 'و', 'ز'],
+  ['ظ', 'د', 'ذ', 'DEL']
+]
+
+const SYMBOL_ROW = ['@', '.', '-', '_', '/', ':', '#', '&', '!', '?', ',']
+
+export function VirtualKeyboard({ value, onChange, onClose, type, visible, extended = false, initialLayout = 'latin' }: VirtualKeyboardProps) {
   const [shifted, setShifted] = useState(false)
+  const [layout, setLayout] = useState<'latin' | 'arabic'>(initialLayout)
+
+  // Each field can ask for its own layout (e.g. the Arabic text of a receipt block).
+  useEffect(() => {
+    setLayout(initialLayout)
+  }, [initialLayout])
 
   // Scroll the active input into view above the keyboard
   useEffect(() => {
@@ -44,12 +64,16 @@ export function VirtualKeyboard({ value, onChange, onClose, type, visible }: Vir
   const handleKey = (key: string) => {
     if (key === 'DEL') {
       onChange(value.slice(0, -1))
-    } else if (key === 'C') {
+    } else if (key === 'C' && type === 'numeric') {
+      // 'C' is the numpad's clear key. On the text keyboard it is the letter C — it used to wipe
+      // the whole field instead of typing "c".
       onChange('')
     } else if (key === 'DONE') {
       onClose()
     } else if (key === 'SHIFT') {
       setShifted(!shifted)
+    } else if (key === 'LANG') {
+      setLayout(layout === 'latin' ? 'arabic' : 'latin')
     } else if (key === 'SPACE') {
       onChange(value + ' ')
     } else if (key === '.') {
@@ -105,11 +129,12 @@ export function VirtualKeyboard({ value, onChange, onClose, type, visible }: Vir
         ) : (
           /* Full QWERTY layout */
           <div className="max-w-3xl mx-auto">
-            {LETTER_ROWS.map((row, ri) => (
+            {textRows(layout, extended).map((row, ri) => (
               <div key={ri} className="flex gap-1 mb-1 justify-center">
                 {row.map((key) => {
-                  const isSpecial = ['SHIFT', 'DEL', 'SPACE', 'DONE'].includes(key)
+                  const isSpecial = ['SHIFT', 'DEL', 'SPACE', 'DONE', 'LANG'].includes(key)
                   const displayKey = key === 'SHIFT' ? (shifted ? '⬆' : '⇧')
+                    : key === 'LANG' ? (layout === 'latin' ? 'ع' : 'ABC')
                     : key === 'DEL' ? '' : key === 'SPACE' ? '' : key === 'DONE' ? '' : (shifted ? key : key.toLowerCase())
 
                   return (
@@ -123,6 +148,8 @@ export function VirtualKeyboard({ value, onChange, onClose, type, visible }: Vir
                             ? 'flex-[2] bg-orange-500 hover:bg-orange-600 text-white'
                             : key === 'SHIFT'
                               ? `flex-[1.4] ${shifted ? 'bg-orange-400 text-white' : 'bg-gray-600 hover:bg-gray-500 text-white'}`
+                              : key === 'LANG'
+                                ? 'flex-[1.4] bg-gray-600 hover:bg-gray-500 text-white'
                               : key === 'DEL'
                                 ? 'flex-[1.4] bg-gray-600 hover:bg-gray-500 text-white'
                                 : ri === 0
@@ -132,7 +159,7 @@ export function VirtualKeyboard({ value, onChange, onClose, type, visible }: Vir
                     >
                       {key === 'DEL' ? <Delete className="h-5 w-5" />
                         : key === 'SPACE' ? <Space className="h-5 w-5" />
-                        : key === 'DONE' ? <><Check className="h-5 w-5 mr-1" /> Done</>
+                        : key === 'DONE' ? <><Check className="h-5 w-5 me-1" /> Done</>
                         : key === 'SHIFT' ? <ChevronUp className="h-5 w-5" />
                         : displayKey}
                     </button>
@@ -145,4 +172,11 @@ export function VirtualKeyboard({ value, onChange, onClose, type, visible }: Vir
       </div>
     </div>
   )
+}
+
+/** Rows of the text keyboard. The default (non-extended) layout is unchanged for existing screens. */
+function textRows(layout: 'latin' | 'arabic', extended: boolean): string[][] {
+  if (!extended) return LETTER_ROWS
+  const base = layout === 'arabic' ? ARABIC_ROWS : LETTER_ROWS.slice(0, -1)
+  return [...base, SYMBOL_ROW, ['LANG', 'SPACE', 'DONE']]
 }
