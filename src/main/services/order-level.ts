@@ -7,6 +7,7 @@ import {
 } from './delivery'
 import { keepAutoSettled, recordPayments, refreshPaymentStatus, refundAllPayments, validatePaymentShape } from './payments'
 import { actingOperator, getOpenShift, openShiftId, requireOpenShift } from './shifts'
+import { journalLineVoid } from './fiscal/journal' // v4 fiscal
 
 /**
  * v4 order-level effects, called from order-service.ts inside its transactions:
@@ -172,6 +173,7 @@ export function recordLineVoid(
     orderId, item.id, item.menu_item_id, item.item_name ?? null, quantity, Number(item.unit_price) || 0,
     (Number(item.unit_price) || 0) * quantity, openShiftId(db), actingOperator(db, operator), now.toISOString()
   )
+  journalLineVoid(db, orderId, item, quantity, actingOperator(db, operator), now) // v4 fiscal: 'void' journal entry
 }
 
 /** Renderer (snake_case) delivery input → service shape; keeps "absent" vs "null" for patches. */

@@ -6,6 +6,7 @@ import {
   Monitor,
   Package,
   Settings,
+  ShieldCheck,
   Tag,
   Users,
   UtensilsCrossed
@@ -54,7 +55,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { path: '/admin/workers', icon: Users, label: 'nav.workers' },
       { path: '/admin/ambiance', icon: Monitor, label: 'nav.ambianceScreen' },
       { path: '/admin/kds', icon: ChefHat, label: 'kds.title' },
-      { path: '/admin/settings', icon: Settings, label: 'nav.settings' }
+      { path: '/admin/settings', icon: Settings, label: 'nav.settings' },
+      { path: '/admin/compliance', icon: ShieldCheck, label: 'compliance.nav' }
     ]
   }
 ]

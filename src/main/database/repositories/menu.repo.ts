@@ -2,6 +2,8 @@ import { getDb } from '../connection'
 import { validateRecipeIngredientAgainstStock } from '../../services/recipe-validation'
 import { canonicalUnit } from '../../services/stock-units'
 import { soldOutSql } from '../../services/catalog-common'
+// v4 channels/availability: channel_prices + available_now on every menu read.
+import { decorateMenuItems } from '../../services/menu-read-extensions'
 
 export interface MenuItem {
   id: number
@@ -24,6 +26,10 @@ export interface MenuItem {
   is_sold_out?: number
   /** Effective: 86'd by hand, or auto_sold_out on and a recipe ingredient has no stock. */
   sold_out?: number
+  /** v4 channels: { [channel]: price } for channels with their own price (others sell at `price`). */
+  channel_prices?: Record<string, number>
+  /** v4 availability: 1 when the item's (and its category's) time rules allow a sale now. */
+  available_now?: number
 }
 
 export interface MenuItemIngredient {
@@ -151,14 +157,14 @@ export const menuRepo = {
       params.push(categoryId)
     }
     query += ' ORDER BY c.sort_order, mi.name'
-    return getDb().prepare(query).all(...params) as MenuItem[]
+    return decorateMenuItems(getDb(), getDb().prepare(query).all(...params) as MenuItem[]) // v4 channels/availability
   },
 
   /** Soft-deleted items, most recently deleted first (for the "Show deleted" view). */
   getDeleted(): MenuItem[] {
-    return getDb()
+    return decorateMenuItems(getDb(), getDb() // v4 channels/availability
       .prepare(`${SELECT_WITH_CATEGORY} WHERE mi.is_active = 0 ORDER BY mi.updated_at DESC, mi.id DESC`)
-      .all() as MenuItem[]
+      .all() as MenuItem[])
   },
 
   getById(id: number): MenuItem | undefined {
@@ -166,6 +172,7 @@ export const menuRepo = {
 
     if (item) {
       item.ingredients = this.getIngredients(id)
+      decorateMenuItems(getDb(), [item]) // v4 channels/availability
     }
     return item
   },
@@ -176,6 +183,7 @@ export const menuRepo = {
       .prepare(`${SELECT_WITH_CATEGORY} WHERE mi.id = ? AND mi.is_active = 1`)
       .get(id) as MenuItem | undefined
     if (item) item.ingredients = this.getIngredients(id)
+    if (item) decorateMenuItems(getDb(), [item]) // v4 channels/availability
     return item
   },
 
