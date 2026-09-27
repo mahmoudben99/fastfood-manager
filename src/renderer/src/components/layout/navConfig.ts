@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
 import {
   BarChart3,
+  Bike,
   ChefHat,
   ClipboardList,
   Monitor,
@@ -8,7 +9,8 @@ import {
   Settings,
   Tag,
   Users,
-  UtensilsCrossed
+  UtensilsCrossed,
+  Wallet
 } from 'lucide-react'
 
 export interface NavItem {
@@ -36,6 +38,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { path: '/admin/analytics', icon: BarChart3, label: 'nav.analytics' },
       { path: '/admin/orders-history', icon: ClipboardList, label: 'nav.ordersHistory' },
+      { path: '/admin/cash', icon: Wallet, label: 'cashAdmin.nav' },
       { path: '/admin/promotions', icon: Tag, label: 'nav.promotions' }
     ]
   },
@@ -52,6 +55,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'ui.nav.groups.restaurant',
     items: [
       { path: '/admin/workers', icon: Users, label: 'nav.workers' },
+      { path: '/admin/delivery', icon: Bike, label: 'delivery.nav' },
       { path: '/admin/ambiance', icon: Monitor, label: 'nav.ambianceScreen' },
       { path: '/admin/kds', icon: ChefHat, label: 'kds.title' },
       { path: '/admin/settings', icon: Settings, label: 'nav.settings' }

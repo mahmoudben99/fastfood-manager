@@ -27,6 +27,9 @@ import { ApprovalHost } from './components/checkout'
 
 // v4 design-system reference (admin-only, lazy so it never weighs on POS start-up).
 const StyleGuide = lazy(() => import('./styleguide/StyleGuide').then((m) => ({ default: m.StyleGuide })))
+// v4 admin: cash & shifts, delivery dispatch (lazy: admin-only).
+const CashPage = lazy(() => import('./pages/cash/CashPage').then((m) => ({ default: m.CashPage })))
+const DeliveryPage = lazy(() => import('./pages/delivery/DeliveryPage').then((m) => ({ default: m.DeliveryPage })))
 
 export default function App() {
   const [loading, setLoading] = useState(true)
@@ -202,6 +205,8 @@ export default function App() {
           <Route path="kds" element={<KdsSettingsPage />} />
           <Route path="promotions" element={<PromotionsPage />} />
           <Route path="receipt-editor" element={<ReceiptEditor />} />
+          <Route path="cash" element={<Suspense fallback={null}><CashPage /></Suspense>} />
+          <Route path="delivery" element={<Suspense fallback={null}><DeliveryPage /></Suspense>} />
         </Route>
         <Route
           path="*"
