@@ -232,14 +232,14 @@ export function PasswordGate({ onUnlock, onCancel }: PasswordGateProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-sm mx-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay animate-fade-in">
+      <div className="bg-surface border border-line rounded-3xl shadow-e4 p-8 w-full max-w-sm mx-4 animate-pop-in">
         {/* Step 1: Normal password entry */}
         {step === 'password' && (
           <>
             <div className="flex flex-col items-center mb-6">
-              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mb-4">
-                <Lock className="h-8 w-8 text-orange-500" />
+              <div className="w-16 h-16 bg-ember rounded-2xl shadow-glow flex items-center justify-center mb-4">
+                <Lock className="h-8 w-8 text-white" />
               </div>
               <h2 className="text-xl font-bold text-gray-900">{t('nav.admin')}</h2>
             </div>
@@ -270,7 +270,7 @@ export function PasswordGate({ onUnlock, onCancel }: PasswordGateProps) {
             <button
               type="button"
               onClick={handleForgotPassword}
-              className="w-full mt-3 text-sm text-orange-500 hover:text-orange-600 transition-colors"
+              className="w-full mt-3 min-h-11 text-sm font-semibold text-primary-ink hover:underline transition-colors"
             >
               {t('forgotPassword.link')}
             </button>
