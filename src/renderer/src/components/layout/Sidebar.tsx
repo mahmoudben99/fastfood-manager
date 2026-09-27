@@ -13,7 +13,8 @@ import {
   ShoppingCart,
   Moon,
   Sun,
-  Tag
+  Tag,
+  ChefHat
 } from 'lucide-react'
 
 const menuItems = [
@@ -23,6 +24,7 @@ const menuItems = [
   { path: '/admin/orders-history', icon: ClipboardList, label: 'nav.ordersHistory' },
   { path: '/admin/analytics', icon: BarChart3, label: 'nav.analytics' },
   { path: '/admin/ambiance', icon: Monitor, label: 'nav.ambianceScreen' },
+  { path: '/admin/kds', icon: ChefHat, label: 'kds.title' },
   { path: '/admin/promotions', icon: Tag, label: 'nav.promotions' },
   { path: '/admin/settings', icon: Settings, label: 'nav.settings' }
 ]

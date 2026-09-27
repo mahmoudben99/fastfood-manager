@@ -4,6 +4,17 @@ import type {
   DashboardSummary, InsightAlert, InsightsPrintResult, InsightsSendResult, InsightsSettings,
   MenuProfitReport, PrepForecast, RushHoursReport, ShoppingList, UpsellSuggestion
 } from '../shared/insights'
+import type {
+  KdsActionResult,
+  KdsBoardState,
+  KdsChangeEvent,
+  KdsDisplayInfo,
+  KdsLanInfo,
+  KdsReadyEvent,
+  KdsSettings,
+  KdsSnapshot,
+  KdsStationFilter
+} from '../shared/kds'
 
 /** Manual print options. reprint=true prints a visible "REPRINT" banner on the ticket. */
 export type PrintOpts = { reprint?: boolean }
@@ -288,6 +299,40 @@ const api = {
       const handler = (_: any, jobs: any[]) => cb(jobs)
       ipcRenderer.on('printer:jobsChanged', handler)
       return () => { ipcRenderer.removeListener('printer:jobsChanged', handler) }
+    }
+  },
+  /** Kitchen display + customer order board (v4). station: 'all' = expo view, 0 = unassigned lines, else workers.id. */
+  kds: {
+    getTickets: (station: KdsStationFilter = 'all'): Promise<KdsSnapshot> => ipcRenderer.invoke('kds:getTickets', station),
+    start: (ticketId: number): Promise<KdsActionResult> => ipcRenderer.invoke('kds:action', { type: 'start', ticketId }),
+    bump: (ticketId: number): Promise<KdsActionResult> => ipcRenderer.invoke('kds:action', { type: 'bump', ticketId }),
+    recall: (ticketId: number): Promise<KdsActionResult> => ipcRenderer.invoke('kds:action', { type: 'recall', ticketId }),
+    lineDone: (itemId: number, done: boolean): Promise<KdsActionResult> => ipcRenderer.invoke('kds:action', { type: 'line-done', itemId, done }),
+    bumpOrder: (orderId: number): Promise<KdsActionResult> => ipcRenderer.invoke('kds:action', { type: 'bump-order', orderId }),
+    recallOrder: (orderId: number): Promise<KdsActionResult> => ipcRenderer.invoke('kds:action', { type: 'recall-order', orderId }),
+    recallLast: (station: KdsStationFilter): Promise<KdsActionResult> => ipcRenderer.invoke('kds:action', { type: 'recall-last', station }),
+    /** Orders whose every kitchen ticket is ready (POS "READY" badges). */
+    getReadyOrders: (): Promise<number[]> => ipcRenderer.invoke('kds:getReadyOrders'),
+    getBoard: (): Promise<KdsBoardState> => ipcRenderer.invoke('kds:getBoard'),
+    getSettings: (): Promise<KdsSettings> => ipcRenderer.invoke('kds:getSettings'),
+    saveSettings: (
+      patch: Partial<Omit<KdsSettings, 'pin'>>
+    ): Promise<{ ok: true; settings: KdsSettings } | { ok: false; error: string }> => ipcRenderer.invoke('kds:saveSettings', patch),
+    setPin: (pin: string): Promise<{ ok: true } | { ok: false; error: string }> => ipcRenderer.invoke('kds:setPin', pin),
+    getDisplays: (): Promise<KdsDisplayInfo[]> => ipcRenderer.invoke('kds:getDisplays'),
+    getLanInfo: (): Promise<KdsLanInfo> => ipcRenderer.invoke('kds:getLanInfo'),
+    /** Opens (or moves) the kitchen screen window; no id = last used / first secondary display. */
+    openWindow: (displayId?: number): Promise<{ ok: true; displayId: number }> => ipcRenderer.invoke('kds:openWindow', displayId),
+    openBoardWindow: (displayId?: number): Promise<{ ok: true; displayId: number }> => ipcRenderer.invoke('kds:openBoardWindow', displayId),
+    onChanged: (cb: (event: KdsChangeEvent) => void) => {
+      const handler = (_: any, event: KdsChangeEvent) => cb(event)
+      ipcRenderer.on('kds:changed', handler)
+      return () => { ipcRenderer.removeListener('kds:changed', handler) }
+    },
+    onReadyChanged: (cb: (event: KdsReadyEvent) => void) => {
+      const handler = (_: any, event: KdsReadyEvent) => cb(event)
+      ipcRenderer.on('kds:readyChanged', handler)
+      return () => { ipcRenderer.removeListener('kds:readyChanged', handler) }
     }
   },
   telegram: {

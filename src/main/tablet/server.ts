@@ -14,6 +14,8 @@ import { getBestLanIP } from './network'
 import { performAutoBackup } from '../ipc/backup.ipc'
 import { computeAutoDiscount, sanitizeOrderItems } from '../services/order-promotions'
 import { getLogoDataUrlSync } from '../services/logo'
+import { getDb } from '../database/connection'
+import { closeKdsStreams, handleKdsRequest, isKdsRoute } from './kds-http'
 
 let server: http.Server | null = null
 let currentPort = 3333
@@ -288,6 +290,12 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
     return
   }
 
+  // Kitchen display (/kds…) and customer order board (/board…): see kds-http.ts.
+  if (isKdsRoute(url.pathname)) {
+    handleKdsRequest(req, res, url, { getDb })
+    return
+  }
+
   // Serve main tablet UI
   if (method === 'GET' && url.pathname === '/') {
     const lang = settingsRepo.get('language') ?? 'en'
@@ -511,6 +519,7 @@ export async function stopTabletServer(): Promise<void> {
     try { client.end() } catch { /* already gone */ }
   }
   displayClients.clear()
+  closeKdsStreams()
   const closingServer = server
   server = null
   mainWin = null
