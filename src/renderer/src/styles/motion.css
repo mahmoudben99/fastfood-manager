@@ -1,0 +1,154 @@
+/*
+ * v4 motion: CSS only, transform/opacity only (never animate box-shadow, width, top/left).
+ * Durations: tap 100ms, state 150-200ms, enter 250ms ease-out, exit 180ms. Max 400ms.
+ * prefers-reduced-motion and Performance mode (.perf on <html>) switch everything off.
+ */
+
+@keyframes ffm-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes ffm-pop-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes ffm-slide-in-end {
+  from { opacity: 0; transform: translateX(calc(24px * var(--dir))); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes ffm-slide-in-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes ffm-pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+@keyframes ffm-flash {
+  0% { opacity: 0.9; }
+  100% { opacity: 0; }
+}
+@keyframes ffm-bump {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+
+@utility animate-fade-in { animation: ffm-fade-in var(--dur-base) var(--ease-out) both; }
+@utility animate-pop-in { animation: ffm-pop-in var(--dur-slow) var(--ease-out) both; }
+@utility animate-slide-in-end { animation: ffm-slide-in-end var(--dur-slow) var(--ease-out) both; }
+@utility animate-slide-in-up { animation: ffm-slide-in-up var(--dur-slow) var(--ease-out) both; }
+@utility animate-pulse-soft { animation: ffm-pulse-soft 1.4s ease-in-out infinite; }
+@utility animate-bump { animation: ffm-bump 240ms var(--ease-out); }
+
+/* Tap feedback: every touchable surface. Scale + (caller's) darker fill, <100ms. */
+@utility tap {
+  transition-property: transform, background-color, border-color, color, opacity;
+  transition-duration: var(--dur-tap), var(--dur-fast), var(--dur-fast), var(--dur-fast), var(--dur-fast);
+  transition-timing-function: var(--ease-out);
+  &:active:not(:disabled):not([aria-disabled='true']) { transform: scale(0.97); }
+}
+
+/* New-line flash for the order ticket: overlay fades out (opacity only). Parent needs position. */
+@utility flash {
+  position: relative;
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: var(--primary-soft-2);
+    pointer-events: none;
+    animation: ffm-flash 600ms var(--ease-out) forwards;
+  }
+}
+
+/* Perforated receipt edge: a paper-coloured strip with round bites (transparent), so it works on
+   any background. receipt-edge = bottom edge (last child), receipt-edge-top = top edge (first child). */
+@utility receipt-edge {
+  height: 10px;
+  background: radial-gradient(circle at 50% 100%, transparent 5px, var(--surface) 5.5px) 0 0 / 16px 10px repeat-x;
+}
+@utility receipt-edge-top {
+  height: 10px;
+  background: radial-gradient(circle at 50% 0, transparent 5px, var(--surface) 5.5px) 0 0 / 16px 10px repeat-x;
+}
+
+/* Tabular, bidi-safe numbers in the bundled Inter (also in Arabic UI). */
+@utility num {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Filled primary surface (buttons, pay bar, active pills). */
+@utility bg-ember {
+  background-color: var(--primary);
+  background-image: linear-gradient(180deg, var(--primary-from), var(--primary-to));
+  color: var(--on-primary);
+}
+
+/* Horizontal chip rows: scroll by touch/wheel without a visible scrollbar. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}
+
+/* Large lists/grids: skip layout+paint work outside the viewport. */
+@utility contain-card { contain: layout paint; }
+@utility auto-visibility {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 120px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *:not(.animate-spin), ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Performance mode: no shadows/blur/transitions; spinners keep spinning so work stays visible. */
+.perf *,
+.perf ::before,
+.perf ::after {
+  --tw-shadow: 0 0 #0000 !important;
+  text-shadow: none !important;
+  backdrop-filter: none !important;
+  transition-duration: 0s !important;
+}
+.perf *:not(.animate-spin),
+.perf ::before,
+.perf ::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+}
+
+/* ===== v3 animations still used by pages (keep until wave 2 migrates them) ===== */
+@keyframes slide-up {
+  from { transform: translateY(100px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.animate-slide-up { animation: slide-up 0.3s var(--ease-out); }
+
+@keyframes slide-up-keyboard {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.animate-slide-up-keyboard { animation: slide-up-keyboard 0.2s ease-out; }
+
+@keyframes slide-down {
+  from { transform: translate(-50%, -100px); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
+}
+.animate-slide-down { animation: slide-down 0.3s var(--ease-out); }
+
+@keyframes flip-sort {
+  0% { transform: rotateX(0deg); opacity: 1; }
+  50% { transform: rotateX(90deg); opacity: 0; }
+  100% { transform: rotateX(0deg); opacity: 1; }
+}
+.animate-flip-sort { animation: flip-sort 0.3s ease-in-out; }
+
+.menu-grid-item { transition: transform 0.3s ease, opacity 0.3s ease; }
