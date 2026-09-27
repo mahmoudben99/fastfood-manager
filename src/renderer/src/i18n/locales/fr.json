@@ -2911,5 +2911,205 @@
       "stillOut": "{{count}} commandes sont encore en route ; elles seront réglées la prochaine fois.",
       "stillOut_one": "{{count}} commande est encore en route ; elle sera réglée la prochaine fois."
     }
+  },
+  "pos": {
+    "title": "Nouvelle commande",
+    "search": "Rechercher",
+    "categories": "Catégories",
+    "all": "Tout",
+    "itemsCount_one": "{{count}} article",
+    "itemsCount_many": "{{count}} articles",
+    "itemsCount_other": "{{count}} articles",
+    "noMatch": "Aucun résultat pour « {{query}} »",
+    "sort": {
+      "label": "Trier les articles",
+      "name": "A–Z",
+      "price": "Prix",
+      "compact": "Tailles regroupées",
+      "expanded": "Chaque taille séparée"
+    },
+    "type": {
+      "label": "Type de commande",
+      "local": "Sur place",
+      "takeout": "À emporter",
+      "delivery": "Livraison"
+    },
+    "status": {
+      "pending": "En attente",
+      "preparing": "En préparation",
+      "ready": "Prête",
+      "completed": "Terminée",
+      "cancelled": "Annulée"
+    },
+    "kind": {
+      "no": "Sans",
+      "extra": "Extra",
+      "light": "Léger"
+    },
+    "tile": {
+      "soldOut": "Épuisé",
+      "unavailable": "Indisponible maintenant",
+      "combo": "Menu",
+      "customize": "Options de {{name}}",
+      "inCart": "{{count}} dans la commande"
+    },
+    "topbar": {
+      "theme": "Thème clair / sombre",
+      "readyCount_one": "{{count}} prête",
+      "readyCount_many": "{{count}} prêtes",
+      "readyCount_other": "{{count}} prêtes"
+    },
+    "recap": {
+      "button": "Bilan du jour",
+      "password": "Mot de passe administrateur",
+      "unlock": "Déverrouiller"
+    },
+    "ticket": {
+      "title": "Commande en cours",
+      "editing": "Modification de la commande n° {{number}}",
+      "cancelEdit": "Annuler la modification",
+      "clear": "Vider la commande",
+      "cleared": "Commande vidée",
+      "editCancelled": "Modification annulée",
+      "cartReplaced": "Panier précédent remplacé",
+      "empty": "Touchez un article pour commencer",
+      "table": "Numéro de table",
+      "tablePlaceholder": "N° de table",
+      "tableRequired": "Saisissez d’abord le numéro de table",
+      "note": "Note de commande",
+      "subtotal": "Sous-total",
+      "discount": "Remise",
+      "deliveryFee": "Frais de livraison",
+      "total": "Total",
+      "pay": "Encaisser",
+      "update": "Enregistrer",
+      "exact": "Exact",
+      "quickCash": "Espèces reçues",
+      "less": "Un de moins",
+      "more": "Un de plus",
+      "removed": "{{name}} retiré",
+      "customPrice": "Prix modifié"
+    },
+    "upsell": {
+      "title": "Souvent ajouté",
+      "chip": "{{percent}} % prennent aussi {{name}}"
+    },
+    "sheet": {
+      "add": "Ajouter",
+      "save": "Enregistrer",
+      "editTitle": "Modifier {{name}}",
+      "required": "Obligatoire",
+      "optional": "Facultatif",
+      "missing": "Choisir : {{group}}",
+      "note": "Note cuisine",
+      "notePlaceholder": "ex. bien cuit",
+      "price": "Prix unitaire",
+      "priceHint": "Vide = prix du menu",
+      "resetPrice": "Prix du menu",
+      "removeLine": "Retirer"
+    },
+    "rule": {
+      "exactly": "Choisir {{count}}",
+      "range": "Choisir de {{min}} à {{max}}",
+      "atLeast": "Au moins {{count}}",
+      "upTo": "Jusqu’à {{count}}",
+      "any": "Au choix"
+    },
+    "combo": {
+      "choose": "Choisir : {{slot}}",
+      "included": "Inclus",
+      "optionsFor": "Options · {{name}}",
+      "incomplete": "Complétez chaque partie.",
+      "missing": "Ce menu n’est pas configuré."
+    },
+    "delivery": {
+      "title": "Détails de livraison",
+      "addressRequired": "Saisissez l’adresse de livraison",
+      "add": "Ajouter téléphone et adresse",
+      "noAddress": "Pas encore d’adresse",
+      "done": "Terminé",
+      "repeated_one": "{{count}} article ajouté depuis la dernière commande",
+      "repeated_many": "{{count}} articles ajoutés depuis la dernière commande",
+      "repeated_other": "{{count}} articles ajoutés depuis la dernière commande",
+      "repeatSkipped_one": "{{count}} article n’est plus disponible",
+      "repeatSkipped_many": "{{count}} articles ne sont plus disponibles",
+      "repeatSkipped_other": "{{count}} articles ne sont plus disponibles"
+    },
+    "discount": {
+      "title": "Remise",
+      "percent": "Pourcentage",
+      "amount": "Montant (DA)",
+      "custom": "Autre valeur",
+      "preview": "Remise sur cette commande",
+      "apply": "Appliquer",
+      "remove": "Retirer la remise",
+      "label": "Remise manuelle",
+      "needsPin": "PIN responsable requis"
+    },
+    "orderNote": {
+      "title": "Note de commande",
+      "recent": "Notes récentes"
+    },
+    "print": {
+      "notConfirmed": "Vérifiez la commande n° {{number}} : {{destination}} non confirmé",
+      "receipt": "reçu client",
+      "kitchen": "ticket cuisine",
+      "kitchenFor": "ticket cuisine de {{name}}",
+      "attention": "Intervention du personnel requise.",
+      "more_one": "+{{count}} autre alerte d’impression",
+      "more_many": "+{{count}} autres alertes d’impression",
+      "more_other": "+{{count}} autres alertes d’impression",
+      "retry": "Réessayer après vérification",
+      "dismiss": "Ignorer",
+      "actionFailed": "L’alerte d’impression n’a pas pu être mise à jour",
+      "printing_one": "Impression de {{count}} ticket…",
+      "printing_many": "Impression de {{count}} tickets…",
+      "printing_other": "Impression de {{count}} tickets…"
+    },
+    "error": {
+      "generic": "Non enregistrée. Rien n’est parti en cuisine ; réessayez.",
+      "soldOut": "Articles épuisés : ils sont signalés dans le ticket.",
+      "noShift": "Aucune caisse ouverte.",
+      "openShift": "Ouvrir la caisse",
+      "belowMin": "En dessous du minimum de commande pour {{zone}} ({{min}} DA).",
+      "belowMinGeneric": "Cette commande est en dessous du minimum de la zone de livraison.",
+      "acceptAnyway": "Accepter quand même",
+      "duplicate": "La commande n° {{number}} est déjà enregistrée, mais le panier a changé. Panier conservé : vérifiez d’abord cette commande.",
+      "approvalCancelled": "Non enregistrée : autorisation annulée.",
+      "cartKept": "Panier conservé : corrigez et réessayez."
+    },
+    "shift": {
+      "title": "Ouvrez d’abord la caisse",
+      "body": "Ouvrez la caisse, puis réessayez. La commande est conservée.",
+      "retry": "Réessayer la commande"
+    },
+    "success": {
+      "change": "Monnaie à rendre",
+      "payLater": "À payer plus tard",
+      "newOrder": "Nouvelle commande",
+      "updated": "Commande n° {{number}} mise à jour",
+      "title": "Commande envoyée"
+    },
+    "history": {
+      "search": "Table, téléphone, n°, article",
+      "noMatch": "Aucune commande ne correspond",
+      "noneOngoing": "Rien en cours",
+      "noneDone": "Aucune commande terminée pour l’instant",
+      "ready": "Prête",
+      "late": "En retard",
+      "unpaid": "Non payée",
+      "partial": "Payée en partie",
+      "print": "Imprimer",
+      "cancel": "Annuler",
+      "table": "Table {{table}}",
+      "justNow": "à l’instant",
+      "minutes": "{{count}} min",
+      "hours": "{{h}} h {{m}} min"
+    },
+    "milestone": "{{count}}e commande de la journée !",
+    "channel": {
+      "label": "Canal de vente",
+      "direct": "Direct"
+    }
   }
 }

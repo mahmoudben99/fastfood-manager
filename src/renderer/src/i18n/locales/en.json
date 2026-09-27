@@ -2905,5 +2905,198 @@
       "stillOut": "{{count}} orders are still on the way; they will be settled next time.",
       "stillOut_one": "{{count}} order is still on the way; it will be settled next time."
     }
+  },
+  "pos": {
+    "title": "New order",
+    "search": "Search",
+    "categories": "Categories",
+    "all": "All",
+    "itemsCount_one": "{{count}} item",
+    "itemsCount_other": "{{count}} items",
+    "noMatch": "Nothing matches “{{query}}”",
+    "sort": {
+      "label": "Sort items",
+      "name": "A–Z",
+      "price": "Price",
+      "compact": "Sizes grouped",
+      "expanded": "Every size separate"
+    },
+    "type": {
+      "label": "Order type",
+      "local": "Dine in",
+      "takeout": "Takeaway",
+      "delivery": "Delivery"
+    },
+    "status": {
+      "pending": "Pending",
+      "preparing": "Preparing",
+      "ready": "Ready",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
+    },
+    "kind": {
+      "no": "No",
+      "extra": "Extra",
+      "light": "Light"
+    },
+    "tile": {
+      "soldOut": "Sold out",
+      "unavailable": "Not available now",
+      "combo": "Combo",
+      "customize": "Options for {{name}}",
+      "inCart": "{{count}} in the order"
+    },
+    "topbar": {
+      "theme": "Light / dark theme",
+      "readyCount": "{{count}} ready"
+    },
+    "recap": {
+      "button": "Day recap",
+      "password": "Admin password",
+      "unlock": "Unlock"
+    },
+    "ticket": {
+      "title": "Current order",
+      "editing": "Editing order #{{number}}",
+      "cancelEdit": "Cancel edit",
+      "clear": "Clear order",
+      "cleared": "Order cleared",
+      "editCancelled": "Edit cancelled",
+      "cartReplaced": "Previous cart replaced",
+      "empty": "Tap an item to start",
+      "table": "Table number",
+      "tablePlaceholder": "Table no.",
+      "tableRequired": "Enter the table number first",
+      "note": "Order note",
+      "subtotal": "Subtotal",
+      "discount": "Discount",
+      "deliveryFee": "Delivery fee",
+      "total": "Total",
+      "pay": "Pay",
+      "update": "Save changes",
+      "exact": "Exact",
+      "quickCash": "Cash received",
+      "less": "One less",
+      "more": "One more",
+      "removed": "{{name}} removed",
+      "customPrice": "Custom price"
+    },
+    "upsell": {
+      "title": "Often added",
+      "chip": "{{percent}}% also take {{name}}"
+    },
+    "sheet": {
+      "add": "Add to order",
+      "save": "Save",
+      "editTitle": "Edit {{name}}",
+      "required": "Required",
+      "optional": "Optional",
+      "missing": "Choose: {{group}}",
+      "note": "Kitchen note",
+      "notePlaceholder": "e.g. well done",
+      "price": "Unit price",
+      "priceHint": "Empty = menu price",
+      "resetPrice": "Use menu price",
+      "removeLine": "Remove"
+    },
+    "rule": {
+      "exactly": "Choose {{count}}",
+      "range": "Choose {{min}} to {{max}}",
+      "atLeast": "At least {{count}}",
+      "upTo": "Up to {{count}}",
+      "any": "Any number"
+    },
+    "combo": {
+      "choose": "Choose: {{slot}}",
+      "included": "Included",
+      "optionsFor": "Options · {{name}}",
+      "incomplete": "Complete every part first.",
+      "missing": "This combo is not set up."
+    },
+    "delivery": {
+      "title": "Delivery details",
+      "addressRequired": "Enter the delivery address",
+      "add": "Add phone and address",
+      "noAddress": "No address yet",
+      "done": "Done",
+      "repeated_one": "{{count}} item added from the last order",
+      "repeated_other": "{{count}} items added from the last order",
+      "repeatSkipped_one": "{{count}} item is no longer available",
+      "repeatSkipped_other": "{{count}} items are no longer available"
+    },
+    "discount": {
+      "title": "Discount",
+      "percent": "Percent",
+      "amount": "Amount (DA)",
+      "custom": "Other value",
+      "preview": "Discount on this order",
+      "apply": "Apply",
+      "remove": "Remove discount",
+      "label": "Manual discount",
+      "needsPin": "Manager PIN required"
+    },
+    "orderNote": {
+      "title": "Order note",
+      "recent": "Recent notes"
+    },
+    "print": {
+      "notConfirmed": "Check order #{{number}}: {{destination}} not confirmed",
+      "receipt": "customer receipt",
+      "kitchen": "kitchen ticket",
+      "kitchenFor": "kitchen ticket for {{name}}",
+      "attention": "Needs staff attention.",
+      "more_one": "+{{count}} more print alert",
+      "more_other": "+{{count}} more print alerts",
+      "retry": "Retry after checking",
+      "dismiss": "Dismiss",
+      "actionFailed": "The print alert could not be updated",
+      "printing_one": "Printing {{count}} ticket…",
+      "printing_other": "Printing {{count}} tickets…"
+    },
+    "error": {
+      "generic": "Not saved. Nothing was sent to the kitchen; retry.",
+      "soldOut": "Some items sold out: they are marked in the ticket.",
+      "noShift": "No open shift.",
+      "openShift": "Open shift",
+      "belowMin": "Below the minimum order for {{zone}} ({{min}} DA).",
+      "belowMinGeneric": "This order is below the delivery zone's minimum.",
+      "acceptAnyway": "Accept anyway",
+      "duplicate": "Order #{{number}} was already saved, but the cart changed. Cart kept: check that order first.",
+      "approvalCancelled": "Not saved: approval cancelled.",
+      "cartKept": "Cart kept: fix and retry."
+    },
+    "shift": {
+      "title": "Open a shift first",
+      "body": "Open a shift, then retry. The order is kept.",
+      "retry": "Retry the order"
+    },
+    "success": {
+      "change": "Change due",
+      "payLater": "To pay later",
+      "newOrder": "New order",
+      "updated": "Order #{{number}} updated",
+      "title": "Order sent"
+    },
+    "history": {
+      "search": "Table, phone, #, item",
+      "noMatch": "No orders match your search",
+      "noneOngoing": "Nothing in progress",
+      "noneDone": "No finished orders yet",
+      "ready": "Ready",
+      "late": "Late",
+      "unpaid": "Unpaid",
+      "partial": "Partly paid",
+      "print": "Print",
+      "cancel": "Cancel",
+      "table": "Table {{table}}",
+      "justNow": "just now",
+      "minutes": "{{count}} min",
+      "hours": "{{h}} h {{m}} min"
+    },
+    "milestone": "Order #{{count}} of the day!",
+    "channel": {
+      "label": "Sales channel",
+      "direct": "Direct"
+    }
   }
 }
