@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import i18n from '../i18n'
+import { DEFAULT_CURRENCY_SYMBOL } from '../../../shared/settings-rules'
 
 interface AppState {
   language: string
@@ -36,8 +37,8 @@ interface AppState {
 export const useAppStore = create<AppState>((set, get) => ({
   language: 'en',
   foodLanguage: 'en',
-  currency: 'USD',
-  currencySymbol: '$',
+  currency: 'DZD',
+  currencySymbol: DEFAULT_CURRENCY_SYMBOL,
   restaurantName: '',
   activated: false,
   setupComplete: false,
@@ -102,8 +103,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({
         language: lang,
         foodLanguage: settings.food_language || lang,
-        currency: settings.currency || 'USD',
-        currencySymbol: settings.currency_symbol || '$',
+        currency: settings.currency || 'DZD',
+        // Contract C4: an empty currency symbol means 'DA' everywhere (was '$').
+        currencySymbol: settings.currency_symbol || DEFAULT_CURRENCY_SYMBOL,
         restaurantName: settings.restaurant_name || '',
         activated: settings.activation_status === 'activated',
         setupComplete: settings.setup_complete === 'true',

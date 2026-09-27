@@ -99,6 +99,31 @@ try {
   }
   assert.equal(db.prepare("SELECT value FROM settings WHERE key = 'setup_complete'").get().value, 'true')
 
+  // v3.2.1 settings: order_alert_minutes is validated at the IPC boundary (0 made every order late).
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('order_alert_minutes', '0')").run()
+  assert.equal((await getHandler('settings:getAll')()).order_alert_minutes, '20')
+  await getHandler('settings:setMultiple')({}, { order_alert_minutes: '-3', restaurant_name: 'R' })
+  assert.equal(db.prepare("SELECT value FROM settings WHERE key = 'order_alert_minutes'").get().value, '0')
+  await getHandler('settings:setMultiple')({}, { order_alert_minutes: '15' })
+  assert.equal(await getHandler('settings:get')({}, 'order_alert_minutes'), '15')
+
+  // v3.2.1 receipt editor: legacy social_media table rows move into settings.social_media (what the
+  // printer reads) once; the editor then reads/writes that setting; clearActive restores the default.
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('social_media', '[]')").run()
+  db.prepare("INSERT INTO social_media (platform, handle) VALUES ('instagram', '@legacy')").run()
+  const { registerReceiptEditorHandlers } = await load('src/main/ipc/receipt-editor.ipc.ts')
+  registerReceiptEditorHandlers()
+  assert.equal(db.prepare("SELECT value FROM settings WHERE key = 'social_media'").get().value, '[{"platform":"instagram","handle":"@legacy"}]')
+  await getHandler('receipt:saveSocialMedia')({}, [{ platform: 'tiktok', handle: ' @new ' }, { platform: 'facebook', handle: '' }])
+  assert.deepEqual(await getHandler('receipt:getSocialMedia')(), [{ platform: 'tiktok', handle: '@new' }])
+  const tmpl = await getHandler('receipt:saveTemplate')({}, { name: 'T', blocks: JSON.stringify([{ id: '5', type: 'logo' }, { id: '5', type: 'total' }]), is_active: 1 })
+  await getHandler('receipt:setActive')({}, tmpl.id)
+  const savedBlocks = JSON.parse(db.prepare('SELECT blocks FROM receipt_templates WHERE id = ?').get(tmpl.id).blocks)
+  assert.equal(new Set(savedBlocks.map((b) => b.id)).size, 2, 'duplicate block ids were stored')
+  await getHandler('receipt:clearActive')()
+  assert.equal(await getHandler('receipt:getActive')(), null)
+  await assert.rejects(async () => getHandler('receipt:saveTemplate')({}, { name: ' ', blocks: '[]' }), /name/)
+
   // Stock unit conversion stays bounded and rejects incompatible/non-positive input.
   assert.equal(recipeQuantityInStockUnits(150, 'g', 'kg'), 0.15)
   assert.equal(recipeQuantityInStockUnits(250, 'ml', 'L'), 0.25)
