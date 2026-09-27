@@ -308,7 +308,8 @@ export function listDeliveries(
     `SELECT o.id AS order_id, o.daily_number, o.order_date, o.status AS order_status, o.customer_name, o.customer_phone,
             o.total, o.delivery_fee, o.payment_status,
             CASE WHEN o.payment_status IS NULL AND NOT EXISTS (SELECT 1 FROM order_payments p WHERE p.order_id = o.id) THEN 0
-                 ELSE o.total - COALESCE((SELECT SUM(p.amount) FROM order_payments p WHERE p.order_id = o.id), 0) END AS balance_due,
+                 ELSE o.total - COALESCE((SELECT SUM(CASE WHEN p.kind = 'refund' AND p.auto = 0 THEN 0 ELSE p.amount END)
+                                          FROM order_payments p WHERE p.order_id = o.id), 0) END AS balance_due,
             COALESCE(d.address, '') AS address, d.address_id, d.zone_id, d.zone_name, d.estimated_minutes, d.driver_id,
             w.name AS driver_name, d.notes, COALESCE(d.status, 'pending') AS status, d.failure_reason,
             COALESCE(d.created_at, o.created_at) AS created_at, d.preparing_at, d.out_for_delivery_at, d.delivered_at,

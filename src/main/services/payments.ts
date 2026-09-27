@@ -50,6 +50,15 @@ export function orderPayments(db: Database.Database, orderId: number): OrderPaym
 
 const isLegacy = (order: OrderMoneyRow, rows: OrderPaymentRow[]): boolean => order.payment_status === null && rows.length === 0
 
+/**
+ * Money that settles the order: every row except manual refunds. A refund handed back by hand
+ * (goodwill, returned item) closes that part of the order — it must not re-open a balance due that
+ * a cashier would then try to collect again. Auto refunds (cancel, total lowered) still count.
+ */
+export function settledAmount(rows: { kind: string; amount: number; auto: number }[]): number {
+  return rows.reduce((acc, row) => acc + (row.kind === 'refund' && !row.auto ? 0 : row.amount), 0)
+}
+
 function statusFor(total: number, paid: number, orderStatus: string): PaymentStatus {
   if (orderStatus === 'cancelled') return 'void'
   if (total <= 0 || paid >= total) return 'paid'
@@ -64,8 +73,9 @@ export function paymentSummary(db: Database.Database, orderId: number): OrderPay
     return { orderId, total, paid: total, balanceDue: 0, status: order.status === 'cancelled' ? 'void' : 'paid', legacy: true, payments: [] }
   }
   const paid = rows.reduce((acc, row) => acc + row.amount, 0)
+  const settled = settledAmount(rows)
   return {
-    orderId, total, paid, balanceDue: total - paid, status: statusFor(total, paid, order.status), legacy: false, payments: rows
+    orderId, total, paid, balanceDue: total - settled, status: statusFor(total, settled, order.status), legacy: false, payments: rows
   }
 }
 
@@ -77,8 +87,7 @@ export function refreshPaymentStatus(db: Database.Database, orderId: number, ini
   const order = orderRow(db, orderId)
   const rows = orderPayments(db, orderId)
   if (!initial && isLegacy(order, rows)) return null
-  const paid = rows.reduce((acc, row) => acc + row.amount, 0)
-  const status = statusFor(Math.round(Number(order.total)), paid, order.status)
+  const status = statusFor(Math.round(Number(order.total)), settledAmount(rows), order.status)
   db.prepare('UPDATE orders SET payment_status = ? WHERE id = ?').run(status, orderId)
   return status
 }
@@ -231,7 +240,7 @@ export function keepAutoSettled(db: Database.Database, orderId: number, ctx: Pay
 
 /**
  * Non-cancelled orders with a balance due (pay later / COD), newest first. `refunded` = money handed
- * back by hand (a partial refund keeps the total, so it shows up here as a balance due).
+ * back by hand (it settles that part of the order; it never re-opens a balance due).
  */
 export function listUnpaidOrders(db: Database.Database, options: { date?: string; shiftId?: number } = {}): {
   id: number; daily_number: number; order_date: string; order_type: string; customer_name: string | null
@@ -239,7 +248,8 @@ export function listUnpaidOrders(db: Database.Database, options: { date?: string
 }[] {
   return db.prepare(
     `SELECT o.id, o.daily_number, o.order_date, o.order_type, o.customer_name, o.customer_phone, o.total,
-            COALESCE(SUM(p.amount), 0) AS paid, o.total - COALESCE(SUM(p.amount), 0) AS balance_due, o.payment_status,
+            COALESCE(SUM(p.amount), 0) AS paid,
+            o.total - COALESCE(SUM(CASE WHEN p.kind = 'refund' AND p.auto = 0 THEN 0 ELSE p.amount END), 0) AS balance_due, o.payment_status,
             COALESCE(SUM(CASE WHEN p.kind = 'refund' AND p.auto = 0 THEN -p.amount ELSE 0 END), 0) AS refunded
      FROM orders o LEFT JOIN order_payments p ON p.order_id = o.id
      WHERE o.status != 'cancelled' AND o.payment_status IN ('unpaid', 'partial')
