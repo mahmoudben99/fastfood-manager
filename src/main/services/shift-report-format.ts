@@ -20,7 +20,7 @@ const LABELS: Record<CashLang, ReportLabels> = {
   en: {
     x: 'X REPORT', z: 'Z REPORT', shift: 'Shift', register: 'Register', cashier: 'Cashier', opened: 'Opened',
     closed: 'Closed', closedBy: 'Closed by', orders: 'Orders', gross: 'Gross sales', discounts: 'Discounts',
-    deliveryFees: 'Delivery fees', net: 'Net sales', average: 'Average ticket', local: 'At table', takeout: 'Take out',
+    deliveryFees: 'Delivery fees', net: 'Net sales', average: 'Average ticket', local: 'Dine in', takeout: 'Takeaway',
     delivery: 'Delivery', payments: 'Payments by method', refunds: 'refunds', drawer: 'Cash drawer',
     float: 'Opening float', cashSales: 'Cash sales', cashRefunds: 'Cash refunds', rounding: 'Rounding',
     payIns: 'Pay-ins', payOuts: 'Pay-outs', drivers: 'Driver settlements', expected: 'Expected cash',
@@ -32,25 +32,25 @@ const LABELS: Record<CashLang, ReportLabels> = {
   fr: {
     x: 'RAPPORT X', z: 'RAPPORT Z', shift: 'Service', register: 'Caisse', cashier: 'Caissier', opened: 'Ouverture',
     closed: 'Clôture', closedBy: 'Clôturé par', orders: 'Commandes', gross: 'Ventes brutes', discounts: 'Remises',
-    deliveryFees: 'Frais de livraison', net: 'Ventes nettes', average: 'Ticket moyen', local: 'Sur place',
+    deliveryFees: 'Frais de livraison', net: 'Ventes nettes', average: 'Panier moyen', local: 'Sur place',
     takeout: 'À emporter', delivery: 'Livraison', payments: 'Paiements par mode', refunds: 'remboursements',
     drawer: 'Tiroir-caisse', float: 'Fond de caisse', cashSales: 'Ventes espèces', cashRefunds: 'Remboursements espèces',
     rounding: 'Arrondi', payIns: 'Entrées', payOuts: 'Sorties', drivers: 'Règlements livreurs',
-    expected: 'Espèces attendues', counted: 'Espèces comptées', overShort: 'Écart', hidden: 'masqué (comptage à l’aveugle)',
-    unpaid: 'Commandes non payées', categories: 'Ventes par catégorie', topItems: 'Meilleures ventes',
+    expected: 'Espèces attendues', counted: 'Espèces comptées', overShort: 'Écart', hidden: "masqué (comptage à l'aveugle)",
+    unpaid: 'Commandes impayées', categories: 'Ventes par catégorie', topItems: 'Meilleures ventes',
     cancellations: 'Annulations', voids: 'Articles retirés', movements: 'Mouvements de caisse',
     byCashier: 'Remises par caissier', denominations: 'Comptage par coupure', printed: 'Imprimé', note: 'billet', coin: 'pièce'
   },
   ar: {
-    x: 'تقرير X', z: 'تقرير Z', shift: 'الوردية', register: 'الصندوق', cashier: 'أمين الصندوق', opened: 'الفتح',
-    closed: 'الإغلاق', closedBy: 'أغلق بواسطة', orders: 'الطلبات', gross: 'المبيعات الإجمالية', discounts: 'التخفيضات',
-    deliveryFees: 'رسوم التوصيل', net: 'صافي المبيعات', average: 'متوسط الطلب', local: 'على الطاولة', takeout: 'تيك أواي',
-    delivery: 'توصيل', payments: 'المدفوعات حسب الطريقة', refunds: 'استرجاع', drawer: 'درج النقود',
-    float: 'رصيد الافتتاح', cashSales: 'المبيعات النقدية', cashRefunds: 'الاسترجاعات النقدية', rounding: 'التقريب',
-    payIns: 'إيداعات', payOuts: 'مصروفات', drivers: 'تسويات السائقين', expected: 'النقد المتوقع', counted: 'النقد المعدود',
-    overShort: 'الفرق', hidden: 'مخفي (عدّ أعمى)', unpaid: 'طلبات غير مدفوعة', categories: 'المبيعات حسب الفئة',
-    topItems: 'الأكثر مبيعا', cancellations: 'الإلغاءات', voids: 'المواد المحذوفة', movements: 'حركات الصندوق',
-    byCashier: 'التخفيضات حسب أمين الصندوق', denominations: 'العد حسب الفئة النقدية', printed: 'طبع في', note: 'ورقة', coin: 'قطعة'
+    x: 'تقرير X', z: 'تقرير Z', shift: 'المناوبة', register: 'الصندوق', cashier: 'أمين الصندوق', opened: 'الفتح',
+    closed: 'الإغلاق', closedBy: 'أُغلقت من طرف', orders: 'الطلبات', gross: 'المبيعات الإجمالية', discounts: 'الخصومات',
+    deliveryFees: 'رسوم التوصيل', net: 'صافي المبيعات', average: 'متوسط الطلب', local: 'في المطعم', takeout: 'سفري',
+    delivery: 'توصيل', payments: 'المدفوعات حسب الطريقة', refunds: 'استرداد', drawer: 'درج النقود',
+    float: 'رصيد الافتتاح', cashSales: 'المبيعات النقدية', cashRefunds: 'المبالغ المستردة نقدًا', rounding: 'التقريب',
+    payIns: 'إيداعات', payOuts: 'سحوبات', drivers: 'تسويات السائقين', expected: 'النقد المتوقع', counted: 'النقد المعدود',
+    overShort: 'الفرق', hidden: 'مخفي (عدّ دون عرض المتوقع)', unpaid: 'طلبات غير مدفوعة', categories: 'المبيعات حسب الفئة',
+    topItems: 'الأكثر مبيعًا', cancellations: 'الإلغاءات', voids: 'المنتجات المحذوفة', movements: 'حركات الصندوق',
+    byCashier: 'الخصومات حسب أمين الصندوق', denominations: 'العد حسب الفئة النقدية', printed: 'طُبع في', note: 'ورقة', coin: 'قطعة'
   }
 }
 

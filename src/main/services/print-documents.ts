@@ -93,8 +93,8 @@ export function buildDefaultReceiptHTML(order: any, settings: Record<string, str
 
 function kitchenOrderType(orderType: string): string {
   if (orderType === 'delivery') return 'DELIVERY'
-  if (orderType === 'takeout') return 'TAKE OUT'
-  return 'AT TABLE'
+  if (orderType === 'takeout') return 'TAKEAWAY'
+  return 'DINE IN'
 }
 
 export interface KitchenContext {

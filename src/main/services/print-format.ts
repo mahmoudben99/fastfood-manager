@@ -41,7 +41,7 @@ const LABELS: Record<ReceiptLang, ReceiptLabels> = {
   en: {
     order: 'Order', table: 'Table', customer: 'Customer', phone: 'Phone', total: 'Total',
     subtotal: 'Subtotal', discount: 'Discount', thanks: 'Thank you for your visit!',
-    local: 'At Table', takeout: 'Take Out', delivery: 'Delivery', reprint: 'REPRINT'
+    local: 'Dine in', takeout: 'Takeaway', delivery: 'Delivery', reprint: 'REPRINT'
   },
   fr: {
     order: 'Commande', table: 'Table', customer: 'Client', phone: 'Tél', total: 'Total',
@@ -50,8 +50,8 @@ const LABELS: Record<ReceiptLang, ReceiptLabels> = {
   },
   ar: {
     order: 'طلب', table: 'طاولة', customer: 'الزبون', phone: 'هاتف', total: 'المجموع',
-    subtotal: 'المجموع الفرعي', discount: 'تخفيض', thanks: 'شكرا لزيارتكم',
-    local: 'على الطاولة', takeout: 'تيك أواي', delivery: 'توصيل', reprint: 'إعادة طباعة'
+    subtotal: 'المجموع الفرعي', discount: 'خصم', thanks: 'شكرًا لزيارتكم!',
+    local: 'في المطعم', takeout: 'سفري', delivery: 'توصيل', reprint: 'إعادة طباعة'
   }
 }
 
