@@ -12,6 +12,11 @@
  *           profitable ⇔ margin DA ≥ qty-weighted average margin DA
  *           Star (popular, profitable) · Plowhorse (popular, low margin)
  *           Puzzle (unpopular, profitable) · Dog (unpopular, low margin)
+ *
+ * v4 catalog: cost is the STANDARD BUILD (catalog-costs.ts: recipe + default options; combos = own
+ * recipe + default picks). Sales follow Analytics: combo children count on their own item at their
+ * allocated revenue, the combo line counts on the combo. Combos are listed (isCombo) but kept out
+ * of the quadrants — their children already carry those sales.
  */
 import type Database from 'better-sqlite3'
 import type {
@@ -19,9 +24,11 @@ import type {
 } from '../../../shared/insights'
 import { assertRange, utcSqlTimestamp } from './dates'
 import {
-  latestUnitCosts, loadPurchaseHistory, loadRecipes, loadStock, priceAt, recipeCost, round1, round2,
+  latestUnitCosts, loadPurchaseHistory, loadStock, priceAt, recipeCost, round1, round2,
   type PurchasePoint, type RecipeLine
 } from './costs'
+import { loadCostingRecipes } from './catalog-costs'
+import { LINE_REVENUE } from './sql'
 
 export const COST_INCREASE_PCT = 10
 export const COST_LOOKBACK_DAYS = 30
@@ -78,6 +85,7 @@ interface MenuRow {
   price: number
   category_id: number
   category_name: string | null
+  is_combo: number
 }
 
 export function buildMenuProfit(
@@ -90,17 +98,17 @@ export function buildMenuProfit(
   const now = options.now ?? new Date()
   const warn = options.marginWarnPct
   const menu = db.prepare(
-    `SELECT mi.id, mi.name, mi.name_ar, mi.name_fr, mi.price, mi.category_id, c.name AS category_name
+    `SELECT mi.id, mi.name, mi.name_ar, mi.name_fr, mi.price, mi.category_id, c.name AS category_name, mi.is_combo
      FROM menu_items mi LEFT JOIN categories c ON c.id = mi.category_id
      WHERE mi.is_active = 1 ORDER BY mi.name`
   ).all() as MenuRow[]
   const sales = new Map((db.prepare(
-    `SELECT oi.menu_item_id AS id, SUM(oi.quantity) AS qty, SUM(oi.total_price) AS revenue
+    `SELECT oi.menu_item_id AS id, SUM(oi.quantity) AS qty, SUM(${LINE_REVENUE}) AS revenue
      FROM orders o JOIN order_items oi ON oi.order_id = o.id
      WHERE o.order_date BETWEEN ? AND ? AND o.status != 'cancelled'
      GROUP BY oi.menu_item_id`
   ).all(range.start, range.end) as { id: number; qty: number; revenue: number }[]).map((row) => [row.id, row]))
-  const recipes = loadRecipes(db)
+  const recipes = loadCostingRecipes(db)
   const book = loadPriceBook(db, now)
 
   const items: MenuProfitItem[] = menu.map((row) => {
@@ -115,6 +123,7 @@ export function buildMenuProfit(
       categoryId: row.category_id,
       categoryName: row.category_name ?? '',
       price: row.price,
+      isCombo: row.is_combo === 1,
       qtySold: sold?.qty ?? 0,
       revenue: Math.round(sold?.revenue ?? 0),
       quadrant: null
@@ -149,7 +158,8 @@ export function buildMenuProfit(
         stockQuantity: c.stockQuantity,
         stockUnit: c.line.stockUnit,
         unitCost: c.unitCost,
-        cost: round2(c.cost)
+        cost: round2(c.cost),
+        via: c.line.via ?? null
       }))
     }
   })
@@ -190,9 +200,9 @@ export function buildMenuProfit(
   }
 }
 
-/** Sets `quadrant` in place on items with a cost; returns the split lines. */
+/** Sets `quadrant` in place on items with a cost (combos excluded); returns the split lines. */
 export function assignQuadrants(items: MenuProfitItem[]): { averageMarginDa: number; popularityThreshold: number } {
-  const costed = items.filter((item) => item.marginDa !== null)
+  const costed = items.filter((item) => item.marginDa !== null && !item.isCombo)
   const totalQty = costed.reduce((sum, item) => sum + item.qtySold, 0)
   if (costed.length === 0 || totalQty <= 0) return { averageMarginDa: 0, popularityThreshold: 0 }
   const averageMarginDa = round2(costed.reduce((sum, item) => sum + (item.marginDa as number) * item.qtySold, 0) / totalQty)

@@ -6,6 +6,7 @@
  * stock_items.price_per_unit (the weighted average) when it was never purchased in the app.
  */
 import type Database from 'better-sqlite3'
+import type { LocalizedName } from '../../../shared/insights'
 import { recipeQuantityInStockUnits } from '../stock-units'
 
 export interface RecipeLine {
@@ -18,6 +19,8 @@ export interface RecipeLine {
   stockName: string
   stockName_ar: string | null
   stockName_fr: string | null
+  /** Where the line comes from when it is not the item's own recipe (option / combo pick). */
+  via?: LocalizedName | null
 }
 
 export interface PurchasePoint {
@@ -39,7 +42,10 @@ export interface StockInfo {
   isActive: boolean
 }
 
-/** All recipes of ACTIVE menu items, grouped by menu item. */
+/**
+ * OWN recipes of ACTIVE menu items (menu_item_ingredients only), grouped by menu item. Options and
+ * combo picks: catalog-costs.ts (loadOptionRecipes / loadCostingRecipes).
+ */
 export function loadRecipes(db: Database.Database): Map<number, RecipeLine[]> {
   const rows = db.prepare(
     `SELECT mii.menu_item_id AS menuItemId, mii.stock_item_id AS stockItemId, mii.quantity, mii.unit,

@@ -9,11 +9,18 @@
  * 3. Optional trend factor: average orders per open day over the last 14 days ÷ days 15–56,
  *    clamped to [0.85, 1.15]; only with ≥ 5 recent and ≥ 10 older open days.
  * Cancelled orders never count. Only active menu items are returned.
+ *
+ * v4 catalog: `items` are PHYSICAL items — combo children count as their own menu item (their line
+ * quantity already equals the combo quantity) and combo parent lines are reported apart in `combos`
+ * (only their own recipe, e.g. packaging, matters for stock). `options` forecasts every stock-using
+ * modifier option the same way (option quantity × line quantity per day), so the shopping list can
+ * add "Extra cheese" etc. Revenue is net of delivery fees (sql.ts).
  */
 import type Database from 'better-sqlite3'
-import type { ForecastMethod, ForecastItem, PrepForecast } from '../../../shared/insights'
+import type { ForecastMethod, ForecastItem, ForecastOption, PrepForecast } from '../../../shared/insights'
 import { addDays, assertIsoDate, weekdayOf } from './dates'
 import { round1, round2 } from './costs'
+import { netTotal, placeholders } from './sql'
 
 export const FORECAST_WEEKS = 6
 export const FALLBACK_DAYS = 28
@@ -26,14 +33,10 @@ export interface ForecastOptions {
 
 interface DayTotals { date: string; orders: number; revenue: number }
 
-function placeholders(count: number): string {
-  return Array.from({ length: count }, () => '?').join(',')
-}
-
 function dayTotals(db: Database.Database, dates: string[]): Map<string, DayTotals> {
   if (dates.length === 0) return new Map()
   const rows = db.prepare(
-    `SELECT order_date AS date, COUNT(*) AS orders, COALESCE(SUM(total), 0) AS revenue
+    `SELECT order_date AS date, COUNT(*) AS orders, COALESCE(SUM(${netTotal()}), 0) AS revenue
      FROM orders WHERE order_date IN (${placeholders(dates.length)}) AND status != 'cancelled'
      GROUP BY order_date`
   ).all(...dates) as DayTotals[]
@@ -42,20 +45,85 @@ function dayTotals(db: Database.Database, dates: string[]): Map<string, DayTotal
 
 function openDaysBetween(db: Database.Database, start: string, end: string): DayTotals[] {
   return db.prepare(
-    `SELECT order_date AS date, COUNT(*) AS orders, COALESCE(SUM(total), 0) AS revenue
+    `SELECT order_date AS date, COUNT(*) AS orders, COALESCE(SUM(${netTotal()}), 0) AS revenue
      FROM orders WHERE order_date BETWEEN ? AND ? AND status != 'cancelled'
      GROUP BY order_date`
   ).all(start, end) as DayTotals[]
 }
 
-function itemQuantities(db: Database.Database, dates: string[]): { date: string; menuItemId: number; qty: number }[] {
+interface QtyRow { date: string; id: number; qty: number; combo: number }
+
+/** Units per day and menu item; `combo` = 1 for combo parent lines. */
+function itemQuantities(db: Database.Database, dates: string[]): QtyRow[] {
   if (dates.length === 0) return []
   return db.prepare(
-    `SELECT o.order_date AS date, oi.menu_item_id AS menuItemId, SUM(oi.quantity) AS qty
+    `SELECT o.order_date AS date, oi.menu_item_id AS id, SUM(oi.quantity) AS qty,
+            (oi.line_kind = 'combo') AS combo
      FROM orders o JOIN order_items oi ON oi.order_id = o.id
      WHERE o.order_date IN (${placeholders(dates.length)}) AND o.status != 'cancelled'
-     GROUP BY o.order_date, oi.menu_item_id`
-  ).all(...dates) as { date: string; menuItemId: number; qty: number }[]
+     GROUP BY o.order_date, oi.menu_item_id, combo`
+  ).all(...dates) as QtyRow[]
+}
+
+/** Option units per day (option quantity × line quantity); kind 'no' uses no stock. */
+function optionQuantities(db: Database.Database, dates: string[]): QtyRow[] {
+  if (dates.length === 0) return []
+  return db.prepare(
+    `SELECT o.order_date AS date, oim.option_id AS id, SUM(oim.quantity * oi.quantity) AS qty, 0 AS combo
+     FROM orders o
+     JOIN order_items oi ON oi.order_id = o.id
+     JOIN order_item_modifiers oim ON oim.order_item_id = oi.id
+     WHERE o.order_date IN (${placeholders(dates.length)}) AND o.status != 'cancelled'
+       AND oim.option_id IS NOT NULL AND oim.kind <> 'no'
+     GROUP BY o.order_date, oim.option_id`
+  ).all(...dates) as QtyRow[]
+}
+
+type NameRow = { id: number; name: string; name_ar: string | null; name_fr: string | null; category_id: number }
+
+/** Weighted expected units per id, one decimal, > 0 only, highest first. */
+function expectedPerId(
+  rows: QtyRow[], weights: Map<string, number>, weightSum: number, factor: number
+): Map<number, number> {
+  const sums = new Map<number, number>()
+  for (const row of rows) sums.set(row.id, (sums.get(row.id) ?? 0) + row.qty * (weights.get(row.date) ?? 0))
+  const out = new Map<number, number>()
+  if (!(weightSum > 0)) return out
+  for (const [id, sum] of sums) {
+    const expected = round1((sum / weightSum) * factor)
+    if (expected > 0) out.set(id, expected)
+  }
+  return out
+}
+
+function forecastItems(db: Database.Database, expected: Map<number, number>): ForecastItem[] {
+  if (expected.size === 0) return []
+  const ids = [...expected.keys()]
+  const rows = db.prepare(
+    `SELECT id, name, name_ar, name_fr, category_id FROM menu_items
+     WHERE is_active = 1 AND id IN (${placeholders(ids.length)})`
+  ).all(...ids) as NameRow[]
+  return rows
+    .map((row) => {
+      const value = expected.get(row.id) as number
+      return {
+        menuItemId: row.id, name: row.name, name_ar: row.name_ar, name_fr: row.name_fr,
+        categoryId: row.category_id, expected: value, rounded: Math.round(value)
+      }
+    })
+    .sort((a, b) => b.expected - a.expected || a.name.localeCompare(b.name))
+}
+
+function forecastOptions(db: Database.Database, expected: Map<number, number>): ForecastOption[] {
+  if (expected.size === 0) return []
+  const ids = [...expected.keys()]
+  const rows = db.prepare(
+    `SELECT id, name, name_ar, name_fr, 0 AS category_id FROM modifier_options
+     WHERE is_active = 1 AND id IN (${placeholders(ids.length)})`
+  ).all(...ids) as NameRow[]
+  return rows
+    .map((row) => ({ optionId: row.id, name: row.name, name_ar: row.name_ar, name_fr: row.name_fr, expected: expected.get(row.id) as number }))
+    .sort((a, b) => b.expected - a.expected || a.name.localeCompare(b.name))
 }
 
 /** Recent-vs-older orders-per-open-day ratio, clamped; 1 when there is not enough history. */
@@ -95,34 +163,10 @@ export function buildForecast(db: Database.Database, dateInput: string, options:
   const weighted = (valueOf: (d: DayTotals) => number): number =>
     weightSum > 0 ? totals.reduce((sum, d) => sum + valueOf(d) * (weights.get(d.date) ?? 0), 0) / weightSum : 0
 
-  const perItem = new Map<number, number>()
-  for (const row of itemQuantities(db, sampleDays)) {
-    const w = weights.get(row.date) ?? 0
-    perItem.set(row.menuItemId, (perItem.get(row.menuItemId) ?? 0) + row.qty * w)
-  }
-
-  const items: ForecastItem[] = []
-  if (perItem.size > 0) {
-    const ids = [...perItem.keys()]
-    const menu = db.prepare(
-      `SELECT id, name, name_ar, name_fr, category_id FROM menu_items
-       WHERE is_active = 1 AND id IN (${placeholders(ids.length)})`
-    ).all(...ids) as { id: number; name: string; name_ar: string | null; name_fr: string | null; category_id: number }[]
-    for (const row of menu) {
-      const expected = round1(((perItem.get(row.id) ?? 0) / weightSum) * factor)
-      if (expected <= 0) continue
-      items.push({
-        menuItemId: row.id,
-        name: row.name,
-        name_ar: row.name_ar,
-        name_fr: row.name_fr,
-        categoryId: row.category_id,
-        expected,
-        rounded: Math.round(expected)
-      })
-    }
-    items.sort((a, b) => b.expected - a.expected || a.name.localeCompare(b.name))
-  }
+  const quantities = itemQuantities(db, sampleDays)
+  const items = forecastItems(db, expectedPerId(quantities.filter((row) => !row.combo), weights, weightSum, factor))
+  const combos = forecastItems(db, expectedPerId(quantities.filter((row) => row.combo), weights, weightSum, factor))
+  const optionForecast = forecastOptions(db, expectedPerId(optionQuantities(db, sampleDays), weights, weightSum, factor))
 
   return {
     date,
@@ -133,6 +177,8 @@ export function buildForecast(db: Database.Database, dateInput: string, options:
     trendFactor: factor,
     expectedOrders: Math.round(weighted((d) => d.orders) * factor),
     expectedRevenue: Math.round(weighted((d) => d.revenue) * factor),
-    items
+    items,
+    combos,
+    options: optionForecast
   }
 }
