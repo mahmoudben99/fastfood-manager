@@ -1,5 +1,14 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { SetupImportPayload, SetupImportResult } from '../shared/excel-import'
+import type {
+  ApprovalAction, ApprovalInput, ApprovalPolicy, CashBreakdown, InvoiceCustomer, InvoiceRow, OrderPaymentInput,
+  OrderPaymentSummary, PaymentMethodConfig, RefundInput
+} from '../shared/cash'
+import type {
+  CustomerAddress, CustomerAddressInput, DeliveryListEntry, DeliveryStatus, DeliveryZone, DeliveryZoneInput,
+  DriverSettlement, DriverSettlementPreview, OrderDelivery, OrderDeliveryInput
+} from '../shared/delivery'
+import type { CashMovement, CashMovementInput, CloseShiftInput, OpenShiftInput, Shift, ShiftReport } from '../shared/shift-report'
 
 /** Manual print options. reprint=true prints a visible "REPRINT" banner on the ticket. */
 export type PrintOpts = { reprint?: boolean }
@@ -109,9 +118,10 @@ const api = {
     getByDate: (date: string) => ipcRenderer.invoke('orders:getByDate', date),
     getByDateRange: (startDate: string, endDate: string) =>
       ipcRenderer.invoke('orders:getByDateRange', startDate, endDate),
-    updateStatus: (id: number, status: string) =>
-      ipcRenderer.invoke('orders:updateStatus', id, status),
-    cancel: (id: number) => ipcRenderer.invoke('orders:cancel', id),
+    /** v4: `approval` is required for 'cancelled' when manager approval guards cancellations. */
+    updateStatus: (id: number, status: string, approval?: ApprovalInput) =>
+      ipcRenderer.invoke('orders:updateStatus', id, status, approval),
+    cancel: (id: number, approval?: ApprovalInput) => ipcRenderer.invoke('orders:cancel', id, approval),
     getToday: () => ipcRenderer.invoke('orders:getToday'),
     /**
      * Resolves to the saved order. A refused edit REJECTS with a message containing
@@ -129,8 +139,105 @@ const api = {
         customer_phone?: string | null
         customer_name?: string | null
         notes?: string | null
-      }
-    ) => ipcRenderer.invoke('orders:updateItems', id, items, discountAmount, discountDetails, info)
+        /** v4: delivery patch; null = no delivery details. */
+        delivery?: OrderDeliveryInput | null
+      },
+      /** v4: needed when the edit voids lines / raises the discount and approvals are on. */
+      approval?: ApprovalInput
+    ) => ipcRenderer.invoke('orders:updateItems', id, items, discountAmount, discountDetails, info, approval)
+  },
+  // ==================== v4 CASH: payments / shifts / delivery / approvals ====================
+  // Rejections carry a message; stable tokens: NO_OPEN_SHIFT:, SHIFT_ALREADY_OPEN:, BELOW_MIN_ORDER:,
+  // APPROVAL_REQUIRED:<action>, APPROVAL_INVALID:<action> (parse with parseApprovalError in shared/cash).
+  payments: {
+    getMethods: (): Promise<PaymentMethodConfig[]> => ipcRenderer.invoke('payments:getMethods'),
+    /** Built-ins are always kept (cash cannot be disabled); custom methods need a label. */
+    saveMethods: (methods: { id: string; enabled: boolean; label?: string }[]): Promise<PaymentMethodConfig[]> =>
+      ipcRenderer.invoke('payments:saveMethods', methods),
+    /** Rounded cash due + change for `amount` (setting cash_rounding 0 | 5 | 10). */
+    previewCash: (amount: number, tendered?: number): Promise<CashBreakdown & { step: number }> =>
+      ipcRenderer.invoke('payments:previewCash', amount, tendered),
+    forOrder: (orderId: number): Promise<OrderPaymentSummary> => ipcRenderer.invoke('payments:forOrder', orderId),
+    /** Pay later / partial / COD collection; split across methods allowed. */
+    add: (orderId: number, lines: OrderPaymentInput[], operator?: string): Promise<OrderPaymentSummary> =>
+      ipcRenderer.invoke('payments:add', orderId, lines, operator),
+    refund: (orderId: number, refund: RefundInput, approval?: ApprovalInput): Promise<OrderPaymentSummary> =>
+      ipcRenderer.invoke('payments:refund', orderId, refund, approval),
+    listUnpaid: (options?: { date?: string; shiftId?: number }): Promise<{
+      id: number; daily_number: number; order_date: string; order_type: string; customer_name: string | null
+      customer_phone: string | null; total: number; paid: number; balance_due: number; payment_status: string
+    }[]> => ipcRenderer.invoke('payments:listUnpaid', options),
+    /** Net collected by method for an order_date range; pre-v4 orders count as cash. */
+    salesByMethod: (startDate: string, endDate: string): Promise<{ method: string; amount: number; count: number }[]> =>
+      ipcRenderer.invoke('payments:salesByMethod', startDate, endDate),
+    getInvoice: (orderId: number): Promise<InvoiceRow | null> => ipcRenderer.invoke('payments:getInvoice', orderId),
+    /** Issues the invoice number on first use, then returns the printable HTML. */
+    invoiceHTML: (orderId: number, customer: InvoiceCustomer, format?: 'receipt' | 'a4'): Promise<string> =>
+      ipcRenderer.invoke('payments:invoiceHTML', orderId, customer, format),
+    printInvoice: (
+      orderId: number,
+      customer: InvoiceCustomer,
+      options?: { printerName?: string; format?: 'receipt' | 'a4' }
+    ): Promise<PrintResult> => ipcRenderer.invoke('payments:printInvoice', orderId, customer, options)
+  },
+  shifts: {
+    getCurrent: (): Promise<Shift | null> => ipcRenderer.invoke('shifts:getCurrent'),
+    open: (input: OpenShiftInput): Promise<Shift> => ipcRenderer.invoke('shifts:open', input),
+    /** Pay-in / pay-out on the open shift; a pay-out needs `approval` when guarded. */
+    addMovement: (input: CashMovementInput, approval?: ApprovalInput): Promise<CashMovement> =>
+      ipcRenderer.invoke('shifts:addMovement', input, approval),
+    listMovements: (shiftId?: number): Promise<CashMovement[]> => ipcRenderer.invoke('shifts:listMovements', shiftId),
+    /** X report; expected cash is null (report.blind) during a blind count unless `approval` is given. */
+    xReport: (approval?: ApprovalInput): Promise<ShiftReport> => ipcRenderer.invoke('shifts:xReport', approval),
+    getReport: (shiftId: number, approval?: ApprovalInput): Promise<ShiftReport> =>
+      ipcRenderer.invoke('shifts:getReport', shiftId, approval),
+    list: (options?: { from?: string; to?: string; limit?: number }): Promise<Shift[]> => ipcRenderer.invoke('shifts:list', options),
+    /** Closes with counted cash (or denominations); returns the Z report (+ print result when input.print). */
+    close: (input: CloseShiftInput): Promise<{ shift: Shift; report: ShiftReport; print?: PrintResult }> =>
+      ipcRenderer.invoke('shifts:close', input),
+    printReport: (shiftId?: number, approval?: ApprovalInput): Promise<PrintResult> =>
+      ipcRenderer.invoke('shifts:printReport', shiftId, approval)
+  },
+  delivery: {
+    getZones: (includeInactive?: boolean): Promise<DeliveryZone[]> => ipcRenderer.invoke('delivery:getZones', includeInactive),
+    saveZone: (input: DeliveryZoneInput): Promise<DeliveryZone> => ipcRenderer.invoke('delivery:saveZone', input),
+    deleteZone: (id: number): Promise<boolean> => ipcRenderer.invoke('delivery:deleteZone', id),
+    getAddresses: (customerId: number): Promise<CustomerAddress[]> => ipcRenderer.invoke('delivery:getAddresses', customerId),
+    getAddressesByPhone: (phone: string): Promise<CustomerAddress[]> => ipcRenderer.invoke('delivery:getAddressesByPhone', phone),
+    saveAddress: (input: CustomerAddressInput): Promise<CustomerAddress> => ipcRenderer.invoke('delivery:saveAddress', input),
+    deleteAddress: (id: number): Promise<boolean> => ipcRenderer.invoke('delivery:deleteAddress', id),
+    /** Active workers with role 'driver'. */
+    getDrivers: (): Promise<{ id: number; name: string; phone: string | null }[]> => ipcRenderer.invoke('delivery:getDrivers'),
+    getOrder: (orderId: number): Promise<OrderDelivery | null> => ipcRenderer.invoke('delivery:getOrder', orderId),
+    list: (options?: { date?: string; status?: DeliveryStatus; driverId?: number }): Promise<DeliveryListEntry[]> =>
+      ipcRenderer.invoke('delivery:list', options),
+    /** Patch address / zone / fee / driver / notes; resolves to the updated order (a fee change updates the total). */
+    updateDetails: (orderId: number, patch: OrderDeliveryInput) => ipcRenderer.invoke('delivery:updateDetails', orderId, patch),
+    assignDriver: (orderId: number, driverId: number | null): Promise<OrderDelivery> =>
+      ipcRenderer.invoke('delivery:assignDriver', orderId, driverId),
+    /** 'delivered' also completes the order. */
+    setStatus: (orderId: number, status: DeliveryStatus, reason?: string): Promise<OrderDelivery> =>
+      ipcRenderer.invoke('delivery:setStatus', orderId, status, reason),
+    settlementPreview: (driverId: number): Promise<DriverSettlementPreview> => ipcRenderer.invoke('delivery:settlementPreview', driverId),
+    settleDriver: (input: { driver_id: number; collected_cash: number; note?: string; operator?: string }): Promise<DriverSettlement> =>
+      ipcRenderer.invoke('delivery:settleDriver', input),
+    listSettlements: (options?: { date?: string; shiftId?: number }): Promise<DriverSettlement[]> =>
+      ipcRenderer.invoke('delivery:listSettlements', options)
+  },
+  approvals: {
+    getPolicy: (): Promise<ApprovalPolicy> => ipcRenderer.invoke('approvals:getPolicy'),
+    /** Ask before prompting: { required }. For 'discount' pass { subtotal, discount, allowance? }. */
+    check: (action: ApprovalAction, context?: { subtotal: number; discount: number; allowance?: number }): Promise<{ required: boolean }> =>
+      ipcRenderer.invoke('approvals:check', action, context),
+    /** Admin password authorises. Policy keys are refused by settings:set (cashiers cannot switch them off). */
+    savePolicy: (
+      adminPassword: string,
+      policy: { enabled?: boolean; actions?: ApprovalAction[]; discountPercent?: number; blindClose?: boolean }
+    ): Promise<ApprovalPolicy> => ipcRenderer.invoke('approvals:savePolicy', adminPassword, policy),
+    /** Admin password authorises; an empty pin clears the manager PIN. */
+    setManagerPin: (adminPassword: string, pin: string): Promise<ApprovalPolicy> =>
+      ipcRenderer.invoke('approvals:setManagerPin', adminPassword, pin),
+    list: (options?: { shiftId?: number; orderId?: number }) => ipcRenderer.invoke('approvals:list', options)
   },
   analytics: {
     getProfitSummary: (startDate: string, endDate: string) =>
@@ -378,6 +485,8 @@ const orderEffectsIpc = {
     note?: string
     tableNumber?: string
     customer?: { phone?: string; name?: string }
+    /** v4 (service camelCase): { address, addressId, zoneId, driverId, fee, notes, saveAddress, ignoreMinOrder }. */
+    delivery?: Record<string, unknown> | null
   }) => ipcRenderer.invoke('orders:effects:updateHeader', input),
   updateOrderLines: (input: {
     orderId: number
@@ -390,11 +499,15 @@ const orderEffectsIpc = {
       workerId?: number
     }[]
     discountAmount?: number
+    /** v4: service-shape delivery patch (see updateOrderHeader). */
+    delivery?: Record<string, unknown> | null
+    approval?: ApprovalInput
   }) => ipcRenderer.invoke('orders:effects:updateLines', input),
   updateOrderStatus: (
     orderId: number,
-    status: 'pending' | 'preparing' | 'completed' | 'cancelled'
-  ) => ipcRenderer.invoke('orders:effects:updateStatus', orderId, status)
+    status: 'pending' | 'preparing' | 'completed' | 'cancelled',
+    approval?: ApprovalInput
+  ) => ipcRenderer.invoke('orders:effects:updateStatus', orderId, status, approval)
 }
 
 const exposedApi = {

@@ -15,6 +15,9 @@ import { registerMenuUploadHandlers } from './menu-upload.ipc'
 import { registerPromotionsHandlers } from './promotions.ipc'
 import { registerReceiptEditorHandlers } from './receipt-editor.ipc'
 import { registerCustomersHandlers } from './customers.ipc'
+import { registerPaymentsHandlers } from './payments.ipc'
+import { registerShiftsHandlers } from './shifts.ipc'
+import { registerDeliveryHandlers } from './delivery.ipc'
 
 export function registerAllHandlers(): void {
   registerActivationHandlers()
@@ -34,4 +37,8 @@ export function registerAllHandlers(): void {
   registerPromotionsHandlers()
   registerReceiptEditorHandlers()
   registerCustomersHandlers()
+  // v4 cash: payments, shifts / cash drawer + approvals, delivery.
+  registerPaymentsHandlers()
+  registerShiftsHandlers()
+  registerDeliveryHandlers()
 }

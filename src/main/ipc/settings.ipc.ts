@@ -4,6 +4,7 @@ import { settingsRepo } from '../database/repositories/settings.repo'
 import { syncAdminPassword, provisionOwnerCredential } from '../sync/owner-sync'
 import { normalizeOrderAlertMinutes, orderAlertMinutesOrDefault } from '../../shared/settings-rules'
 import { getLogoDataUrl, importLogo, removeLogo, resolveLogoFile } from '../services/logo'
+import { APPROVAL_SETTING_KEYS } from '../services/approvals'
 
 // Keys that can ONLY be set through proper activation/trial flows, never from renderer
 const PROTECTED_KEYS = new Set([
@@ -13,7 +14,10 @@ const PROTECTED_KEYS = new Set([
   'machine_id',
   'trial_expires_at',
   'trial_status',
-  '_integrity'
+  '_integrity',
+  // v4: approval policy + manager PIN change only through approvals:savePolicy / setManagerPin
+  // (admin password), so a cashier cannot switch manager approval off from the renderer.
+  ...APPROVAL_SETTING_KEYS
 ])
 
 /**

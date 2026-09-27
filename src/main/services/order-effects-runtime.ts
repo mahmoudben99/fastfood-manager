@@ -5,6 +5,7 @@ import { sendOrderNotificationStrict } from '../telegram/bot'
 import { syncAnalyticsDateStrict } from '../sync/analytics-sync'
 import { syncOrderToCloudStrict } from '../sync/owner-sync'
 import { createOutboxWorker, type OutboxEventRow } from './outbox-worker'
+import { sendShiftSummaryStrict } from './shift-report'
 
 let timer: ReturnType<typeof setInterval> | null = null
 let running = false
@@ -26,6 +27,15 @@ function payloadFor(event: OutboxEventRow): OrderEventPayload {
     throw new Error('Invalid outbox order id')
   }
   return value as OrderEventPayload
+}
+
+function shiftReportId(event: OutboxEventRow): number | null {
+  try {
+    const payload = JSON.parse(event.payload) as { kind?: string; shiftId?: number }
+    return payload?.kind === 'shift-report' && Number.isInteger(payload.shiftId) ? Number(payload.shiftId) : null
+  } catch {
+    return null
+  }
 }
 
 async function consumeOnce(
@@ -62,6 +72,9 @@ function productionWorker(): ReturnType<typeof createOutboxWorker> {
         await syncAnalyticsDateStrict(orderDate)
       }),
       telegram: (event) => consumeOnce(event, 'telegram', async () => {
+        // v4: shift-close summaries share the durable telegram lane ({ kind: 'shift-report', shiftId }).
+        const shiftId = shiftReportId(event)
+        if (shiftId !== null) return sendShiftSummaryStrict(shiftId)
         const payload = payloadFor(event)
         const order = ordersRepo.getById(payload.orderId)
         if (!order) throw new Error(`Order ${payload.orderId} no longer exists`)

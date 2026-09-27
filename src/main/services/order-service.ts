@@ -12,6 +12,12 @@ import {
   type KitchenLineChange,
   type KitchenLineSnapshot
 } from './print-routing'
+// v4 cash (order-level fields: shift, payments, delivery fee, voids) — see order-level.ts.
+import type { OrderPaymentInput } from '../../shared/cash'
+import {
+  CashError, applyOrderLevelCreate, applyOrderLevelEdit, cashResultCode, onOrderCancelled, onOrderRestored,
+  planOrderLevelCreate, planOrderLevelEdit, recordLineVoid, validateOrderLevel, type DeliveryDetails
+} from './order-level'
 
 export type OrderSource = 'pos' | 'tablet' | 'remote'
 export type OrderStatus = 'pending' | 'preparing' | 'completed' | 'cancelled'
@@ -37,6 +43,10 @@ export interface CreateOrderInput {
   explicitDiscountAmount?: number
   discountDetails?: string
   operator?: string
+  /** v4: omitted = default per source (POS: cash in full); [] = unpaid (pay later / COD). */
+  payments?: OrderPaymentInput[]
+  /** v4: delivery details for orderType 'delivery'; the fee is added to the total. */
+  delivery?: DeliveryDetails
 }
 
 export type CreateOrderResult =
@@ -48,12 +58,14 @@ export type CreateOrderResult =
       orderDate: string
       subtotal: number
       discountAmount: number
+      /** v4: total = subtotal − discountAmount + deliveryFee. */
+      deliveryFee: number
       total: number
       printJobIds: number[]
     }
   | {
       ok: false
-      code: 'invalid_input' | 'inactive_item' | 'incompatible_unit' | 'db_failure'
+      code: 'invalid_input' | 'inactive_item' | 'incompatible_unit' | 'db_failure' | 'no_open_shift' | 'not_allowed'
       message: string
       lineIndex?: number
     }
@@ -63,6 +75,8 @@ export interface UpdateOrderHeaderInput {
   note?: string | null
   tableNumber?: string | null
   customer?: { phone?: string | null; name?: string | null }
+  /** v4: patch the delivery details (a fee change is refused once lines are no longer editable). */
+  delivery?: DeliveryDetails | null
 }
 
 export interface OrderLineEditInput extends OrderLineInput {
@@ -75,15 +89,19 @@ export interface UpdateOrderLinesInput {
   discountAmount?: number
   /** Internal compatibility fields used by ordersRepo.updateItems. */
   discountDetails?: string
-  header?: Omit<UpdateOrderHeaderInput, 'orderId'> & { orderType?: 'local' | 'takeout' | 'delivery' }
+  header?: Omit<UpdateOrderHeaderInput, 'orderId' | 'delivery'> & { orderType?: 'local' | 'takeout' | 'delivery' }
   operator?: string
+  /** v4: delivery patch (null = no delivery details); the fee follows the next order type. */
+  delivery?: DeliveryDetails | null
 }
 
 export type UpdateOrderResult =
-  | { ok: true; orderId: number; subtotal: number; discountAmount: number; total: number }
+  | { ok: true; orderId: number; subtotal: number; discountAmount: number; deliveryFee: number; total: number }
   | {
       ok: false
       code:
+        | 'no_open_shift'
+        | 'not_allowed'
         | 'not_found'
         | 'invalid_input'
         | 'inactive_item'
@@ -113,6 +131,7 @@ interface OrderRow {
   subtotal: number
   discount_amount: number
   discount_details: string | null
+  delivery_fee: number
   total: number
   notes: string | null
   source: OrderSource
@@ -205,6 +224,7 @@ function validateCreateInput(input: CreateOrderInput): void {
     units += line.quantity
   })
   if (units > MAX_UNITS) throw new DomainError('invalid_input', `Order cannot contain more than ${MAX_UNITS} units`)
+  validateOrderLevel(input) // v4: payments / delivery shape
 }
 
 function validateEditLines(lines: OrderLineEditInput[]): void {
@@ -358,6 +378,7 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
     orderDate: row.order_date,
     subtotal: row.subtotal,
     discountAmount: row.discount_amount,
+    deliveryFee: Number(row.delivery_fee) || 0,
     total: row.total,
     printJobIds: ids
   })
@@ -366,6 +387,7 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
     orderId: row.id,
     subtotal: row.subtotal,
     discountAmount: row.discount_amount,
+    deliveryFee: Number(row.delivery_fee) || 0,
     total: row.total
   })
   const duplicateFor = (source: OrderSource, sourceRequestId: string): CreateOrderResult | undefined => {
@@ -467,7 +489,9 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
             .join(', ') || null
         }
         const discount = roundMoney(Math.min(Math.max(0, rawDiscount), subtotal))
-        const total = roundMoney(subtotal - discount)
+        // v4: open-shift requirement + delivery fee; total = subtotal − discount + delivery_fee.
+        const orderLevel = planOrderLevelCreate(db, input, subtotal - discount)
+        const total = roundMoney(subtotal - discount + orderLevel.deliveryFee)
 
         const daily = db.prepare(
           `INSERT INTO daily_counters (date, last_order_num) VALUES (?, 1)
@@ -500,6 +524,8 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
           input.sourceRequestId,
           captured.toISOString()
         ).lastInsertRowid)
+        // v4: shift id, delivery row, payments / default payment, payment_status.
+        applyOrderLevelCreate(db, orderId, orderLevel, input, captured)
 
         // item_name* snapshot the sold name so later menu renames never rewrite history.
         const itemInsert = db.prepare(
@@ -574,6 +600,7 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
       if (error instanceof DomainError) {
         return { ok: false, code: error.code, message: error.message, lineIndex: error.lineIndex }
       }
+      if (error instanceof CashError) return { ok: false, code: cashResultCode(error), message: error.message }
       // A competing connection may have committed the same request after our initial read.
       if (isSourceRequestUniqueConflict(error)) {
         const duplicate = duplicateFor(input.source, input.sourceRequestId)
@@ -633,7 +660,20 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
       (input.tableNumber !== undefined && (input.tableNumber ?? null) !== (order.table_number ?? null))
     try {
       return db.transaction(() => {
-        updateHeaderWithinTransaction(order, input)
+        // v4: a delivery patch may change the fee and so the total (order-level.ts).
+        validateOrderLevel({ delivery: input.delivery })
+        const orderLevel = input.delivery !== undefined
+          ? planOrderLevelEdit(db, order.id, order.order_type, input.delivery, order.subtotal - order.discount_amount)
+          : null
+        const nextTotal = orderLevel ? roundMoney(order.subtotal - order.discount_amount + orderLevel.deliveryFee) : order.total
+        if (nextTotal !== order.total && orderEditRejection(order, now())) {
+          throw new CashError('not_allowed', 'The delivery fee of a completed, cancelled or past-day order cannot change')
+        }
+        updateHeaderWithinTransaction(order, input, nextTotal)
+        if (orderLevel) {
+          db.prepare('UPDATE orders SET total = ? WHERE id = ?').run(nextTotal, order.id)
+          applyOrderLevelEdit(db, order.id, orderLevel, now())
+        }
         if (kitchenRelevantChange) {
           const items = db.prepare('SELECT worker_id FROM order_items WHERE order_id = ?').all(input.orderId) as { worker_id: number | null }[]
           enqueueAutomaticPrintJobs(db, input.orderId, items, 'updated')
@@ -643,6 +683,7 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
       })()
     } catch (error) {
       if (error instanceof DomainError) return { ok: false, code: error.code, message: error.message }
+      if (error instanceof CashError) return { ok: false, code: cashResultCode(error), message: error.message }
       if (isBusyOrFull(error)) throw error
       return { ok: false, code: 'db_failure', message: error instanceof Error ? error.message : String(error) }
     }
@@ -661,6 +702,7 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
     }
     try {
       validateEditLines(input.lines)
+      validateOrderLevel({ delivery: input.delivery }) // v4
       if (input.discountAmount !== undefined &&
           (!Number.isFinite(input.discountAmount) || input.discountAmount < 0 || input.discountAmount > MAX_MONEY)) {
         throw new DomainError('invalid_input', 'Discount is outside the supported range')
@@ -715,6 +757,7 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
 
         for (const old of oldItems) {
           if (retained.has(old.id)) continue
+          recordLineVoid(db, input.orderId, old, old.quantity, input.operator, captured) // v4: Z report voids
           for (const deduction of deductionsFor(old.id)) {
             adjustStock(deduction.stock_item_id, deduction.quantity_deducted, `Order #${order.daily_number} edit: removed line`)
           }
@@ -750,6 +793,7 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
             }
 
             if (line.quantity !== old.quantity) {
+              recordLineVoid(db, input.orderId, old, old.quantity - line.quantity, input.operator, captured) // v4: no-op on increase
               for (const deduction of deductionsFor(old.id)) {
                 const perUnit = deduction.quantity_deducted / old.quantity
                 if (!Number.isFinite(perUnit) || perUnit < 0) {
@@ -856,7 +900,11 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
         const subtotal = roundMoney(rawSubtotal)
         const requestedDiscount = input.discountAmount ?? order.discount_amount
         const discount = roundMoney(Math.min(Math.max(0, requestedDiscount), subtotal))
-        const total = roundMoney(subtotal - discount)
+        // v4: the delivery fee follows the next order type / delivery patch (order-level.ts).
+        const orderLevel = planOrderLevelEdit(
+          db, input.orderId, input.header?.orderType ?? order.order_type, input.delivery, subtotal - discount
+        )
+        const total = roundMoney(subtotal - discount + orderLevel.deliveryFee)
         const details = input.discountDetails !== undefined
           ? input.discountDetails.trim() || null
           : order.discount_details
@@ -872,6 +920,7 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
           `UPDATE orders SET subtotal = ?, discount_amount = ?, discount_details = ?, total = ?,
            order_type = ? WHERE id = ?`
         ).run(subtotal, discount, details, total, input.header?.orderType ?? order.order_type, input.orderId)
+        applyOrderLevelEdit(db, input.orderId, orderLevel, captured) // v4: fee, delivery row, payment status
 
         if (kitchenRelevantChange) {
           const newItems = db.prepare(
@@ -894,12 +943,18 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
       })()
     } catch (error) {
       if (error instanceof DomainError) return { ok: false, code: error.code, message: error.message }
+      if (error instanceof CashError) return { ok: false, code: cashResultCode(error), message: error.message }
       if (isBusyOrFull(error)) throw error
       return { ok: false, code: 'db_failure', message: error instanceof Error ? error.message : String(error) }
     }
   }
 
-  function updateOrderStatus(orderId: number, status: OrderStatus): UpdateOrderResult {
+  /** v4: `meta` names who cancelled and why (audit trail + Z report cancellations list). */
+  function updateOrderStatus(
+    orderId: number,
+    status: OrderStatus,
+    meta?: { operator?: string; reason?: string }
+  ): UpdateOrderResult {
     const order = current(orderId)
     if (!order) return { ok: false, code: 'not_found', message: 'Order not found' }
     if (!['pending', 'preparing', 'completed', 'cancelled'].includes(status)) {
@@ -937,8 +992,8 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
             orderId,
             originalValue: order.status,
             newValue: 'cancelled',
-            operator: 'system',
-            reason: 'Order cancelled'
+            operator: meta?.operator?.trim() || 'system',
+            reason: meta?.reason?.trim() || 'Order cancelled'
           })
         } else if (order.status === 'cancelled') {
           for (const item of items) {
@@ -960,6 +1015,9 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
 
         const completedAt = status === 'completed' || status === 'cancelled' ? now().toISOString() : null
         db.prepare('UPDATE orders SET status = ?, completed_at = ? WHERE id = ?').run(status, completedAt, orderId)
+        // v4: refunds + cancellation record on cancel; auto-settled orders re-settle on restore.
+        if (status === 'cancelled') onOrderCancelled(db, orderId, meta, now())
+        else if (order.status === 'cancelled') onOrderRestored(db, orderId, now())
         const event = status === 'cancelled'
           ? 'cancelled'
           : status === 'preparing' && (order.status === 'cancelled' || order.status === 'completed')
