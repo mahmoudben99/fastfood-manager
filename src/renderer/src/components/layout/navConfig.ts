@@ -6,6 +6,7 @@ import {
   Monitor,
   Package,
   Settings,
+  ShieldCheck,
   Tag,
   Users,
   UtensilsCrossed
@@ -54,10 +55,26 @@ export const NAV_GROUPS: NavGroup[] = [
       { path: '/admin/workers', icon: Users, label: 'nav.workers' },
       { path: '/admin/ambiance', icon: Monitor, label: 'nav.ambianceScreen' },
       { path: '/admin/kds', icon: ChefHat, label: 'kds.title' },
-      { path: '/admin/settings', icon: Settings, label: 'nav.settings' }
+      { path: '/admin/settings', icon: Settings, label: 'nav.settings' },
+      { path: '/admin/compliance', icon: ShieldCheck, label: 'compliance.nav' }
     ]
   }
 ]
+
+/** Admin pages reached from Settings (not in the sidebar): breadcrumb only. */
+const EXTRA_PAGES: { path: string; group: string; label: string }[] = [
+  { path: '/admin/receipt-editor', group: 'nav.settings', label: 'receiptEditor.title' },
+  { path: '/admin/backup', group: 'nav.settings', label: 'nav.backup' },
+  { path: '/admin/excel', group: 'nav.settings', label: 'nav.excel' }
+]
+
+/** Breadcrumb labels (i18n keys) for a pathname: sidebar pages first, then Settings sub-pages. */
+export function breadcrumbFor(pathname: string): { group: string; label: string } | null {
+  const hit = findNavItem(pathname)
+  if (hit) return { group: hit.group.label, label: hit.item.label }
+  const extra = EXTRA_PAGES.find((page) => pathname === page.path || pathname.startsWith(page.path + '/'))
+  return extra ? { group: extra.group, label: extra.label } : null
+}
 
 /** Group + item for a pathname (prefix match so sub-routes keep their parent active). */
 export function findNavItem(pathname: string): { group: NavGroup; item: NavItem } | null {

@@ -8,6 +8,7 @@ import {
 } from './print-catalog'
 import type { ReceiptContext } from './receipt-template'
 import { kitchenDeliveryHTML, receiptDeliveryHTML, receiptFeeRowsHTML, receiptPaymentsHTML } from './print-cash'
+import { fiscalNumberHTML } from './fiscal/print-fiscal' // v4 fiscal
 
 export type PrintEventType = 'new' | 'updated' | 'cancelled' | 'restored'
 
@@ -52,6 +53,7 @@ export function buildDefaultReceiptHTML(order: any, settings: Record<string, str
   ${settings.restaurant_address ? `<div class="center" style="font-size:10px">${esc(settings.restaurant_address)}</div>` : ''}
   <div class="line"></div>
   <div class="row"><span>${esc(L.order)} #${esc(order.daily_number)}</span><span>${esc(orderTypeLabel(order.order_type, L))}</span></div>
+  ${fiscalNumberHTML(order, settings)}
   <div>${esc(new Date(order.created_at).toLocaleString())}</div>
   ${order.table_number ? `<div>${esc(L.table)}: ${esc(order.table_number)}</div>` : ''}
   ${order.customer_phone ? `<div>${esc(L.phone)}: ${esc(order.customer_phone)}</div>` : ''}

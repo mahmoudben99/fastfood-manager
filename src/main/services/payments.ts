@@ -5,6 +5,7 @@ import {
 } from '../../shared/cash'
 import { CashError, cleanText, wholeDinars } from './cash-error'
 import { cashRoundingStep, enabledPaymentMethod } from './payment-methods'
+import { journalPaymentRow } from './fiscal/journal' // v4 fiscal
 
 /**
  * Order payments ledger (table order_payments). Every row is money that moved:
@@ -97,6 +98,8 @@ function insertRow(
     ctx.shiftId, ctx.driverId ?? null, ctx.auto ? 1 : 0, cleanText(ctx.operator, 80), cleanText(ctx.reason, 200),
     ctx.now.toISOString()
   )
+  // v4 fiscal: every money movement is a 'payment' / 'refund' journal entry (same transaction).
+  journalPaymentRow(db, orderId, row, { ...ctx, operator: cleanText(ctx.operator, 80), reason: cleanText(ctx.reason, 200) })
 }
 
 /** Shape check done before any database work (order create / edit input validation). */

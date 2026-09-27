@@ -24,6 +24,12 @@ import type {
   DriverSettlement, DriverSettlementPreview, OrderDelivery, OrderDeliveryInput
 } from '../shared/delivery'
 import type { CashMovement, CashMovementInput, CloseShiftInput, OpenShiftInput, Shift, ShiftReport } from '../shared/shift-report'
+import type {
+  ArchiveExportResult, AttestationLang, AttestationResult, FiscalStatus, JournalVerification, VendorInfo
+} from '../shared/fiscal'
+import type { ChannelPrices, CustomPlatformInput, SalesChannel } from '../shared/channels'
+import type { AvailabilityEnforce, AvailabilityRule, AvailabilityState, AvailabilityTarget } from '../shared/availability'
+import type { ConsentInput, CustomerRecord, LastOrderResult } from '../shared/customer-lookup'
 
 /** Manual print options. reprint=true prints a visible "REPRINT" banner on the ticket. */
 export type PrintOpts = { reprint?: boolean }
@@ -214,6 +220,8 @@ const api = {
         notes?: string | null
         /** v4: delivery patch; null = no delivery details. */
         delivery?: OrderDeliveryInput | null
+        /** v4 fiscal: sales channel ('yassir' / platform id for delivery orders); orders.create takes `channel` too. */
+        channel?: string
       },
       /** v4: needed when the edit voids lines / raises the discount and approvals are on. */
       approval?: ApprovalInput
@@ -554,7 +562,13 @@ const api = {
     getById: (id: number) => ipcRenderer.invoke('customers:getById', id),
     getOrders: (customerId: number) => ipcRenderer.invoke('customers:getOrders', customerId),
     getFavorites: (customerId: number) => ipcRenderer.invoke('customers:getFavorites', customerId),
-    update: (id: number, data: any) => ipcRenderer.invoke('customers:update', id, data)
+    update: (id: number, data: any) => ipcRenderer.invoke('customers:update', id, data),
+    /** v4: last non-cancelled order as re-orderable lines + skipped ones (sold out / removed). */
+    getLastOrder: (customerId: number): Promise<LastOrderResult> => ipcRenderer.invoke('customers:getLastOrder', customerId),
+    /** v4: customer agreed to keep phone + addresses (law 18-07); creates the customer by phone if new. */
+    recordConsent: (input: ConsentInput): Promise<CustomerRecord> => ipcRenderer.invoke('customers:recordConsent', input),
+    /** v4: consent withdrawn — deletes saved addresses, clears consent. */
+    withdrawConsent: (customerId: number): Promise<CustomerRecord> => ipcRenderer.invoke('customers:withdrawConsent', customerId)
   },
   promotions: {
     getAll: () => ipcRenderer.invoke('promotions:getAll'),
@@ -620,6 +634,41 @@ const api = {
       ipcRenderer.on('remote:new-order', handler)
       return () => { ipcRenderer.removeListener('remote:new-order', handler) }
     }
+  },
+  // ==================== v4 FISCAL: journal, archive, attestation / channels / availability ====================
+  // Orders carry `fiscal_number` (gapless, printed "N° fiscal") and `channel`; menu reads carry
+  // `channel_prices` ({ [channel]: price }) and `available_now` (1 | 0). Types: src/shared/{fiscal,channels,availability}.ts
+  fiscal: {
+    getStatus: (): Promise<FiscalStatus> => ipcRenderer.invoke('fiscal:getStatus'),
+    /** Re-hashes the whole journal and every journaled order (can take a few seconds on big databases). */
+    verify: (): Promise<JournalVerification> => ipcRenderer.invoke('fiscal:verify'),
+    getVendorInfo: (): Promise<VendorInfo> => ipcRenderer.invoke('fiscal:getVendorInfo'),
+    saveVendorInfo: (patch: Partial<VendorInfo>): Promise<VendorInfo> => ipcRenderer.invoke('fiscal:saveVendorInfo', patch),
+    /** Opens a folder picker; one sub-folder per year (JSON + CSV + manifest with SHA-256). Omit years = all. */
+    exportArchive: (years?: number[]): Promise<ArchiveExportResult> => ipcRenderer.invoke('fiscal:exportArchive', years),
+    /** The attestation TEMPLATE as HTML (preview). */
+    attestationHtml: (lang: AttestationLang): Promise<string> => ipcRenderer.invoke('fiscal:attestationHtml', lang),
+    /** Save dialog → PDF of the attestation TEMPLATE. */
+    saveAttestationPdf: (lang: AttestationLang): Promise<AttestationResult> => ipcRenderer.invoke('fiscal:saveAttestationPdf', lang),
+    /** Shows an exported file / folder of this session in Explorer. */
+    reveal: (path: string): Promise<boolean> => ipcRenderer.invoke('fiscal:reveal', path)
+  },
+  channels: {
+    list: (): Promise<SalesChannel[]> => ipcRenderer.invoke('channels:list'),
+    /** Replaces the delivery platform list (Yassir can be disabled, never removed). */
+    savePlatforms: (platforms: CustomPlatformInput[]): Promise<SalesChannel[]> => ipcRenderer.invoke('channels:savePlatforms', platforms),
+    getItemPrices: (menuItemId: number): Promise<ChannelPrices> => ipcRenderer.invoke('channels:getItemPrices', menuItemId),
+    /** Full replace: a channel left out (or null) sells at the menu price. */
+    setItemPrices: (menuItemId: number, prices: Record<string, number | null>): Promise<ChannelPrices> =>
+      ipcRenderer.invoke('channels:setItemPrices', menuItemId, prices)
+  },
+  availability: {
+    get: (target: AvailabilityTarget): Promise<AvailabilityState> => ipcRenderer.invoke('availability:get', target),
+    /** Full replace of the target's rules ([] = always available). */
+    set: (target: AvailabilityTarget, rules: AvailabilityRule[]): Promise<AvailabilityState> =>
+      ipcRenderer.invoke('availability:set', target, rules),
+    getEnforce: (): Promise<AvailabilityEnforce> => ipcRenderer.invoke('availability:getEnforce'),
+    setEnforce: (mode: AvailabilityEnforce): Promise<AvailabilityEnforce> => ipcRenderer.invoke('availability:setEnforce', mode)
   }
 }
 

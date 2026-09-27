@@ -4,6 +4,7 @@ import {
 } from './print-format'
 import { receiptRows, receiptSubLinesHTML } from './print-catalog'
 import { receiptDeliveryHTML, receiptFeeRowsHTML, receiptPaymentsHTML } from './print-cash'
+import { fiscalNumberHTML } from './fiscal/print-fiscal' // v4 fiscal
 
 /** Everything about the destination printer / run that is not part of the order or settings. */
 export interface ReceiptContext {
@@ -116,6 +117,7 @@ export async function buildFromTemplate(
           if (cfg.language === 'bilingual') {
             body += line(`${esc(secondary.order)} #${esc(order.daily_number)} | ${esc(time)}`, `font-size:${base - 2}px;color:#888;margin:2px 0;direction:${isRTL ? 'ltr' : 'rtl'};`)
           }
+          body += fiscalNumberHTML(order, settings, `font-size:${base - 1}px;`) // v4 fiscal
           if (order.table_number) body += line(`${esc(L.table)}: ${esc(order.table_number)}`)
           if (order.order_type) body += line(esc(orderTypeLabel(order.order_type, L)))
           // Customer name + phone: delivery receipts need the phone for the driver.

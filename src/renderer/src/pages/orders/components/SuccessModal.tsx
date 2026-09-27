@@ -18,7 +18,7 @@ export function SuccessModal({ info, onClose }: { info: SuccessInfo; onClose: ()
         <p className="text-sm font-semibold text-muted">{t('pos.success.title')}</p>
         <p className="num text-display text-ink mt-1" data-testid="success-number">#{info.orderNumber}</p>
 
-        {info.change !== null && (
+        {info.change !== null && info.change > 0 && (
           <div className="mt-5 rounded-2xl bg-success-soft px-4 py-3">
             <p className="text-sm font-bold text-success-ink">{t('pos.success.change')}</p>
             <p className="text-[2.75rem] leading-tight font-extrabold text-success-ink">

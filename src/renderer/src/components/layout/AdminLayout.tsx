@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Outlet, useNavigate } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
 import { PasswordGate } from '../ui/PasswordGate'
 import { Sidebar } from './Sidebar'
@@ -16,6 +16,10 @@ function readCollapsed(): boolean {
 }
 
 export function AdminLayout() {
+  // Each admin page opens at the top (the scroll container is shared across routes).
+  const mainRef = useRef<HTMLElement>(null)
+  const { pathname } = useLocation()
+  useEffect(() => { mainRef.current?.scrollTo(0, 0) }, [pathname])
   const navigate = useNavigate()
   const { isUnlocked, unlock, checkAutoLock } = useAuthStore()
   const [collapsed, setCollapsed] = useState(readCollapsed)
@@ -50,7 +54,7 @@ export function AdminLayout() {
       <Sidebar collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
       <div className="flex-1 min-w-0 flex flex-col">
         <TopBar />
-        <main className="flex-1 overflow-y-auto bg-canvas p-6 lg:p-8">
+        <main ref={mainRef} className="flex-1 overflow-y-auto bg-canvas p-6 lg:p-8">
           <Outlet />
         </main>
       </div>

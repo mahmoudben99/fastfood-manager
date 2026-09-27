@@ -98,21 +98,23 @@ export const TopBar = memo(function TopBar(props: TopBarProps) {
       </div>
 
       <div className="flex items-center justify-end gap-2 pe-3 ps-2 min-w-0">
-        <ShiftBar compact />
+        <div className="min-w-0 flex justify-end">
+          <ShiftBar compact />
+        </div>
         <button
           type="button"
           onClick={props.onOpenHistory}
-          className="tap relative inline-flex items-center gap-2 h-11 px-3.5 rounded-xl bg-surface-2 border border-line text-ink font-semibold hover:bg-surface-3 min-w-0"
+          className="tap relative inline-flex items-center gap-2 h-11 px-3.5 max-[1279px]:px-2.5 rounded-xl bg-surface-2 border border-line text-ink font-semibold hover:bg-surface-3 shrink-0"
         >
           <ClipboardList className="h-5 w-5 shrink-0 text-ink-2" />
           <span className="truncate max-[1279px]:sr-only">{t('orders.today')}</span>
           {props.ongoingCount > 0 && (
-            <span className="num min-w-6 h-6 px-1.5 rounded-full bg-danger-strong text-white text-xs font-bold flex items-center justify-center">
+            <span className="num min-w-6 h-6 px-1.5 rounded-full bg-danger-strong text-white text-xs font-bold flex items-center justify-center max-[1279px]:absolute max-[1279px]:-top-2 max-[1279px]:-end-2 max-[1279px]:min-w-5 max-[1279px]:h-5 max-[1279px]:ring-2 max-[1279px]:ring-surface">
               {props.ongoingCount}
             </span>
           )}
           {props.readyCount > 0 && (
-            <span title={t('pos.topbar.readyCount', { count: props.readyCount })} className="num inline-flex items-center gap-1 h-6 px-2 rounded-full bg-success-soft text-success-ink text-xs font-bold">
+            <span title={t('pos.topbar.readyCount', { count: props.readyCount })} className="num inline-flex items-center gap-1 h-6 px-2 rounded-full bg-success-soft text-success-ink text-xs font-bold max-[1279px]:absolute max-[1279px]:-bottom-2 max-[1279px]:-end-2 max-[1279px]:h-5 max-[1279px]:px-1.5 max-[1279px]:ring-2 max-[1279px]:ring-surface">
               <ChefHat className="h-3.5 w-3.5" />
               {props.readyCount}
               <span className="sr-only">{t('pos.topbar.readyCount', { count: props.readyCount })}</span>

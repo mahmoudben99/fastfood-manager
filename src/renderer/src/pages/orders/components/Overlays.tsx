@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Lock, RefreshCw, Star, Trophy } from 'lucide-react'
-import { ShiftBar } from '../../../components/checkout'
+import { ShiftBar, useShiftStore } from '../../../components/checkout'
 import { Button, Modal } from '../../../components/ui'
 
 /** Admin password before the Day Recap (it shows revenue and profit). */
@@ -43,14 +43,24 @@ export function RecapGate({ onClose, onUnlocked }: { onClose: () => void; onUnlo
   )
 }
 
-/** NO_OPEN_SHIFT: open the shift right here (full ShiftBar panel), then retry the same checkout. */
+/** NO_OPEN_SHIFT: open the shift right here (full ShiftBar panel); the same checkout retries by itself. */
 export function ShiftPrompt({ onClose, onRetry }: { onClose: () => void; onRetry: () => void }) {
   const { t } = useTranslation()
+  const shiftOpen = useShiftStore((s) => Boolean(s.shift && s.shift.status === 'open'))
+  // Only a shift opened HERE triggers the retry (a stale "open" store state must not loop).
+  const openedAtMount = useRef(shiftOpen)
+  const retried = useRef(false)
+  useEffect(() => {
+    if (shiftOpen && !openedAtMount.current && !retried.current) {
+      retried.current = true
+      onRetry()
+    }
+  }, [shiftOpen, onRetry])
   return (
     <Modal
       isOpen
       onClose={onClose}
-      size="md"
+      size="xl"
       title={t('pos.shift.title')}
       description={t('pos.shift.body')}
       footer={

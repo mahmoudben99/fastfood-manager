@@ -22,6 +22,8 @@ import { migration020 } from './020_category_soft_delete'
 import { migration021 } from './021_modifiers_combos'
 import { migration022 } from './022_cash_shifts_delivery'
 import { migration024 } from './024_kds_tickets'
+import { migration025 } from './025_fiscal_channels_availability'
+import { migration026 } from './026_customer_consent'
 
 interface Migration {
   version: number
@@ -52,7 +54,9 @@ const migrations: Migration[] = [
   migration020,
   migration021,
   migration022,
-  migration024
+  migration024,
+  migration025,
+  migration026
 ]
 
 export function runMigrations(db: Database.Database): void {

@@ -36,6 +36,11 @@ import {
   CashError, applyOrderLevelCreate, applyOrderLevelEdit, cashResultCode, onOrderCancelled, onOrderRestored,
   planOrderLevelCreate, planOrderLevelEdit, recordLineVoid, validateOrderLevel, type DeliveryDetails
 } from './order-level'
+// v4 fiscal: gapless fiscal ticket number + SHA-256 chained journal (services/fiscal/journal.ts),
+// per-channel prices (channels.ts) and time-based availability (availability.ts). Hunks: "v4 fiscal".
+import { assignFiscalNumber, fiscalBefore, journalHeaderEdit, journalOrderEvent } from './fiscal/journal'
+import { channelBasePrice, editOrderChannel, resolveOrderChannel, setOrderChannel } from './channels'
+import { availabilityRejection } from './availability'
 
 export type OrderSource = 'pos' | 'tablet' | 'remote'
 export type OrderStatus = 'pending' | 'preparing' | 'completed' | 'cancelled'
@@ -73,6 +78,8 @@ export interface CreateOrderInput {
   payments?: OrderPaymentInput[]
   /** v4: delivery details for orderType 'delivery'; the fee is added to the total. */
   delivery?: DeliveryDetails
+  /** v4 fiscal: sales channel ('yassir' / a platform for delivery orders); default = orderType. */
+  channel?: string
 }
 
 export type CreateOrderResult =
@@ -115,7 +122,7 @@ export interface UpdateOrderLinesInput {
   discountAmount?: number
   /** Internal compatibility fields used by ordersRepo.updateItems. */
   discountDetails?: string
-  header?: Omit<UpdateOrderHeaderInput, 'orderId' | 'delivery'> & { orderType?: 'local' | 'takeout' | 'delivery' }
+  header?: Omit<UpdateOrderHeaderInput, 'orderId' | 'delivery'> & { orderType?: 'local' | 'takeout' | 'delivery'; channel?: string }
   operator?: string
   /** v4: delivery patch (null = no delivery details); the fee follows the next order type. */
   delivery?: DeliveryDetails | null
@@ -162,6 +169,8 @@ interface OrderRow {
   notes: string | null
   source: OrderSource
   source_request_id: string | null
+  /** v4 fiscal (migration 025). */
+  channel?: string | null
 }
 
 interface OrderItemRow {
@@ -445,10 +454,15 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
       return db.transaction(() => {
         const duplicate = duplicateFor(input.source, input.sourceRequestId)
         if (duplicate) return duplicate
+        // v4 fiscal: the sales channel prices the lines (default = the order type's own channel).
+        const channel = resolveOrderChannel(db, input.orderType, input.channel)
+        if (!channel) throw new DomainError('invalid_input', 'Unknown or disabled sales channel')
 
         const lines = input.lines.map((line, index) => {
           const menu = db.prepare('SELECT * FROM menu_items WHERE id = ? AND is_active = 1').get(line.menuItemId) as any
           if (!menu) throw new DomainError('inactive_item', `Menu item ${line.menuItemId} is unavailable`, index)
+          const unavailable = availabilityRejection(db, menu, captured) // v4 fiscal: outside its hours ('block')
+          if (unavailable) throw new DomainError('inactive_item', unavailable, index)
 
           let workerId: number | null = line.workerId ?? null
           if (workerId != null) {
@@ -486,7 +500,7 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
           // v4 catalog: sold-out check, options, combo picks (prices from the DB, never the client).
           const catalog = prepareCatalogLine(db, menu, line, catalogContext(index))
           if (catalog.isCombo) workerId = null // a combo parent is not cooked; its children route
-          const computedUnit = Math.max(0, menu.price + catalog.extrasPerUnit)
+          const computedUnit = Math.max(0, channelBasePrice(db, menu, channel) + catalog.extrasPerUnit) // v4 fiscal: channel price
           const unitPrice = input.source === 'pos' ? line.unitPriceOverride ?? computedUnit : computedUnit
           const lineTotal = unitPrice * line.quantity
           if (!Number.isFinite(lineTotal) || lineTotal < 0 || lineTotal > MAX_MONEY) {
@@ -564,6 +578,7 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
           input.sourceRequestId,
           captured.toISOString()
         ).lastInsertRowid)
+        assignFiscalNumber(db, orderId, channel) // v4 fiscal: gapless number + channel, same transaction
         // v4: shift id, delivery row, payments / default payment, payment_status.
         applyOrderLevelCreate(db, orderId, orderLevel, input, captured)
 
@@ -640,6 +655,8 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
         // Combo children print at their own stations; the combo parent line never prints.
         const workerGroups = kitchenStations(db, orderId)
         const ids = enqueueAutomaticPrintJobs(db, orderId, workerGroups, 'new')
+        // v4 fiscal: journal entry with the full sale (lines, options, checkout payments).
+        journalOrderEvent(db, orderId, 'create', { source: input.source, operator: input.operator?.trim() || null }, { full: true, at: captured })
         enqueueOutbox(db, orderId, 'created', true)
         return createResult(current(orderId)!, false, ids)
       })()
@@ -724,6 +741,7 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
         if (kitchenRelevantChange) {
           enqueueAutomaticPrintJobs(db, input.orderId, kitchenStations(db, input.orderId), 'updated')
         }
+        journalHeaderEdit(db, order as unknown as Record<string, unknown>, order.id) // v4 fiscal
         enqueueOutbox(db, input.orderId, 'updated')
         return updateResult(current(input.orderId)!)
       })()
@@ -758,6 +776,9 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
       }
 
       return db.transaction(() => {
+        const fiscalPrior = fiscalBefore(db, input.orderId) // v4 fiscal: line history kept in the journal
+        const channel = editOrderChannel(db, order, input.header?.orderType, input.header?.channel) // v4 fiscal
+        if (!channel) throw new DomainError('invalid_input', 'Unknown or disabled sales channel')
         const oldItems = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(input.orderId) as OrderItemRow[]
         const oldById = new Map(oldItems.map((item) => [item.id, item]))
         // v4 catalog: combo children are managed through their parent line. Lines pointing at a
@@ -901,9 +922,11 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
 
           const menu = db.prepare('SELECT * FROM menu_items WHERE id = ? AND is_active = 1').get(line.menuItemId) as any
           if (!menu) throw new DomainError('inactive_item', 'A newly added menu item is unavailable')
+          const unavailable = availabilityRejection(db, menu, captured) // v4 fiscal: outside its hours ('block')
+          if (unavailable) throw new DomainError('inactive_item', unavailable)
           // v4 catalog: sold-out check, options, combo picks for the added line.
           const catalog = prepareCatalogLine(db, menu, line, catalogContext())
-          const computedUnit = Math.max(0, menu.price + catalog.extrasPerUnit)
+          const computedUnit = Math.max(0, channelBasePrice(db, menu, channel) + catalog.extrasPerUnit) // v4 fiscal: channel price
           const unitPrice = line.unitPriceOverride ?? computedUnit
           const lineTotal = unitPrice * line.quantity
           if (!Number.isFinite(lineTotal) || lineTotal < 0 || rawSubtotal + lineTotal > MAX_MONEY) {
@@ -987,6 +1010,7 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
           `UPDATE orders SET subtotal = ?, discount_amount = ?, discount_details = ?, total = ?,
            order_type = ? WHERE id = ?`
         ).run(subtotal, discount, details, total, input.header?.orderType ?? order.order_type, input.orderId)
+        setOrderChannel(db, input.orderId, channel) // v4 fiscal
         applyOrderLevelEdit(db, input.orderId, orderLevel, captured) // v4: fee, delivery row, payment status
 
         if (kitchenRelevantChange || catalogKitchenChange) {
@@ -1007,6 +1031,8 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
             : lineChanges.map((change) => ({ worker_id: change.workerId }))
           enqueueAutomaticPrintJobs(db, input.orderId, stations, 'updated', lineChanges)
         }
+        // v4 fiscal: before + after content, so removed / changed lines stay reconstructible.
+        journalOrderEvent(db, input.orderId, 'line_edit', { operator: input.operator?.trim() || null }, { full: true, before: fiscalPrior, at: captured })
         enqueueOutbox(db, input.orderId, 'updated')
         return updateResult(current(input.orderId)!)
       })()
@@ -1084,6 +1110,12 @@ export function createOrderService({ db, now = () => new Date() }: OrderServiceD
 
         const completedAt = status === 'completed' || status === 'cancelled' ? now().toISOString() : null
         db.prepare('UPDATE orders SET status = ?, completed_at = ? WHERE id = ?').run(status, completedAt, orderId)
+        // v4 fiscal: cancel / restore are journaled before their refunds / re-settlement entries.
+        if (status === 'cancelled') {
+          journalOrderEvent(db, orderId, 'cancel', {
+            from: order.status, operator: meta?.operator?.trim() || null, reason: meta?.reason?.trim() || null
+          }, { at: now() })
+        } else if (order.status === 'cancelled') journalOrderEvent(db, orderId, 'restore', { to: status }, { at: now() })
         // v4: refunds + cancellation record on cancel; auto-settled orders re-settle on restore.
         if (status === 'cancelled') onOrderCancelled(db, orderId, meta, now())
         else if (order.status === 'cancelled') onOrderRestored(db, orderId, now())

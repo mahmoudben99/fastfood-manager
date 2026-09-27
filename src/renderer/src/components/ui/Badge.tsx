@@ -32,7 +32,7 @@ const dots: Record<BadgeVariant, string> = {
   default: 'bg-faint',
   neutral: 'bg-faint',
   primary: 'bg-accent',
-  solid: 'bg-white'
+  solid: 'bg-[#fff]'
 }
 
 export function Badge({ variant = 'default', size = 'sm', dot, icon, children, className = '' }: BadgeProps) {

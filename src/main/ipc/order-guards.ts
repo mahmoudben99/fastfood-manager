@@ -6,6 +6,7 @@
 import type { ApprovalInput } from '../../shared/cash'
 import { getDb } from '../database/connection'
 import { computeAutoDiscount } from '../services/order-promotions'
+import { channelBasePrice, resolveOrderChannel } from '../services/channels'
 import { discountNeedsApproval, editVoidsLines, requireApproval } from '../services/approvals'
 
 type Meta = { operator?: string; reason?: string }
@@ -13,18 +14,22 @@ type Meta = { operator?: string; reason?: string }
 /** orders:create — a discount beyond the active promotions and above the threshold. */
 export function guardCreateDiscount(input: {
   discount_amount?: number
+  order_type?: string
+  channel?: string | null
   items: { menu_item_id: number; quantity: number; unit_price?: number }[]
   approval?: ApprovalInput
 }): void {
   const discount = Number(input?.discount_amount) || 0
   if (discount <= 0 || !Array.isArray(input.items)) return
   const db = getDb()
-  const price = db.prepare('SELECT price FROM menu_items WHERE id = ?')
+  const channel = resolveOrderChannel(db, input.order_type ?? 'takeout', input.channel)
+  const menu = db.prepare('SELECT id, price FROM menu_items WHERE id = ?')
   const subtotal = input.items.reduce((acc, item) => {
-    const unit = item.unit_price ?? (price.get(item.menu_item_id) as { price: number } | undefined)?.price ?? 0
+    const row = menu.get(item.menu_item_id) as { id: number; price: number } | undefined
+    const unit = item.unit_price ?? (row ? channelBasePrice(db, row, channel) : 0)
     return acc + Number(unit) * Number(item.quantity || 0)
   }, 0)
-  const allowance = computeAutoDiscount(input.items).amount
+  const allowance = computeAutoDiscount(input.items, db, channel).amount
   if (discountNeedsApproval(db, { subtotal, discount, allowance })) {
     requireApproval(db, 'discount', input.approval, { detail: { discount, subtotal, allowance } })
   }
