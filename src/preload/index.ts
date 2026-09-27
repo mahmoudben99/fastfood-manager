@@ -228,7 +228,7 @@ const api = {
     ) => ipcRenderer.invoke('orders:updateItems', id, items, discountAmount, discountDetails, info, approval)
   },
   // ==================== v4 CASH: payments / shifts / delivery / approvals ====================
-  // Rejections carry a message; stable tokens: NO_OPEN_SHIFT:, SHIFT_ALREADY_OPEN:, BELOW_MIN_ORDER:,
+  // Rejections carry a message; stable tokens: NO_OPEN_SHIFT:, SHIFT_ALREADY_OPEN:, BELOW_MIN_ORDER:, CONSENT_REQUIRED:,
   // APPROVAL_REQUIRED:<action>, APPROVAL_INVALID:<action> (parse with parseApprovalError in shared/cash).
   payments: {
     getMethods: (): Promise<PaymentMethodConfig[]> => ipcRenderer.invoke('payments:getMethods'),
@@ -247,6 +247,8 @@ const api = {
     listUnpaid: (options?: { date?: string; shiftId?: number }): Promise<{
       id: number; daily_number: number; order_date: string; order_type: string; customer_name: string | null
       customer_phone: string | null; total: number; paid: number; balance_due: number; payment_status: string
+      /** v4: money handed back by hand on this order (a partial refund leaves a balance due). */
+      refunded: number
     }[]> => ipcRenderer.invoke('payments:listUnpaid', options),
     /** Net collected by method for an order_date range; pre-v4 orders count as cash. */
     salesByMethod: (startDate: string, endDate: string): Promise<{ method: string; amount: number; count: number }[]> =>

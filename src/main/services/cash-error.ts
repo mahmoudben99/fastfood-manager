@@ -4,7 +4,7 @@ import type Database from 'better-sqlite3'
  * Domain error for the v4 cash modules (payments, shifts, delivery). The order service turns it
  * into an `{ ok: false, code, message }` result; IPC handlers let it reject with its message.
  * Messages that a UI must recognise start with a stable token (NO_OPEN_SHIFT:, SHIFT_ALREADY_OPEN:,
- * BELOW_MIN_ORDER:) because Electron only forwards an error's message to the renderer.
+ * BELOW_MIN_ORDER:, CONSENT_REQUIRED:) because Electron only forwards an error's message to the renderer.
  */
 export type CashErrorCode = 'invalid_input' | 'no_open_shift' | 'shift_open' | 'not_found' | 'not_allowed'
 

@@ -5,6 +5,19 @@ import {
   createOrderService, delivery, fixedNow, freshDb, NOW, order, payments, seedDriver, seedMenu, settlement, shifts, tryOrder
 } from './cash-test-helpers.mjs'
 
+/** Migration 026 adds customers.consent_at; add it here when this branch runs without 026. */
+function ensureConsentColumn(db) {
+  const has = db.prepare("SELECT 1 FROM pragma_table_info('customers') WHERE name = 'consent_at'").get()
+  if (!has) db.exec('ALTER TABLE customers ADD COLUMN consent_at TEXT; ALTER TABLE customers ADD COLUMN consent_version TEXT')
+}
+
+/** A customer who agreed to keep their data (law 18-07), as the order screen records it. */
+function consentingCustomer(db, phone, normalized, name = null) {
+  ensureConsentColumn(db)
+  db.prepare(`INSERT INTO customers (phone, phone_normalized, name, total_spent, order_count, consent_at, consent_version)
+              VALUES (?, ?, ?, 0, 0, ?, 'test')`).run(phone, normalized, name, NOW.toISOString())
+}
+
 function seedZones(db) {
   const center = delivery.saveZone(db, { name: 'Centre-ville', fee: 150, min_order: 800, estimated_minutes: 25 })
   const far = delivery.saveZone(db, { name: 'Bab Ezzouar', fee: 300 })
@@ -16,6 +29,7 @@ test('delivery fee is added to the total; zone snapshot, minimum order, address 
   try {
     seedMenu(db)
     const { center } = seedZones(db)
+    consentingCustomer(db, '0550 12 34 56', '+213550123456', 'Amine')
     const service = createOrderService({ db, now: fixedNow })
     const created = order(service, {
       orderType: 'delivery',
@@ -148,5 +162,33 @@ test('driver settlement: expected COD vs collected, payments in the shift, drawe
     assert.deepEqual([report.cash.cash_sales, report.cash.driver_differences, report.cash.expected, report.cash.over_short], [1600, -100, 1500, 0])
     assert.deepEqual(report.driver_settlements, [{ driver_name: 'Yacine', expected: 1600, collected: 1500, difference: -100 }])
     assert.equal(report.unpaid.count, 1, 'the order still out for delivery is unpaid')
+  } finally { cleanup() }
+})
+
+test('law 18-07: without recorded consent the address stays on the order only; the address book refuses it', () => {
+  const { db, cleanup } = freshDb()
+  try {
+    seedMenu(db)
+    ensureConsentColumn(db)
+    const { center } = seedZones(db)
+    const service = createOrderService({ db, now: fixedNow })
+    const first = order(service, {
+      orderType: 'delivery', customer: { phone: '0661 22 33 44', name: 'Samia' },
+      delivery: { address: 'Rue des Frères, bloc 3', zoneId: center.id, saveAddress: true }
+    })
+    assert.equal(delivery.getOrderDelivery(db, first.orderId).address, 'Rue des Frères, bloc 3', 'the order keeps its address')
+    assert.deepEqual(delivery.listAddressesByPhone(db, '0661223344'), [], 'nothing stored without consent')
+    assert.throws(() => delivery.saveAddress(db, { customer_phone: '0661 22 33 44', address: 'Rue des Frères, bloc 3' }), /CONSENT_REQUIRED:/)
+    assert.throws(() => delivery.saveAddress(db, { customer_phone: '0770 00 00 00', address: 'Somewhere' }), /CONSENT_REQUIRED:/)
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM customers WHERE phone_normalized = '+213770000000'").get().n, 0, 'a refused save creates no customer')
+
+    db.prepare("UPDATE customers SET consent_at = ?, consent_version = 'test' WHERE phone_normalized = '+213661223344'").run(NOW.toISOString())
+    order(service, {
+      orderType: 'delivery', customer: { phone: '0661 22 33 44' },
+      delivery: { address: 'Rue des Frères, bloc 3', zoneId: center.id, saveAddress: true }
+    })
+    const saved = delivery.saveAddress(db, { customer_phone: '0661 22 33 44', address: 'Bureau, Hydra', label: 'Work' })
+    assert.deepEqual(delivery.listAddressesByPhone(db, '0661223344').map((a) => a.address).sort(), ['Bureau, Hydra', 'Rue des Frères, bloc 3'])
+    assert.equal(saved.label, 'Work')
   } finally { cleanup() }
 })

@@ -165,6 +165,9 @@ test('pre-v4 order (payment_status NULL, no rows) reads as paid cash; manual ref
       [['cash', 700], ['cib', 1000]])
     const refunded = payments.recordRefund(db, 50, { method: 'cash', amount: 200, reason: 'cold fries' }, ctx)
     assert.deepEqual([refunded.legacy, refunded.paid, refunded.balanceDue], [false, 500, 200])
+    // The unpaid list says why the balance exists: 200 handed back by hand (the auto legacy row is not a refund).
+    const listed = payments.listUnpaidOrders(db).find((o) => o.id === 50)
+    assert.deepEqual([listed.balance_due, listed.refunded], [200, 200])
     assert.throws(() => payments.recordRefund(db, created.orderId, { method: 'cash', amount: 1 }, ctx), /Only 0/)
   } finally { cleanup() }
 })

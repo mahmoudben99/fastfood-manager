@@ -32,6 +32,9 @@ const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage').then(
 const InsightsPage = lazy(() => import('./pages/insights/InsightsPage').then((m) => ({ default: m.InsightsPage })))
 const AnalyticsDashboard = lazy(() => import('./pages/analytics/AnalyticsDashboard').then((m) => ({ default: m.AnalyticsDashboard })))
 const adminLazy = (node: ReactNode) => <Suspense fallback={<div className="h-64 rounded-2xl bg-surface-2 animate-pulse-soft" />}>{node}</Suspense>
+// v4 admin: cash & shifts, delivery dispatch (lazy: admin-only).
+const CashPage = lazy(() => import('./pages/cash/CashPage').then((m) => ({ default: m.CashPage })))
+const DeliveryPage = lazy(() => import('./pages/delivery/DeliveryPage').then((m) => ({ default: m.DeliveryPage })))
 
 export default function App() {
   const [loading, setLoading] = useState(true)
@@ -211,6 +214,8 @@ export default function App() {
           <Route path="promotions" element={<PromotionsPage />} />
           <Route path="receipt-editor" element={<ReceiptEditor />} />
           <Route path="compliance" element={<CompliancePage />} />
+          <Route path="cash" element={<Suspense fallback={null}><CashPage /></Suspense>} />
+          <Route path="delivery" element={<Suspense fallback={null}><DeliveryPage /></Suspense>} />
         </Route>
         <Route
           path="*"
