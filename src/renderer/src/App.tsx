@@ -23,6 +23,7 @@ import { KdsScreen } from './pages/kds/KdsScreen'
 import { BoardScreen } from './pages/kds/BoardScreen'
 import { KdsSettingsPage } from './pages/kds/KdsSettingsPage'
 import { Toaster } from './components/ui/Toast'
+import { ApprovalHost } from './components/checkout'
 
 // v4 design-system reference (admin-only, lazy so it never weighs on POS start-up).
 const StyleGuide = lazy(() => import('./styleguide/StyleGuide').then((m) => ({ default: m.StyleGuide })))
@@ -141,6 +142,7 @@ export default function App() {
     <HashRouter>
       <UpdateToast />
       <Toaster />
+      <ApprovalHost />
 
       {/* Tablet new-order toast */}
       {tabletToast && (
