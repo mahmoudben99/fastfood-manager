@@ -9,8 +9,8 @@ exports.run = async () => {
   const out = artifactsDir('order-discount')
   const { app, win } = await bootSeededPos()
   try {
-    // Take Out avoids the table-number / phone validation.
-    await win.getByText('Take Out').click()
+    // Takeaway avoids the table-number / phone validation (v4 order screen labels).
+    await win.getByText('Takeaway', { exact: true }).first().click()
     await sleep(400)
 
     // Add one Cheeseburger (300 DA) to the cart.
@@ -22,8 +22,10 @@ exports.run = async () => {
     const cartText = await win.evaluate(() => document.body.innerText)
     saveText(out, 'cart.txt', cartText)
 
-    // Place the order.
-    await win.getByText(/Place Order/).click()
+    // Pay (F2) opens the payment sheet; Enter confirms the full amount in cash.
+    await win.getByRole('button', { name: /^Pay/ }).first().click()
+    await sleep(800)
+    await win.keyboard.press('Enter')
     await sleep(2500)
     await win.screenshot({ path: path.join(out, '2-after-place.png') })
 
