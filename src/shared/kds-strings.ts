@@ -83,7 +83,34 @@ const en = {
   openBoard: 'Open customer board',
   save: 'Save',
   saved: 'Saved',
-  close: 'Close'
+  close: 'Close',
+  // w2-restyle
+  timerWarn: 'Hurry',
+  timerLate: 'Late',
+  bump: 'Done',
+  markDone: 'Mark this line done',
+  openCount: '{{n}} open',
+  boardReadyHint: 'Please collect your order at the counter',
+  copyLink: 'Copy link',
+  linkCopied: 'Link copied',
+  copyFailed: 'Could not copy the link',
+  currentPin: 'Current PIN',
+  newPin: 'New PIN',
+  minutesShort: 'min',
+  decrease: 'Less',
+  increase: 'More',
+  lanHint: 'Scan the QR code with a tablet or TV on the restaurant Wi-Fi, or type the link.',
+  displayHint: 'Pick a screen connected to this computer, then open the kitchen display or the customer board on it.',
+  pin: 'PIN',
+  timersShort: 'Timers',
+  warnAfter: 'Amber after',
+  lateAfter: 'Red after',
+  alertsShort: 'New tickets',
+  flashShort: 'Flash screen',
+  paperShort: 'Paperless',
+  paperExpoShort: 'Expo (full ticket)',
+  boardShort: 'Customer board',
+  boardClearShort: 'Clear ready after'
 }
 
 export type KdsStrings = typeof en
@@ -165,7 +192,34 @@ const fr: KdsStrings = {
   openBoard: 'Ouvrir le tableau clients',
   save: 'Enregistrer',
   saved: 'Enregistré',
-  close: 'Fermer'
+  close: 'Fermer',
+  // w2-restyle
+  timerWarn: 'Vite',
+  timerLate: 'En retard',
+  bump: 'Terminé',
+  markDone: 'Marquer cette ligne comme faite',
+  openCount: '{{n}} en cours',
+  boardReadyHint: 'Merci de récupérer votre commande au comptoir',
+  copyLink: 'Copier le lien',
+  linkCopied: 'Lien copié',
+  copyFailed: 'Impossible de copier le lien',
+  currentPin: 'Code actuel',
+  newPin: 'Nouveau code',
+  minutesShort: 'min',
+  decrease: 'Moins',
+  increase: 'Plus',
+  lanHint: 'Scannez le QR code avec une tablette ou une TV connectée au Wi-Fi du restaurant, ou saisissez le lien.',
+  displayHint: "Choisissez un écran branché sur cet ordinateur, puis ouvrez-y l'écran cuisine ou le tableau clients.",
+  pin: 'Code PIN',
+  timersShort: 'Minuteurs',
+  warnAfter: 'Orange après',
+  lateAfter: 'Rouge après',
+  alertsShort: 'Nouveaux tickets',
+  flashShort: "Flash de l'écran",
+  paperShort: 'Sans papier',
+  paperExpoShort: 'Expo (ticket complet)',
+  boardShort: 'Tableau clients',
+  boardClearShort: 'Retirer les prêtes après'
 }
 
 const ar: KdsStrings = {
@@ -245,7 +299,34 @@ const ar: KdsStrings = {
   openBoard: 'فتح لوحة الزبائن',
   save: 'حفظ',
   saved: 'تم الحفظ',
-  close: 'إغلاق'
+  close: 'إغلاق',
+  // w2-restyle
+  timerWarn: 'أسرع',
+  timerLate: 'متأخر',
+  bump: 'تم',
+  markDone: 'تحديد هذا السطر كمنجز',
+  openCount: '{{n}} مفتوحة',
+  boardReadyHint: 'يُرجى استلام طلبك من المنضدة',
+  copyLink: 'نسخ الرابط',
+  linkCopied: 'تم نسخ الرابط',
+  copyFailed: 'تعذّر نسخ الرابط',
+  currentPin: 'الرمز الحالي',
+  newPin: 'رمز جديد',
+  minutesShort: 'دقيقة',
+  decrease: 'أقل',
+  increase: 'أكثر',
+  lanHint: 'امسح رمز QR بجهاز لوحي أو تلفاز متصل بشبكة Wi-Fi المطعم، أو اكتب الرابط.',
+  displayHint: 'اختر شاشة موصولة بهذا الحاسوب، ثم افتح عليها شاشة المطبخ أو لوحة الزبائن.',
+  pin: 'الرمز السري',
+  timersShort: 'المؤقتات',
+  warnAfter: 'برتقالي بعد',
+  lateAfter: 'أحمر بعد',
+  alertsShort: 'التذاكر الجديدة',
+  flashShort: 'وميض الشاشة',
+  paperShort: 'بدون ورق',
+  paperExpoShort: 'التجميع (التذكرة كاملة)',
+  boardShort: 'لوحة الزبائن',
+  boardClearShort: 'إزالة الجاهزة بعد'
 }
 
 export const KDS_STRINGS: Record<'en' | 'fr' | 'ar', KdsStrings> = { en, fr, ar }

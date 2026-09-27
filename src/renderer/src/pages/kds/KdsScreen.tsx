@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { ChefHat, TriangleAlert } from 'lucide-react'
+import { EmptyState, Skeleton } from '../../components/ui'
 import {
   KDS_CANCEL_FLASH_MS,
   KDS_UNDO_MS,
@@ -11,6 +13,7 @@ import {
   type KdsStationFilter
 } from '../../../../shared/kds'
 import { KdsCard } from './KdsCard'
+import { KdsTopBar } from './KdsTopBar'
 import { playNewTicketBeep } from './kds-i18n'
 
 const readLocal = (key: string): string | null => {
@@ -22,12 +25,23 @@ const writeLocal = (key: string, value: string): void => {
 
 interface Toast {
   text: string
+  error?: boolean
   undo?: () => void
 }
+
+/* Finite kitchen animations (the live dot is the only infinite one). Opacity/transform only. */
+const KDS_CSS = `
+  @keyframes kds-flash-once { 0% { opacity: 0 } 15% { opacity: .3 } 100% { opacity: 0 } }
+  .kds-screen-flash { animation: kds-flash-once .9s ease-out forwards }
+  @keyframes kds-blink { 0%, 100% { opacity: 1 } 50% { opacity: .55 } }
+  .kds-cancel-flash { animation: kds-blink .8s ease-in-out 5 }
+  .kds-banner-pulse { animation: kds-blink 1.2s ease-in-out 3 }
+`
 
 /**
  * In-app kitchen display (#/kds), opened on a second monitor from Admin → Kitchen Display.
  * Same model as the LAN page (src/main/tablet/kds-page.ts): IPC snapshots + `kds:changed` pushes.
+ * Always dark (the `dark` class on the root re-points the Ember tokens), whatever the app theme.
  */
 export function KdsScreen() {
   const { t, i18n } = useTranslation()
@@ -112,6 +126,7 @@ export function KdsScreen() {
     next.delete(key)
     return next
   })
+  const fail = (text = t('kds.actionFailed')): void => setToast({ text, error: true })
 
   const bump = (card: KdsCardData): void => {
     if (card.status === 'cancelled') {
@@ -124,7 +139,7 @@ export function KdsScreen() {
     request.then((result) => {
       if (!result.ok) {
         unhide(card.key)
-        setToast({ text: t('kds.actionFailed') })
+        fail()
         return
       }
       setToast({
@@ -136,19 +151,19 @@ export function KdsScreen() {
       })
     }, () => {
       unhide(card.key)
-      setToast({ text: t('kds.actionFailed') })
+      fail()
     })
   }
 
   const lineDone = (item: KdsItemView): void => {
     void window.api.kds.lineDone(item.id, !item.doneAt).then((result) => {
-      if (!result.ok) setToast({ text: t('kds.actionFailed') })
+      if (!result.ok) fail()
     })
   }
 
   const recallLast = (): void => {
     void window.api.kds.recallLast(station).then((result) => {
-      if (!result.ok) setToast({ text: result.error === 'nothing_to_recall' ? t('kds.nothingToRecall') : t('kds.actionFailed') })
+      if (!result.ok) fail(result.error === 'nothing_to_recall' ? t('kds.nothingToRecall') : t('kds.actionFailed'))
     })
   }
 
@@ -164,87 +179,59 @@ export function KdsScreen() {
     !(card.cancelledAt && now - Date.parse(card.cancelledAt) > KDS_CANCEL_FLASH_MS))
   const allDay = showAllDay ? snapshot?.allDay ?? [] : []
   const clock = new Date(now)
+  const pad = (n: number): string => String(n).padStart(2, '0')
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#0b0f17] text-slate-100">
-      <style>{`
-        @keyframes kds-card-in { from { opacity: 0; transform: translateY(8px) scale(.98) } to { opacity: 1; transform: none } }
-        .kds-card-in { animation: kds-card-in .35s ease-out }
-        @keyframes kds-screen-flash { 0% { opacity: 0 } 15% { opacity: .35 } 100% { opacity: 0 } }
-        .kds-screen-flash { animation: kds-screen-flash .9s ease-out forwards }
-      `}</style>
+    <div className="dark flex h-screen flex-col overflow-hidden bg-canvas text-ink">
+      <style>{KDS_CSS}</style>
 
-      <header className="flex h-16 shrink-0 items-center gap-2.5 border-b border-slate-800 bg-gray-900 px-3.5">
-        <h1 className="whitespace-nowrap text-xl font-extrabold">{t('kds.title')}</h1>
-        <select
-          value={String(station)}
-          onChange={(event) => changeStation(event.target.value)}
-          aria-label={t('kds.station')}
-          className="h-11 rounded-lg border border-slate-700 bg-gray-800 px-3 text-base font-bold text-slate-100"
-        >
-          <option value="all">{t('kds.expoView')}</option>
-          {(snapshot?.stations ?? []).map((entry) => (
-            <option key={entry.id} value={entry.id}>{entry.id === 0 ? t('kds.expo') : entry.name}</option>
-          ))}
-        </select>
-        <button
-          type="button"
-          onClick={recallLast}
-          disabled={!snapshot?.canRecall}
-          className="h-11 rounded-lg border border-slate-700 bg-gray-800 px-3.5 text-base font-bold disabled:opacity-35"
-        >
-          {t('kds.recall')}
-        </button>
-        <button
-          type="button"
-          aria-pressed={showAllDay}
-          onClick={() => { writeLocal('kds_allday', showAllDay ? '0' : '1'); setShowAllDay(!showAllDay) }}
-          className={`h-11 rounded-lg border border-slate-700 bg-gray-800 px-3.5 text-base font-bold ${showAllDay ? '' : 'opacity-55'}`}
-        >
-          {t('kds.allDay')}
-        </button>
-        <button
-          type="button"
-          aria-pressed={soundOn}
-          onClick={() => { writeLocal('kds_sound_local', soundOn ? '0' : '1'); setSoundOn(!soundOn) }}
-          className={`h-11 rounded-lg border border-slate-700 bg-gray-800 px-3.5 text-base font-bold ${soundOn ? '' : 'opacity-55'}`}
-        >
-          {t('kds.sound')}
-        </button>
-        <span className="flex-1" />
-        <span className={`flex items-center gap-1.5 whitespace-nowrap text-sm font-bold ${failed ? 'text-red-300' : 'text-green-300'}`}>
-          <i className={`inline-block h-3 w-3 rounded-full ${failed ? 'animate-pulse bg-red-500' : 'bg-green-500'}`} />
-          {failed ? t('kds.offline') : t('kds.live')}
-        </span>
-        <span className="min-w-[72px] text-end text-2xl font-extrabold tabular-nums">
-          {String(clock.getHours()).padStart(2, '0')}:{String(clock.getMinutes()).padStart(2, '0')}
-        </span>
-      </header>
+      <KdsTopBar
+        station={station}
+        stations={snapshot?.stations ?? []}
+        onStation={changeStation}
+        canRecall={!!snapshot?.canRecall}
+        onRecall={recallLast}
+        showAllDay={showAllDay}
+        onToggleAllDay={() => { writeLocal('kds_allday', showAllDay ? '0' : '1'); setShowAllDay(!showAllDay) }}
+        soundOn={soundOn}
+        onToggleSound={() => { writeLocal('kds_sound_local', soundOn ? '0' : '1'); setSoundOn(!soundOn) }}
+        failed={failed}
+        openCount={snapshot ? cards.filter((card) => card.status !== 'cancelled').length : null}
+        clock={`${pad(clock.getHours())}:${pad(clock.getMinutes())}`}
+      />
 
       {allDay.length > 0 && (
-        <div className="flex h-13 shrink-0 items-center gap-2 overflow-x-auto whitespace-nowrap border-b border-slate-800 bg-slate-950 px-3.5 py-2">
-          <b className="me-1 text-sm uppercase text-slate-400">{t('kds.allDay')}</b>
+        <div className="no-scrollbar flex shrink-0 items-center gap-2 overflow-x-auto whitespace-nowrap border-b border-line bg-surface-2 px-4 py-2">
+          <b className="me-1 text-sm font-extrabold uppercase tracking-wide text-muted rtl:normal-case rtl:tracking-normal">{t('kds.allDay')}</b>
           {allDay.map((row) => (
-            <span key={row.key} className="rounded-full bg-slate-800 px-3 py-1.5 text-lg font-bold">
-              <bdi>{kdsLocalName(row, i18n.language)}</bdi>{' '}
-              <em className="not-italic text-amber-400">×{row.quantity}</em>
+            <span key={row.key} className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3.5 py-1.5 text-lg font-bold text-ink">
+              <bdi>{kdsLocalName(row, i18n.language)}</bdi>
+              <span className="num font-black text-primary-ink">×{row.quantity}</span>
             </span>
           ))}
         </div>
       )}
 
-      <main className="flex-1 overflow-y-auto p-3.5">
-        {cards.length === 0 ? (
-          <div className="px-5 py-20 text-center text-2xl font-bold text-slate-500">{snapshot ? t('kds.noTickets') : '…'}</div>
+      <main className="flex-1 overflow-y-auto p-4">
+        {!snapshot ? (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(360px,1fr))] items-start gap-4" aria-busy="true">
+            {[0, 1, 2].map((index) => <Skeleton key={index} className="h-72 rounded-2xl" />)}
+          </div>
+        ) : cards.length === 0 ? (
+          <EmptyState
+            icon={<ChefHat />}
+            title={<span className="text-2xl">{t('kds.noTickets')}</span>}
+            className="h-full"
+          />
         ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] items-start gap-3.5">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(360px,1fr))] items-start gap-4">
             {cards.map((card) => (
               <KdsCard
                 key={card.key}
                 card={card}
                 expo={expo}
                 nowMs={now}
-                settings={snapshot!.settings}
+                settings={snapshot.settings}
                 onBump={bump}
                 onLineDone={lineDone}
                 onStart={(ticketId) => { void window.api.kds.start(ticketId) }}
@@ -254,16 +241,20 @@ export function KdsScreen() {
         )}
       </main>
 
-      {flashKey > 0 && <div key={flashKey} className="kds-screen-flash pointer-events-none fixed inset-0 z-30 bg-white opacity-0" />}
+      {flashKey > 0 && <div key={flashKey} className="kds-screen-flash pointer-events-none fixed inset-0 z-30 bg-primary opacity-0" />}
 
       {toast && (
-        <div className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-4 rounded-2xl bg-slate-50 py-3 pe-3.5 ps-5 text-lg font-extrabold text-slate-900 shadow-2xl">
+        <div
+          role="status"
+          className="animate-slide-in-up fixed bottom-5 left-1/2 z-40 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-4 rounded-2xl bg-inverse py-3 pe-3 ps-5 text-xl font-extrabold text-on-inverse shadow-e4"
+        >
+          {toast.error && <TriangleAlert className="h-6 w-6 shrink-0 text-danger-strong" aria-hidden="true" />}
           <span>{toast.text}</span>
           {toast.undo && (
             <button
               type="button"
               onClick={() => { const undo = toast.undo; setToast(null); undo?.() }}
-              className="h-12 rounded-lg bg-slate-900 px-5 font-black text-white"
+              className="tap min-h-14 rounded-xl bg-ember px-6 text-lg font-black"
             >
               {t('kds.undo')}
             </button>

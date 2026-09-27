@@ -50,9 +50,16 @@ export const KDS_PAGE_SCRIPT = String.raw`(function () {
     return Number(m.quantity) > 1 ? label + ' x' + m.quantity : label;
   }
   function typeLabel(t) { return t === 'local' ? S.dineIn : t === 'delivery' ? S.delivery : S.takeout; }
+  function typeIcon(t) { return t === 'local' ? 'dineIn' : t === 'delivery' ? 'delivery' : 'takeout'; }
   function stationLabel(id, name) { return Number(id) === 0 ? S.expo : name; }
   function statusLabel(st) {
     return { 'new': S.statusNew, in_progress: S.statusInProgress, ready: S.statusReady, bumped: S.statusBumped, cancelled: S.statusCancelled }[st] || st;
+  }
+  // Inline SVG icons from KDS_CONFIG (markup only; no behaviour hangs on them).
+  function ic(name, cls) { var svg = (C.icons || {})[name] || ''; return cls ? svg.replace('class="ic"', 'class="ic ' + cls + '"') : svg; }
+  function statusChip(st) {
+    var icon = st === 'in_progress' ? ic('flame') : st === 'ready' || st === 'bumped' ? ic('check') : st === 'cancelled' ? ic('x') : '';
+    return '<span class="gst ' + st + '">' + icon + esc(statusLabel(st)) + '</span>';
   }
 
   // ── Network ──
@@ -158,35 +165,60 @@ export const KDS_PAGE_SCRIPT = String.raw`(function () {
     known = keys; snap = next; render();
     if (fresh) { beep(); flash(); }
   }
-  function itemHtml(item, ticket, card) {
+  function modHtml(m) {
+    var kind = String(m.kind || 'none').toLowerCase(), label = modLabel(m);
+    var cls = kind === 'no' ? ' no' : kind === 'extra' ? ' extra' : kind === 'light' ? ' light' : '';
+    if (!cls) label = label.replace(/^\+\s*/, '');
+    return '<li class="mod' + cls + '"><span class="mi">' + ic(kind === 'no' ? 'x' : kind === 'light' ? 'minus' : 'plus') + '</span><bdi>' + esc(label) + '</bdi></li>';
+  }
+  function itemHtml(item) {
     var cls = 'item' + (item.doneAt ? ' done' : '') + (item.change ? ' ' + item.change : '') + (item.parentOrderItemId ? ' child' : '');
     var mark = item.change === 'added' ? S.added : item.change === 'removed' ? S.removed : item.change === 'changed' ? S.changed : '';
     if (item.change === 'changed' && item.previousQuantity != null && item.previousQuantity !== item.quantity) mark += ' · ' + fmt(S.wasQty, { n: item.previousQuantity });
-    var html = '<li class="' + cls + '"><button class="chk" data-item="' + item.id + '" data-done="' + (item.doneAt ? 1 : 0) + '">✓</button><div class="body">';
-    if (item.comboName) html += '<div class="combo">' + esc(fmt(S.combo, { name: item.comboName })) + '</div>';
-    html += '<div class="line"><span class="qty">' + item.quantity + '×</span><span class="name">' + esc(localName(item)) + '</span>' + (mark ? '<span class="mark">' + esc(mark) + '</span>' : '') + '</div>';
-    (item.modifiers || []).forEach(function (m) { html += '<div class="mod' + (String(m.kind).toLowerCase() === 'no' ? ' no' : '') + '">' + esc(modLabel(m)) + '</div>'; });
-    if (item.notes) html += '<div class="inote">⚠ ' + esc(item.notes) + '</div>';
+    var markIcon = item.change === 'added' ? ic('plus') : item.change === 'removed' ? ic('minus') : ic('refresh');
+    var html = '<li class="' + cls + '"><button class="chk" data-item="' + item.id + '" data-done="' + (item.doneAt ? 1 : 0) + '" aria-label="' + esc(S.markDone) + '">' + ic('check') + '</button><div class="body">';
+    html += '<div class="line"><span class="qty' + (item.quantity > 1 ? ' multi' : '') + '">' + item.quantity + '×</span><span class="name"><bdi>' + esc(localName(item)) + '</bdi></span>' + (mark ? '<span class="mark">' + markIcon + esc(mark) + '</span>' : '') + '</div>';
+    if (item.modifiers && item.modifiers.length) html += '<ul class="mods">' + item.modifiers.map(modHtml).join('') + '</ul>';
+    if (item.notes) html += '<div class="inote">' + ic('alert') + '<bdi>' + esc(item.notes) + '</bdi></div>';
     return html + '</div></li>';
   }
+  // Combo children arrive right after each other: one combo header, then the indented children.
+  function itemsHtml(items) {
+    var html = '', prev = null;
+    items.forEach(function (item) {
+      var parent = item.parentOrderItemId == null ? null : item.parentOrderItemId;
+      if (parent !== null && item.comboName && parent !== prev) html += '<li class="combo-head">' + ic('layers') + '<bdi>' + esc(fmt(S.combo, { name: item.comboName })) + '</bdi></li>';
+      prev = parent;
+      html += itemHtml(item);
+    });
+    return html;
+  }
   function cardHtml(card) {
-    var expo = snap.station === 'all', start = ms(card.timerStart);
-    var banner = card.status === 'cancelled' ? 'cancelled' : card.change && card.changedAt && now() - ms(card.changedAt) < C.highlightMs ? card.change : '';
-    var html = '<div class="card st-' + card.status + ' lvl-' + level(now() - start) + '" data-key="' + card.key + '" data-order="' + card.orderId + '" data-number="' + card.dailyNumber + '"' +
+    var expo = snap.station === 'all', start = ms(card.timerStart), cancelled = card.status === 'cancelled';
+    var banner = cancelled ? 'cancelled' : card.change && card.changedAt && now() - ms(card.changedAt) < C.highlightMs ? card.change : '';
+    var html = '<div class="card st-' + card.status + ' lvl-' + level(now() - start) + '" title="' + esc(S.tapToBump) + '" data-key="' + card.key + '" data-order="' + card.orderId + '" data-number="' + card.dailyNumber + '"' +
       (card.tickets.length === 1 ? ' data-ticket="' + card.tickets[0].id + '"' : '') + (card.cancelledAt ? ' data-cancelled="' + ms(card.cancelledAt) + '"' : '') + '>';
-    html += '<div class="head"><div class="num">#' + card.dailyNumber + '</div><div class="meta"><span class="type">' + esc(typeLabel(card.orderType)) + '</span>';
+    html += '<div class="head"><div class="row1"><span class="num">#' + card.dailyNumber + '</span><span class="tpill">' + ic('clock', 'i-ok') + ic('hourglass', 'i-warn') + ic('alert', 'i-late') +
+      '<span class="timer" data-start="' + start + '">' + elapsed(now() - start) + '</span><span class="tw tw-warn">' + esc(S.timerWarn) + '</span><span class="tw tw-late">' + esc(S.timerLate) + '</span></span></div>';
+    html += '<div class="meta"><span class="type">' + ic(typeIcon(card.orderType)) + esc(typeLabel(card.orderType)) + '</span>';
     if (card.tableNumber) html += '<span>' + esc(fmt(S.table, { n: card.tableNumber })) + '</span>';
-    if (card.customerName) html += '<span>' + esc(card.customerName) + '</span>';
-    html += '</div><div class="timer" data-start="' + start + '">' + elapsed(now() - start) + '</div></div>';
-    if (banner) html += '<div class="banner ' + banner + '">' + esc(banner === 'cancelled' ? S.statusCancelled : S[banner] || banner) + '</div>';
-    if (card.orderNote) html += '<div class="note">⚠ ' + esc(card.orderNote) + '</div>';
+    if (card.customerName) html += '<bdi>' + esc(card.customerName) + '</bdi>';
+    if (!cancelled) html += statusChip(card.status);
+    html += '</div></div>';
+    if (banner) {
+      html += '<div class="banner ' + banner + '">' + (banner === 'cancelled' ? ic('circleX') : banner === 'updated' ? ic('refresh') : ic('recall', 'flip')) +
+        esc(banner === 'cancelled' ? S.statusCancelled : S[banner] || banner) + '</div>';
+    }
+    if (card.orderNote) html += '<div class="note">' + ic('note') + '<bdi>' + esc(card.orderNote) + '</bdi></div>';
     card.tickets.forEach(function (t) {
       html += '<div class="group">';
-      if (expo) html += '<div class="ghead"><span>' + esc(stationLabel(t.stationId, t.stationName)) + '</span><span class="gst ' + t.status + '">' + esc(statusLabel(t.status)) + '</span></div>';
-      html += '<ul class="items">' + t.items.map(function (i) { return itemHtml(i, t, card); }).join('') + '</ul></div>';
+      if (expo) html += '<div class="ghead"><bdi>' + esc(stationLabel(t.stationId, t.stationName)) + '</bdi>' + statusChip(t.status) + '</div>';
+      html += '<ul class="items">' + itemsHtml(t.items) + '</ul></div>';
     });
-    html += '<div class="foot"><span>' + esc(S.tapToBump) + '</span>';
-    if (!expo && card.status === 'new') html += '<button class="start" data-start-ticket="' + card.tickets[0].id + '">' + esc(S.start) + '</button>';
+    html += '<div class="foot">';
+    if (!expo && card.status === 'new') html += '<button class="start" data-start-ticket="' + card.tickets[0].id + '">' + ic('play', 'flip') + esc(S.start) + '</button>';
+    // No data attribute: a tap here falls through to the card handler (bump, or dismiss when cancelled).
+    html += '<button class="bump">' + (cancelled ? ic('x') + esc(S.close) : ic('circleCheck') + esc(S.bump)) + '</button>';
     return html + '</div></div>';
   }
   function render() {
@@ -201,7 +233,7 @@ export const KDS_PAGE_SCRIPT = String.raw`(function () {
     var strip = $('allday');
     strip.hidden = !showAllDay || snap.allDay.length === 0;
     document.body.className = strip.hidden ? '' : 'with-allday';
-    strip.innerHTML = '<b>' + esc(S.allDay) + '</b>' + snap.allDay.map(function (r) { return '<span><bdi>' + esc(localName(r)) + '</bdi> <em>×' + r.quantity + '</em></span>'; }).join('');
+    strip.innerHTML = '<b>' + esc(S.allDay) + '</b>' + snap.allDay.map(function (r) { return '<span><bdi>' + esc(localName(r)) + '</bdi><em>×' + r.quantity + '</em></span>'; }).join('');
     var cards = snap.cards.filter(function (c) {
       return !hidden[c.key] && !dismissed[c.key + (c.cancelledAt || '')] && !(c.cancelledAt && now() - ms(c.cancelledAt) > C.cancelFlashMs);
     });
