@@ -26,7 +26,7 @@ export interface SetupImportStockItem {
 
 export interface SetupImportWorker {
   name: string
-  role: 'cook' | 'server' | 'cleaner' | 'cashier' | 'other'
+  role: 'cook' | 'server' | 'cleaner' | 'cashier' | 'driver' | 'other'
   pay_full_day: number
   pay_half_day: number
   phone?: string
@@ -138,7 +138,7 @@ export function parseSetupImportNumber(value: unknown): number | 'ambiguous' | u
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
-const WORKER_ROLES = new Set(['cook', 'server', 'cleaner', 'cashier', 'other'])
+const WORKER_ROLES = new Set(['cook', 'server', 'cleaner', 'cashier', 'driver', 'other'])
 
 function record(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
