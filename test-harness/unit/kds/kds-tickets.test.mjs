@@ -296,10 +296,14 @@ test('v4-catalog lines: combo containers skipped, children carry the combo name,
   const { db, cleanup } = freshDb()
   try {
     seedKitchen(db)
-    db.exec(`ALTER TABLE order_items ADD COLUMN parent_order_item_id INTEGER;
-      ALTER TABLE order_items ADD COLUMN line_kind TEXT NOT NULL DEFAULT 'item';
-      CREATE TABLE order_item_modifiers (id INTEGER PRIMARY KEY, order_item_id INTEGER NOT NULL, name TEXT NOT NULL,
-        name_ar TEXT, name_fr TEXT, kind TEXT NOT NULL DEFAULT 'none', quantity INTEGER, sort_order INTEGER, created_at TEXT)`)
+    // Migration 021 (v4-catalog) creates these; only simulate them on a schema that predates it.
+    const lineColumns = db.prepare('PRAGMA table_info(order_items)').all().map((c) => c.name)
+    if (!lineColumns.includes('parent_order_item_id')) {
+      db.exec(`ALTER TABLE order_items ADD COLUMN parent_order_item_id INTEGER;
+        ALTER TABLE order_items ADD COLUMN line_kind TEXT NOT NULL DEFAULT 'item';
+        CREATE TABLE order_item_modifiers (id INTEGER PRIMARY KEY, order_item_id INTEGER NOT NULL, name TEXT NOT NULL,
+          name_ar TEXT, name_fr TEXT, kind TEXT NOT NULL DEFAULT 'none', quantity INTEGER, sort_order INTEGER, created_at TEXT)`)
+    }
     db.exec("INSERT INTO menu_items (id, name, price, category_id, is_active) VALUES (9, 'Menu Maxi', 900, 1, 1)")
     const service = createOrderService({ db, now: () => T0 })
     const orderId = createOrder(service, [{ menuItemId: 9, quantity: 1 }, { menuItemId: 1, quantity: 1 }, { menuItemId: 2, quantity: 1 }])
