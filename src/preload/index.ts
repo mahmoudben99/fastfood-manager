@@ -103,6 +103,11 @@ const api = {
       ipcRenderer.invoke('orders:updateStatus', id, status),
     cancel: (id: number) => ipcRenderer.invoke('orders:cancel', id),
     getToday: () => ipcRenderer.invoke('orders:getToday'),
+    /**
+     * Resolves to the saved order. A refused edit REJECTS with a message containing
+     * `ORDER_EDIT_REJECTED:<past_day|completed|cancelled|not_found>` (see src/shared/order-edit.ts);
+     * it never resolves to the unchanged order.
+     */
     updateItems: (
       id: number,
       items: any[],

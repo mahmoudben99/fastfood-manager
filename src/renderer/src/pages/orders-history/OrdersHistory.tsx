@@ -1,12 +1,29 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle, X, Check, Pencil, Minus, Plus, Trash2, Search } from 'lucide-react'
+import { AlertTriangle, X, Check, Pencil, Minus, Plus, Trash2, Search, Info } from 'lucide-react'
 import { useAppStore } from '../../store/appStore'
 import { Badge } from '../../components/ui/Badge'
 import { Modal } from '../../components/ui/Modal'
 import { Button } from '../../components/ui/Button'
 import { formatCurrency } from '../../utils/formatCurrency'
 import { localToday, formatDateTime } from '../../utils/localDate'
+import { orderEditRejection, parseOrderEditRejection } from '../../../../shared/order-edit'
+
+/** Manual prints from history always carry the REPRINT banner. */
+const REPRINT = { reprint: true } as const
+
+type PrintResult = { success: boolean; error?: string; printerName?: string }
+
+function stripIpcPrefix(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  return message.replace(/^Error invoking remote method '[^']+':\s*(Error:\s*)?/, '')
+}
+
+/** Paper width declared by the receipt document's own body rule (72mm or 48mm). */
+function receiptPaperWidth(html: string): string {
+  const match = html.match(/body\s*\{[^}]*?(?<![-\w])width\s*:\s*([\d.]+mm)/)
+  return match?.[1] ?? '72mm'
+}
 
 export function OrdersHistory() {
   const { t } = useTranslation()
@@ -23,12 +40,13 @@ export function OrdersHistory() {
 
   // Receipt preview
   const [previewHtml, setPreviewHtml] = useState<string | null>(null)
-  const [printError, setPrintError] = useState('')
+  const [printNotice, setPrintNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
 
   // Edit state
   const [editMode, setEditMode] = useState(false)
   const [editItems, setEditItems] = useState<any[]>([])
   const [savingEdit, setSavingEdit] = useState(false)
+  const [editError, setEditError] = useState('')
 
   useEffect(() => {
     loadOrders()
@@ -43,7 +61,8 @@ export function OrdersHistory() {
     const order = await window.api.orders.getById(id)
     setSelectedOrder(order)
     setEditMode(false)
-    setPrintError('')
+    setEditError('')
+    setPrintNotice(null)
   }
 
   const markDone = async (id: number) => {
@@ -69,6 +88,8 @@ export function OrdersHistory() {
   // Edit helpers
   const startEdit = () => {
     if (!selectedOrder?.items) return
+    if (orderEditRejection(selectedOrder)) return
+    setEditError('')
     setEditItems(
       selectedOrder.items.map((item: any) => ({
         order_item_id: item.id,
@@ -100,6 +121,7 @@ export function OrdersHistory() {
   const saveEdit = async () => {
     if (!selectedOrder || editItems.length === 0) return
     setSavingEdit(true)
+    setEditError('')
     try {
       const updated = await window.api.orders.updateItems(
         selectedOrder.id,
@@ -120,7 +142,15 @@ export function OrdersHistory() {
       setEditMode(false)
       loadOrders()
     } catch (err) {
+      // Previously only logged: the dialog looked as if it had saved. Keep the edit on screen
+      // and say why (e.g. the order belongs to a previous business day).
       console.error('Failed to update order:', err)
+      const rejection = parseOrderEditRejection(err)
+      setEditError(
+        rejection
+          ? t(`orders.editRejected.${rejection}`, { number: selectedOrder.daily_number })
+          : t('orders.editRejected.generic', { message: stripIpcPrefix(err) })
+      )
     } finally {
       setSavingEdit(false)
     }
@@ -148,21 +178,25 @@ export function OrdersHistory() {
     if (html) setPreviewHtml(html)
   }
 
-  const runPrint = async (
-    request: () => Promise<{ success: boolean; error?: string }>,
-    label: string
-  ) => {
-    setPrintError('')
+  const runPrint = async (request: () => Promise<PrintResult>, document: string) => {
+    setPrintNotice(null)
     try {
       const result = await request()
-      if (!result.success) {
-        setPrintError(label + ' was not printed: ' + (result.error || 'unknown printer error'))
+      if (result?.success) {
+        setPrintNotice({
+          kind: 'success',
+          text: result.printerName
+            ? t('orders.reprint.sent', { document, printer: result.printerName })
+            : t('orders.reprint.sentDefault', { document })
+        })
+      } else {
+        setPrintNotice({
+          kind: 'error',
+          text: t('orders.reprint.failed', { document, error: result?.error || t('orders.reprint.failedUnknown') })
+        })
       }
     } catch (error) {
-      setPrintError(
-        label + ' was not printed: ' +
-        (error instanceof Error ? error.message : 'unexpected printer error')
-      )
+      setPrintNotice({ kind: 'error', text: t('orders.reprint.failed', { document, error: stripIpcPrefix(error) }) })
     }
   }
 
@@ -299,14 +333,34 @@ export function OrdersHistory() {
       {selectedOrder && (
         <Modal isOpen onClose={() => { setSelectedOrder(null); setEditMode(false) }} title={t('orders.orderNumber', { number: selectedOrder.daily_number })} size="lg">
           <div className="space-y-4">
-            {printError && (
+            {printNotice && (
+              <div
+                className={`flex items-start gap-2 rounded-lg border p-3 ${
+                  printNotice.kind === 'error' ? 'border-red-300 bg-red-50' : 'border-green-300 bg-green-50'
+                }`}
+                role={printNotice.kind === 'error' ? 'alert' : 'status'}
+              >
+                {printNotice.kind === 'error'
+                  ? <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
+                  : <Check className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />}
+                <p className={`min-w-0 flex-1 text-sm font-medium break-words ${
+                  printNotice.kind === 'error' ? 'text-red-800' : 'text-green-800'
+                }`}>
+                  {printNotice.text}
+                </p>
+                <button type="button" onClick={() => setPrintNotice(null)} aria-label={t('orders.reprint.dismiss')}>
+                  <X className={`h-4 w-4 ${printNotice.kind === 'error' ? 'text-red-600' : 'text-green-600'}`} />
+                </button>
+              </div>
+            )}
+            {editError && (
               <div className="flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 p-3" role="alert">
                 <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-red-800">Print failed</p>
-                  <p className="text-xs text-red-700 break-words">{printError}</p>
+                  <p className="text-sm font-bold text-red-800">{t('orders.orderError.updateTitle')}</p>
+                  <p className="text-xs text-red-700 break-words">{editError}</p>
                 </div>
-                <button type="button" onClick={() => setPrintError('')} aria-label="Dismiss print error">
+                <button type="button" onClick={() => setEditError('')} aria-label={t('orders.orderError.dismiss')}>
                   <X className="h-4 w-4 text-red-600" />
                 </button>
               </div>
@@ -368,7 +422,7 @@ export function OrdersHistory() {
                 </div>
 
                 <div className="flex gap-2">
-                  <Button variant="secondary" onClick={() => setEditMode(false)} className="flex-1">
+                  <Button variant="secondary" onClick={() => { setEditMode(false); setEditError('') }} className="flex-1">
                     {t('common.cancel')}
                   </Button>
                   <Button onClick={saveEdit} loading={savingEdit} disabled={editItems.length === 0} className="flex-1">
@@ -418,8 +472,8 @@ export function OrdersHistory() {
                     variant="secondary"
                     size="sm"
                     onClick={() => runPrint(
-                      () => window.api.printer.printReceipt(selectedOrder.id),
-                      'Customer receipt'
+                      () => window.api.printer.printReceipt(selectedOrder.id, REPRINT),
+                      t('orders.reprint.receipt')
                     )}
                   >
                     {t('orders.printReceipt')}
@@ -428,20 +482,30 @@ export function OrdersHistory() {
                     variant="secondary"
                     size="sm"
                     onClick={() => runPrint(
-                      () => window.api.printer.printKitchen(selectedOrder.id),
-                      'Kitchen ticket'
+                      () => window.api.printer.printKitchen(selectedOrder.id, REPRINT),
+                      t('orders.reprint.kitchen')
                     )}
                   >
                     {t('orders.printKitchen')}
                   </Button>
                 </div>
 
+                {isOngoing(selectedOrder.status) && orderEditRejection(selectedOrder) === 'past_day' && (
+                  // Same business rule the main process enforces: only today's orders are
+                  // editable. Explain instead of offering an Edit that can never save.
+                  <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                    <Info className="h-4 w-4 mt-0.5 shrink-0" />
+                    <p>{t('orders.editLocked.past_day')}</p>
+                  </div>
+                )}
                 {isOngoing(selectedOrder.status) && (
                   <div className="flex gap-2 pt-4 border-t">
-                    <Button variant="secondary" size="sm" onClick={startEdit}>
-                      <Pencil className="h-4 w-4" />
-                      {t('orders.editOrder')}
-                    </Button>
+                    {orderEditRejection(selectedOrder) === null && (
+                      <Button variant="secondary" size="sm" onClick={startEdit}>
+                        <Pencil className="h-4 w-4" />
+                        {t('orders.editOrder')}
+                      </Button>
+                    )}
                     <Button size="sm" onClick={() => markDone(selectedOrder.id)}>
                       <Check className="h-4 w-4" />
                       {t('orders.markDone')}
@@ -458,13 +522,18 @@ export function OrdersHistory() {
         </Modal>
       )}
 
-      {/* Receipt Preview Modal */}
+      {/* Receipt Preview Modal — the receipt is a full document with its own reset CSS and
+          dir attribute, so it renders in an isolated, script-less iframe. Injecting it into the
+          app page collapsed the app's spacing, switched it to Courier, and lost RTL. */}
       {previewHtml && (
         <Modal isOpen onClose={() => setPreviewHtml(null)} title={t('orders.previewReceipt')} size="sm">
           <div className="flex justify-center">
-            <div
-              className="bg-white border rounded-lg p-2 shadow-inner max-h-[70vh] overflow-y-auto"
-              dangerouslySetInnerHTML={{ __html: previewHtml }}
+            <iframe
+              title={t('orders.previewReceipt')}
+              srcDoc={previewHtml}
+              sandbox=""
+              className="bg-white border rounded-lg shadow-inner h-[70vh] max-w-full"
+              style={{ width: `calc(${receiptPaperWidth(previewHtml)} + 24px)` }}
             />
           </div>
           <div className="flex gap-2 mt-4">
@@ -475,8 +544,8 @@ export function OrdersHistory() {
               <Button
                 onClick={() => {
                   void runPrint(
-                    () => window.api.printer.printReceipt(selectedOrder.id),
-                    'Customer receipt'
+                    () => window.api.printer.printReceipt(selectedOrder.id, REPRINT),
+                    t('orders.reprint.receipt')
                   )
                   setPreviewHtml(null)
                 }}
