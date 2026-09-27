@@ -5,8 +5,8 @@
  */
 import type { ApprovalInput } from '../../shared/cash'
 import { getDb } from '../database/connection'
-import { computeAutoDiscount } from '../services/order-promotions'
-import { channelBasePrice, resolveOrderChannel } from '../services/channels'
+import { computeAutoDiscount, resolveUnitPrice } from '../services/order-promotions'
+import { resolveOrderChannel } from '../services/channels'
 import { discountNeedsApproval, editVoidsLines, requireApproval } from '../services/approvals'
 
 type Meta = { operator?: string; reason?: string }
@@ -23,10 +23,9 @@ export function guardCreateDiscount(input: {
   if (discount <= 0 || !Array.isArray(input.items)) return
   const db = getDb()
   const channel = resolveOrderChannel(db, input.order_type ?? 'takeout', input.channel)
-  const menu = db.prepare('SELECT id, price FROM menu_items WHERE id = ?')
+  // Same base as order-service: channel price + chosen options / combo upcharges.
   const subtotal = input.items.reduce((acc, item) => {
-    const row = menu.get(item.menu_item_id) as { id: number; price: number } | undefined
-    const unit = item.unit_price ?? (row ? channelBasePrice(db, row, channel) : 0)
+    const unit = item.unit_price ?? resolveUnitPrice(db, item as Parameters<typeof resolveUnitPrice>[1], channel) ?? 0
     return acc + Number(unit) * Number(item.quantity || 0)
   }, 0)
   const allowance = computeAutoDiscount(input.items, db, channel).amount
@@ -51,7 +50,8 @@ export function guardLineEdit(
   approval?: ApprovalInput
 ): string | undefined {
   const db = getDb()
-  const existing = db.prepare('SELECT id, quantity, total_price FROM order_items WHERE order_id = ?').all(orderId) as
+  // Combo sub-lines follow their combo line; only top-level lines count as voided.
+  const existing = db.prepare('SELECT id, quantity, total_price FROM order_items WHERE order_id = ? AND parent_order_item_id IS NULL').all(orderId) as
     { id: number; quantity: number; total_price: number }[]
   const order = db.prepare('SELECT subtotal, discount_amount FROM orders WHERE id = ?').get(orderId) as
     { subtotal: number; discount_amount: number } | undefined

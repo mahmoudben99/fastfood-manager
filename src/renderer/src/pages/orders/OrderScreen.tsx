@@ -145,7 +145,7 @@ function OrderScreenBody({ isTouch }: { isTouch: boolean }) {
 
   return (
     <div className="pos-layout h-screen grid bg-canvas text-ink overflow-hidden">
-      {/* WP-G remote inbox mount */}<RemoteOrderInbox />
+      {/* WP-G remote inbox: bottom-start, clear of the ticket and Pay button */}<RemoteOrderInbox />
       <TopBar
         searchRef={searchRef}
         search={search}

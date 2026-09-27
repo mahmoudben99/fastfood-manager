@@ -152,7 +152,7 @@ export function RemoteOrderInbox() {
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
-          className="tap fixed bottom-4 end-4 z-40 flex min-h-14 items-center gap-2.5 rounded-full bg-ember ps-5 pe-3 text-base font-semibold text-on-primary shadow-glow hover:brightness-[1.07]"
+          className="tap fixed bottom-4 start-4 z-40 flex min-h-14 items-center gap-2.5 rounded-full bg-ember ps-5 pe-3 text-base font-semibold text-on-primary shadow-glow hover:brightness-[1.07]"
         >
           <Inbox className="h-5 w-5" aria-hidden />
           <span>{t('remoteInbox.title')}</span>
@@ -165,7 +165,7 @@ export function RemoteOrderInbox() {
       )}
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-end justify-end p-4" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-end justify-start p-4" onClick={() => setOpen(false)}>
           <div className="absolute inset-0 bg-overlay animate-fade-in" aria-hidden />
           <div
             role="dialog"
