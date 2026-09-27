@@ -16,6 +16,7 @@ exports.run = async () => {
     const forced = await win.evaluate(
       (mid) =>
         window.api.orders.create({
+          source_request_id: crypto.randomUUID(),
           order_type: 'takeout',
           forceMenuPrice: true,
           items: [{ menu_item_id: mid, quantity: 1, unit_price: 0 }]
@@ -32,6 +33,7 @@ exports.run = async () => {
     const custom = await win.evaluate(
       (mid) =>
         window.api.orders.create({
+          source_request_id: crypto.randomUUID(),
           order_type: 'takeout',
           items: [{ menu_item_id: mid, quantity: 1, unit_price: 250 }]
         }),

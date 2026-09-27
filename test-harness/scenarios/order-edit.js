@@ -16,6 +16,7 @@ exports.run = async () => {
     const created = await win.evaluate(
       (mid) =>
         window.api.orders.create({
+          source_request_id: crypto.randomUUID(),
           order_type: 'takeout',
           discount_amount: 30,
           discount_details: 'Test 10% Off: -30',

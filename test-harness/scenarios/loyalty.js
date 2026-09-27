@@ -17,6 +17,7 @@ exports.run = async () => {
     const order = await win.evaluate(
       (a) =>
         window.api.orders.create({
+          source_request_id: crypto.randomUUID(),
           order_type: 'delivery',
           customer_phone: a.phone,
           customer_name: 'Loyalty Test',

@@ -20,6 +20,7 @@ exports.run = async () => {
     const menu = await win.evaluate(() => window.api.menu.getAll())
     const order = await win.evaluate(
       (menuItemId) => window.api.orders.create({
+        source_request_id: crypto.randomUUID(),
         order_type: 'takeout',
         items: [{ menu_item_id: menuItemId, quantity: 1 }]
       }),

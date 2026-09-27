@@ -26,6 +26,7 @@ exports.run = async () => {
         ingredients: [{ stock_item_id: stock.id, quantity: 100, unit: 'g' }]
       })
       const order = await window.api.orders.create({
+        source_request_id: crypto.randomUUID(),
         order_type: 'takeout',
         discount_amount: 30,
         discount_details: 'Sale-time discount: -30',
