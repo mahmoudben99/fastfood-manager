@@ -1,6 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { SetupImportPayload, SetupImportResult } from '../shared/excel-import'
 
+/** Manual print options. reprint=true prints a visible "REPRINT" banner on the ticket. */
+export type PrintOpts = { reprint?: boolean }
+/** Result of every printer:* print call. error is human-readable and names the printer. */
+export type PrintResult = { success: boolean; error?: string; printerName?: string }
+
 const api = {
   activation: {
     getMachineId: () => ipcRenderer.invoke('activation:getMachineId'),
@@ -29,7 +34,9 @@ const api = {
       | { ok: true; ownerDashboard: 'provisioned' | 'offline' | 'too_short' | 'unlicensed' | 'failed' }
     > => ipcRenderer.invoke('settings:setAdminPassword', newPassword),
     verifyPassword: (password: string) => ipcRenderer.invoke('settings:verifyPassword', password),
-    uploadLogo: () => ipcRenderer.invoke('settings:uploadLogo'),
+    uploadLogo: (): Promise<string | null> => ipcRenderer.invoke('settings:uploadLogo'),
+    getLogoDataUrl: (): Promise<string | null> => ipcRenderer.invoke('settings:getLogoDataUrl'),
+    removeLogo: (): Promise<void> => ipcRenderer.invoke('settings:removeLogo'),
     selectFolder: () => ipcRenderer.invoke('settings:selectFolder'),
     getAutoLaunch: () => ipcRenderer.invoke('settings:getAutoLaunch'),
     setAutoLaunch: (enabled: boolean) => ipcRenderer.invoke('settings:setAutoLaunch', enabled),
@@ -143,13 +150,16 @@ const api = {
   },
   printer: {
     getPrinters: () => ipcRenderer.invoke('printer:getPrinters'),
-    printReceipt: (orderId: number) => ipcRenderer.invoke('printer:printReceipt', orderId),
-    printKitchen: (orderId: number) => ipcRenderer.invoke('printer:printKitchen', orderId),
-    printKitchenForWorker: (orderId: number, workerId: number) => ipcRenderer.invoke('printer:printKitchenForWorker', orderId, workerId),
+    printReceipt: (orderId: number, opts?: PrintOpts): Promise<PrintResult> => ipcRenderer.invoke('printer:printReceipt', orderId, opts),
+    printKitchen: (orderId: number, opts?: PrintOpts): Promise<PrintResult> => ipcRenderer.invoke('printer:printKitchen', orderId, opts),
+    printKitchenForWorker: (orderId: number, workerId: number, opts?: PrintOpts): Promise<PrintResult> => ipcRenderer.invoke('printer:printKitchenForWorker', orderId, workerId, opts),
+    printKitchenUnassigned: (orderId: number, opts?: PrintOpts): Promise<PrintResult> => ipcRenderer.invoke('printer:printKitchenUnassigned', orderId, opts),
     getOrderWorkers: (orderId: number) => ipcRenderer.invoke('printer:getOrderWorkers', orderId),
     previewReceipt: (orderId: number) => ipcRenderer.invoke('printer:previewReceipt', orderId),
+    /** Full standalone HTML of what the receipt printer prints for a sample order. template=null → default receipt. */
+    previewTemplate: (template: any | null): Promise<string> => ipcRenderer.invoke('printer:previewTemplate', template),
     testPrint: () => ipcRenderer.invoke('printer:testPrint'),
-    testPrintOnPrinter: (printerName: string) => ipcRenderer.invoke('printer:testPrintOnPrinter', printerName),
+    testPrintOnPrinter: (printerName: string): Promise<PrintResult> => ipcRenderer.invoke('printer:testPrintOnPrinter', printerName),
     getAssignments: () => ipcRenderer.invoke('printer:getAssignments'),
     setAssignment: (printerName: string, assignmentType: string, workerId?: number) => ipcRenderer.invoke('printer:setAssignment', printerName, assignmentType, workerId),
     deleteAssignment: (id: number) => ipcRenderer.invoke('printer:deleteAssignment', id),
