@@ -1,262 +1,222 @@
 import { create } from 'zustand'
+import type { DeliveryDraft } from '../components/checkout'
+import {
+  computeUnitPrice, defaultChannelFor, mergeSignature, reprice,
+  type ActivePromo, type CartItem, type ManualDiscount, type NewLine, type OrderType
+} from './orderPricing'
 
-export interface CartItem {
-  /** Present for a line loaded from an existing order; absent for a newly added line. */
-  order_item_id?: number
-  menu_item_id: number
-  name: string
-  name_ar: string | null
-  name_fr: string | null
-  price: number
-  quantity: number
-  notes: string
-  image_path: string | null
-  category_id: number
-  worker_id: number | null
-}
+export * from './orderPricing'
 
-interface ActivePromo {
-  id: number
-  name: string
-  type: 'percentage' | 'fixed'
-  discount_value: number
-  applies_to: 'all' | 'specific'
-  menu_item_ids?: number[]
-}
+/**
+ * The POS cart. Lines are keyed (stable React keys, flash, undo) and carry their v4 catalog picks
+ * (modifiers, combo children). `price` is always the effective unit price (see orderPricing.ts).
+ */
 
 interface OrderState {
   items: CartItem[]
-  orderType: 'local' | 'takeout' | 'delivery'
+  orderType: OrderType
+  /** Sales channel picked for the order (delivery platform); null = the order type's own channel. */
+  channel: string | null
+  /** Edit mode: the channel the order was saved on (a change is sent with the update). */
+  editingChannel: string | null
   tableNumber: string
   customerPhone: string
   customerName: string
   notes: string
+  delivery: DeliveryDraft | null
+  deliveryFee: number
+  /** Edit mode: the delivery details were changed (send them with the update). */
+  deliveryDirty: boolean
   activePromos: ActivePromo[]
+  /** Edit mode: stored flat discount of the order being edited. */
   discountAmount: number
   discountDetails: string
+  manualDiscount: ManualDiscount | null
   editingOrderId: number | null
   editingOrderDailyNumber: number | null
+  /** Last line touched by a tap (ticket flash). */
+  pulse: { key: string; n: number } | null
 
-  addItem: (item: Omit<CartItem, 'quantity' | 'notes' | 'worker_id'>) => Promise<void>
-  removeItem: (index: number) => void
-  updateQuantity: (index: number, quantity: number) => void
-  updateItemNotes: (index: number, notes: string) => void
-  updateItemPrice: (index: number, price: number) => void
-  setWorkerForItem: (index: number, workerId: number | null) => void
-  setOrderType: (type: 'local' | 'takeout' | 'delivery') => void
-  setTableNumber: (num: string) => void
-  setCustomerPhone: (phone: string) => void
-  setCustomerName: (name: string) => void
-  setNotes: (notes: string) => void
-  setEditingOrder: (orderId: number | null) => void
-  loadOrderForEdit: (order: any) => void
+  addItem: (line: NewLine) => string
+  updateLine: (key: string, patch: Partial<CartItem>) => void
+  setQuantity: (key: string, quantity: number) => void
+  removeLine: (key: string) => { line: CartItem; index: number } | null
+  restoreLine: (line: CartItem, index: number) => void
+  setOrderType: (type: OrderType) => void
+  setChannel: (channel: string | null) => void
+  setTableNumber: (value: string) => void
+  setCustomerPhone: (value: string) => void
+  setCustomerName: (value: string) => void
+  setNotes: (value: string) => void
+  setDelivery: (draft: DeliveryDraft | null, fee: number) => void
+  setManualDiscount: (discount: ManualDiscount | null) => void
+  loadOrderForEdit: (order: any, lines: CartItem[]) => void
+  markUnavailable: (menuItemIds: Set<number>) => void
   loadActivePromos: () => Promise<void>
-  getSubtotal: () => number
-  getDiscount: () => number
-  getDiscountDetails: () => string
-  getTotal: () => number
   clearOrder: () => void
 }
 
-/** Compute the promo discount for a cart, returning both the amount and a human-readable breakdown. */
-function computeDiscount(
-  items: CartItem[],
-  activePromos: ActivePromo[]
-): { amount: number; details: string } {
-  if (activePromos.length === 0 || items.length === 0) return { amount: 0, details: '' }
+/** Channel that prices the cart right now. */
+export const activeChannel = (s: { orderType: OrderType; channel: string | null }): string => s.channel ?? defaultChannelFor(s.orderType)
 
-  let totalDiscount = 0
-  const amountsByPromo = new Map<number, number>()
+let keySeq = 0
+export const newLineKey = (): string => `l${Date.now().toString(36)}${(++keySeq).toString(36)}`
 
-  for (const item of items) {
-    const itemTotal = item.price * item.quantity
-    let remaining = itemTotal
-    for (const promo of activePromos) {
-      const applies =
-        promo.applies_to === 'all' ||
-        (promo.menu_item_ids && promo.menu_item_ids.includes(item.menu_item_id))
-      if (!applies) continue
-
-      const requested = promo.type === 'percentage'
-        ? itemTotal * (promo.discount_value / 100)
-        : promo.discount_value * item.quantity
-      const applied = Math.min(Math.max(0, requested), remaining)
-      if (applied <= 0) continue
-      totalDiscount += applied
-      remaining -= applied
-      amountsByPromo.set(promo.id, (amountsByPromo.get(promo.id) || 0) + applied)
-      if (remaining <= 0) break
-    }
+/** Default kitchen worker per category (cached; the lookup used to run on every tap). */
+const workerCache = new Map<number, Promise<number | null>>()
+function workerForCategory(categoryId: number): Promise<number | null> {
+  let hit = workerCache.get(categoryId)
+  if (!hit) {
+    hit = window.api.workers
+      .getByCategoryId(categoryId)
+      .then((workers: { id: number }[]) => (workers.length > 0 ? workers[0].id : null))
+      .catch(() => null)
+    workerCache.set(categoryId, hit)
+    // Staff assignments can change in admin; keep the cache short-lived.
+    setTimeout(() => workerCache.delete(categoryId), 60_000)
   }
-
-  const amount = Math.round(totalDiscount * 100) / 100
-  const details = activePromos
-    .filter((promo) => (amountsByPromo.get(promo.id) || 0) > 0)
-    .map((promo) => `${promo.name}: -${Math.round(amountsByPromo.get(promo.id) || 0)}`)
-  return { amount, details: details.join(', ') }
+  return hit
 }
 
-export const useOrderStore = create<OrderState>((set, get) => ({
-  items: [],
-  orderType: 'local',
+const EMPTY_ORDER = {
+  items: [] as CartItem[],
+  orderType: 'local' as OrderType,
+  channel: null as string | null,
+  editingChannel: null as string | null,
   tableNumber: '',
   customerPhone: '',
   customerName: '',
   notes: '',
-  activePromos: [],
+  delivery: null,
+  deliveryFee: 0,
+  deliveryDirty: false,
   discountAmount: 0,
   discountDetails: '',
+  manualDiscount: null,
   editingOrderId: null,
   editingOrderDailyNumber: null,
+  pulse: null
+}
 
-  addItem: async (item) => {
-    // Merge into an existing line only when it's the SAME product at the SAME (menu) price
-    // with no per-item note. Merging by menu_item_id alone made a new full-price tap bump a
-    // line that had a one-off price override or a note ("no onions"), charging/annotating both
-    // units wrong. A freshly-appended line always has the menu price and empty notes, so rapid
-    // double-taps still merge correctly.
-    const existingIndex = get().items.findIndex(
-      (i) => i.menu_item_id === item.menu_item_id && i.price === item.price && i.notes === ''
-    )
+export const useOrderStore = create<OrderState>((set, get) => ({
+  ...EMPTY_ORDER,
+  activePromos: [],
 
-    if (existingIndex >= 0) {
-      // Clone the line object (not just the array) so memoized children don't observe a mutated old snapshot.
+  addItem: (input) => {
+    const { items, pulse } = get()
+    const channelKey = activeChannel(get())
+    const quantity = Math.max(1, input.quantity ?? 1)
+    const notes = input.notes ?? ''
+    const signature = mergeSignature(input)
+    const unitPrice = computeUnitPrice({ ...input, worker_id: null, quantity, notes }, channelKey)
+    const hit = notes === '' && input.price_override == null
+      ? items.findIndex((it) => it.notes === '' && !it.unavailable && it.price_override == null &&
+          (it.order_item_id === undefined || !it.catalog_dirty) && it.price === unitPrice &&
+          mergeSignature(it) === signature)
+      : -1
+    if (hit >= 0) {
+      const key = items[hit].key
+      // Clone the line (not just the array) so memoized ticket lines see a new object.
       set({
-        items: get().items.map((it, i) =>
-          i === existingIndex ? { ...it, quantity: it.quantity + 1 } : it
-        )
+        items: items.map((it, i) => (i === hit ? { ...it, quantity: it.quantity + quantity } : it)),
+        pulse: { key, n: (pulse?.n ?? 0) + 1 }
       })
-      return
+      return key
     }
-
-    // New item: append synchronously FIRST so a rapid second tap finds it and bumps quantity
-    // (previously both taps awaited getByCategoryId, saw existingIndex<0, and appended duplicate lines).
-    set({ items: [...get().items, { ...item, quantity: 1, notes: '', worker_id: null }] })
-
-    // Then fill in the auto-assigned worker once the async lookup resolves.
-    try {
-      const workers = await window.api.workers.getByCategoryId(item.category_id)
-      if (workers.length > 0) {
-        const workerId = workers[0].id
-        set({
-          items: get().items.map((it) =>
-            it.menu_item_id === item.menu_item_id && it.worker_id === null
-              ? { ...it, worker_id: workerId }
-              : it
-          )
-        })
-      }
-    } catch (err) {
-      console.warn('Failed to get worker for category:', err)
+    const key = newLineKey()
+    const line: CartItem = { ...input, key, quantity, notes, worker_id: null, price: unitPrice }
+    // Append synchronously so a rapid second tap finds this line and bumps it.
+    set({ items: [...items, line], pulse: { key, n: (pulse?.n ?? 0) + 1 } })
+    if (!input.is_combo) {
+      void workerForCategory(input.category_id).then((workerId) => {
+        if (workerId === null) return
+        set({ items: get().items.map((it) => (it.key === key && it.worker_id === null ? { ...it, worker_id: workerId } : it)) })
+      })
     }
+    return key
   },
 
-  removeItem: (index) => {
-    set({ items: get().items.filter((_, i) => i !== index) })
-  },
-
-  updateQuantity: (index, quantity) => {
-    if (quantity <= 0) {
-      set({ items: get().items.filter((_, i) => i !== index) })
-      return
-    }
-    set({ items: get().items.map((it, i) => (i === index ? { ...it, quantity } : it)) })
-  },
-
-  updateItemNotes: (index, notes) => {
-    set({ items: get().items.map((it, i) => (i === index ? { ...it, notes } : it)) })
-  },
-
-  updateItemPrice: (index, price) => {
-    set({ items: get().items.map((it, i) => (i === index ? { ...it, price } : it)) })
-  },
-
-  setWorkerForItem: (index, workerId) => {
-    set({ items: get().items.map((it, i) => (i === index ? { ...it, worker_id: workerId } : it)) })
-  },
-
-  setOrderType: (type) => set({ orderType: type }),
-  setTableNumber: (num) => set({ tableNumber: num }),
-  setCustomerPhone: (phone) => set({ customerPhone: phone }),
-  setCustomerName: (name) => set({ customerName: name }),
-  setNotes: (notes) => set({ notes }),
-  setEditingOrder: (orderId) => set({ editingOrderId: orderId }),
-
-  loadOrderForEdit: (order) => {
-    const items: CartItem[] = (order.items || []).map((item: any) => ({
-      order_item_id: item.id,
-      menu_item_id: item.menu_item_id,
-      name: item.menu_item_name || item.name || '',
-      // getOrderItems aliases the localized names as menu_item_name_ar/_fr, so reading only
-      // name_ar/name_fr left them null and edited cart lines fell back to English on an RTL
-      // Arabic POS. Accept either alias.
-      name_ar: item.name_ar ?? item.menu_item_name_ar ?? null,
-      name_fr: item.name_fr ?? item.menu_item_name_fr ?? null,
-      price: item.unit_price ?? item.price ?? 0,
-      quantity: item.quantity,
-      notes: item.notes || '',
-      image_path: item.image_path || null,
-      category_id: item.category_id || 0,
-      worker_id: item.worker_id || null
-    }))
+  updateLine: (key, patch) => {
+    const channelKey = activeChannel(get())
     set({
-      items,
+      items: get().items.map((it) => {
+        if (it.key !== key) return it
+        const next = { ...it, ...patch }
+        return { ...next, price: computeUnitPrice(next, channelKey) }
+      })
+    })
+  },
+
+  setQuantity: (key, quantity) => {
+    if (quantity <= 0) {
+      get().removeLine(key)
+      return
+    }
+    set({ items: get().items.map((it) => (it.key === key ? { ...it, quantity } : it)) })
+  },
+
+  removeLine: (key) => {
+    const items = get().items
+    const index = items.findIndex((it) => it.key === key)
+    if (index < 0) return null
+    set({ items: items.filter((it) => it.key !== key) })
+    return { line: items[index], index }
+  },
+
+  restoreLine: (line, index) => {
+    const items = get().items.filter((it) => it.key !== line.key)
+    items.splice(Math.min(index, items.length), 0, line)
+    set({ items })
+  },
+
+  // A platform belongs to one order type: switching type goes back to the type's own channel.
+  setOrderType: (orderType) => set({ orderType, channel: null, items: reprice(get().items, defaultChannelFor(orderType)) }),
+  setChannel: (channel) => {
+    const next = channel === defaultChannelFor(get().orderType) ? null : channel
+    set({ channel: next, items: reprice(get().items, next ?? defaultChannelFor(get().orderType)) })
+  },
+  setTableNumber: (tableNumber) => set({ tableNumber }),
+  setCustomerPhone: (customerPhone) => set({ customerPhone }),
+  setCustomerName: (customerName) => set({ customerName }),
+  setNotes: (notes) => set({ notes }),
+  setDelivery: (delivery, fee) => set({ delivery, deliveryFee: Math.max(0, fee || 0), deliveryDirty: true }),
+  setManualDiscount: (manualDiscount) => set({ manualDiscount }),
+
+  loadOrderForEdit: (order, lines) => {
+    const orderType = (['local', 'takeout', 'delivery'].includes(order.order_type) ? order.order_type : 'local') as OrderType
+    const d = order.delivery
+    set({
+      ...EMPTY_ORDER,
+      items: lines,
       editingOrderId: order.id,
       editingOrderDailyNumber: order.daily_number ?? null,
-      orderType: (order.order_type as 'local' | 'takeout' | 'delivery') || 'local',
+      orderType,
+      channel: order.channel && order.channel !== defaultChannelFor(orderType) ? order.channel : null,
+      editingChannel: order.channel && order.channel !== defaultChannelFor(orderType) ? order.channel : null,
       tableNumber: order.table_number || '',
       customerPhone: order.customer_phone || '',
       customerName: order.customer_name || '',
       notes: order.notes || '',
-      // Editing a historical order must not silently apply promotions that happen to be
-      // active today. Preserve the stored flat discount until an explicit reprice exists.
+      delivery: d
+        ? { address: d.address ?? null, address_id: d.address_id ?? null, zone_id: d.zone_id ?? null, driver_id: d.driver_id ?? null, fee: d.fee ?? null, notes: d.notes ?? null }
+        : null,
+      deliveryFee: Number(order.delivery_fee) || 0,
+      // Editing a historical order must not apply today's promotions: keep its flat discount.
       discountAmount: Number(order.discount_amount) || 0,
       discountDetails: order.discount_details || ''
     })
   },
 
+  markUnavailable: (ids) =>
+    set({ items: get().items.map((it) => (ids.has(it.menu_item_id) !== Boolean(it.unavailable) ? { ...it, unavailable: ids.has(it.menu_item_id) } : it)) }),
+
   loadActivePromos: async () => {
     try {
-      const promos = await window.api.promotions.getActive()
-      set({ activePromos: promos })
+      set({ activePromos: await window.api.promotions.getActive() })
     } catch {
       set({ activePromos: [] })
     }
   },
 
-  getSubtotal: () => {
-    return get().items.reduce((sum, item) => sum + item.price * item.quantity, 0)
-  },
-
-  getDiscount: () => {
-    const state = get()
-    if (state.editingOrderId) {
-      return Math.min(Math.max(0, state.discountAmount), state.getSubtotal())
-    }
-    return computeDiscount(state.items, state.activePromos).amount
-  },
-
-  getDiscountDetails: () => {
-    const state = get()
-    if (state.editingOrderId) return state.discountDetails
-    return computeDiscount(state.items, state.activePromos).details
-  },
-
-  getTotal: () => {
-    return Math.max(0, get().getSubtotal() - get().getDiscount())
-  },
-
-  clearOrder: () =>
-    set({
-      items: [],
-      orderType: 'local',
-      tableNumber: '',
-      customerPhone: '',
-      customerName: '',
-      notes: '',
-      discountAmount: 0,
-      discountDetails: '',
-      editingOrderId: null,
-      editingOrderDailyNumber: null
-    })
+  clearOrder: () => set({ ...EMPTY_ORDER })
 }))

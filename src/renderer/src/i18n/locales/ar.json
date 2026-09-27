@@ -993,5 +993,221 @@
       "fullFeatured": "كامل",
       "bilingual": "ثنائي اللغة (عربي/فرنسي)"
     }
+  },
+  "pos": {
+    "title": "طلب جديد",
+    "search": "بحث",
+    "categories": "الأصناف",
+    "all": "الكل",
+    "noMatch": "لا نتائج لـ «{{query}}»",
+    "sort": {
+      "label": "ترتيب العناصر",
+      "name": "أ–ي",
+      "price": "السعر",
+      "compact": "الأحجام مجمّعة",
+      "expanded": "كل حجم على حدة"
+    },
+    "type": {
+      "label": "نوع الطلب",
+      "local": "في المطعم",
+      "takeout": "سفري",
+      "delivery": "توصيل"
+    },
+    "status": {
+      "pending": "قيد الانتظار",
+      "preparing": "قيد التحضير",
+      "ready": "جاهز",
+      "completed": "مكتمل",
+      "cancelled": "ملغى"
+    },
+    "kind": {
+      "no": "بدون",
+      "extra": "إضافي",
+      "light": "خفيف"
+    },
+    "tile": {
+      "soldOut": "نفد",
+      "unavailable": "غير متوفر الآن",
+      "combo": "وجبة",
+      "customize": "خيارات {{name}}",
+      "inCart": "{{count}} في الطلب"
+    },
+    "topbar": {
+      "theme": "المظهر الفاتح / الداكن",
+      "readyCount": "{{count}} جاهز"
+    },
+    "recap": {
+      "button": "ملخص اليوم",
+      "password": "كلمة مرور المسؤول",
+      "unlock": "فتح"
+    },
+    "ticket": {
+      "title": "الطلب الحالي",
+      "editing": "تعديل الطلب #{{number}}",
+      "cancelEdit": "إلغاء التعديل",
+      "clear": "إفراغ الطلب",
+      "cleared": "تم إفراغ الطلب",
+      "editCancelled": "أُلغي التعديل",
+      "cartReplaced": "استُبدلت السلة السابقة",
+      "empty": "المس عنصرًا للبدء",
+      "table": "رقم الطاولة",
+      "tablePlaceholder": "رقم الطاولة",
+      "tableRequired": "أدخل رقم الطاولة أولًا",
+      "note": "ملاحظة الطلب",
+      "subtotal": "المجموع الفرعي",
+      "discount": "تخفيض",
+      "deliveryFee": "رسوم التوصيل",
+      "total": "المجموع",
+      "pay": "الدفع",
+      "update": "حفظ التعديلات",
+      "exact": "بالضبط",
+      "quickCash": "المبلغ المستلم نقدًا",
+      "less": "واحد أقل",
+      "more": "واحد أكثر",
+      "removed": "أُزيل {{name}}",
+      "customPrice": "سعر معدّل"
+    },
+    "upsell": {
+      "title": "يُضاف غالبًا",
+      "chip": "{{percent}}% يأخذون أيضًا {{name}}"
+    },
+    "sheet": {
+      "add": "أضف إلى الطلب",
+      "save": "حفظ",
+      "editTitle": "تعديل {{name}}",
+      "required": "إلزامي",
+      "optional": "اختياري",
+      "missing": "اختر: {{group}}",
+      "note": "ملاحظة للمطبخ",
+      "notePlaceholder": "مثال: مطهو جيدًا",
+      "price": "سعر الوحدة",
+      "priceHint": "فارغ = سعر القائمة",
+      "resetPrice": "سعر القائمة",
+      "removeLine": "إزالة"
+    },
+    "rule": {
+      "exactly": "اختر {{count}}",
+      "range": "اختر من {{min}} إلى {{max}}",
+      "atLeast": "على الأقل {{count}}",
+      "upTo": "حتى {{count}}",
+      "any": "أي عدد"
+    },
+    "combo": {
+      "choose": "اختر: {{slot}}",
+      "included": "مشمول",
+      "optionsFor": "خيارات · {{name}}",
+      "incomplete": "أكمل كل الأجزاء أولًا.",
+      "missing": "هذه الوجبة غير مُعدّة."
+    },
+    "delivery": {
+      "title": "تفاصيل التوصيل",
+      "phone": "الهاتف",
+      "name": "الاسم",
+      "address": "العنوان",
+      "addressRequired": "أدخل عنوان التوصيل",
+      "add": "أضف الهاتف والعنوان",
+      "noAddress": "لا يوجد عنوان بعد",
+      "done": "تم",
+      "repeated_zero": "لم يُضف أي عنصر",
+      "repeated_one": "أُضيف عنصر واحد من آخر طلب",
+      "repeated_two": "أُضيف عنصران من آخر طلب",
+      "repeated_few": "أُضيفت {{count}} عناصر من آخر طلب",
+      "repeated_many": "أُضيف {{count}} عنصرًا من آخر طلب",
+      "repeated_other": "أُضيف {{count}} عنصر من آخر طلب",
+      "repeatSkipped_zero": "كل العناصر متوفرة",
+      "repeatSkipped_one": "عنصر واحد لم يعد متوفرًا",
+      "repeatSkipped_two": "عنصران لم يعودا متوفرين",
+      "repeatSkipped_few": "{{count}} عناصر لم تعد متوفرة",
+      "repeatSkipped_many": "{{count}} عنصرًا لم يعد متوفرًا",
+      "repeatSkipped_other": "{{count}} عنصر لم يعد متوفرًا"
+    },
+    "discount": {
+      "title": "تخفيض",
+      "percent": "نسبة مئوية",
+      "amount": "مبلغ (DA)",
+      "custom": "قيمة أخرى",
+      "preview": "التخفيض على هذا الطلب",
+      "apply": "تطبيق",
+      "remove": "إزالة التخفيض",
+      "label": "تخفيض يدوي",
+      "needsPin": "يلزم رمز PIN للمسؤول"
+    },
+    "orderNote": {
+      "title": "ملاحظة الطلب",
+      "recent": "ملاحظات حديثة"
+    },
+    "print": {
+      "notConfirmed": "تحقق من الطلب #{{number}}: {{destination}} غير مؤكد",
+      "receipt": "إيصال الزبون",
+      "kitchen": "تذكرة المطبخ",
+      "kitchenFor": "تذكرة المطبخ لـ {{name}}",
+      "attention": "يحتاج إلى تدخل الموظفين.",
+      "retry": "إعادة المحاولة بعد التحقق",
+      "dismiss": "تجاهل",
+      "actionFailed": "تعذر تحديث تنبيه الطباعة",
+      "more_zero": "",
+      "more_one": "+تنبيه طباعة آخر",
+      "more_two": "+تنبيهان آخران",
+      "more_few": "+{{count}} تنبيهات طباعة أخرى",
+      "more_many": "+{{count}} تنبيهًا آخر",
+      "more_other": "+{{count}} تنبيه آخر",
+      "printing_zero": "لا شيء للطباعة",
+      "printing_one": "طباعة تذكرة واحدة…",
+      "printing_two": "طباعة تذكرتين…",
+      "printing_few": "طباعة {{count}} تذاكر…",
+      "printing_many": "طباعة {{count}} تذكرة…",
+      "printing_other": "طباعة {{count}} تذكرة…"
+    },
+    "error": {
+      "generic": "لم يُحفظ. لم يُرسَل شيء إلى المطبخ؛ أعد المحاولة.",
+      "soldOut": "نفدت بعض العناصر: مميزة في التذكرة.",
+      "noShift": "لا توجد وردية مفتوحة.",
+      "openShift": "فتح الوردية",
+      "belowMin": "أقل من الحد الأدنى للطلب في {{zone}} ({{min}} DA).",
+      "belowMinGeneric": "هذا الطلب أقل من الحد الأدنى لمنطقة التوصيل.",
+      "acceptAnyway": "القبول رغم ذلك",
+      "duplicate": "الطلب #{{number}} محفوظ مسبقًا لكن السلة تغيّرت. السلة محفوظة: راجع ذلك الطلب أولًا.",
+      "approvalCancelled": "لم يُحفظ: أُلغيت الموافقة.",
+      "cartKept": "السلة محفوظة: صحّح وأعد المحاولة."
+    },
+    "shift": {
+      "title": "افتح وردية أولًا",
+      "body": "افتح وردية ثم أعد المحاولة. الطلب محفوظ.",
+      "retry": "إعادة محاولة الطلب"
+    },
+    "success": {
+      "change": "الباقي للزبون",
+      "payLater": "للدفع لاحقًا",
+      "newOrder": "طلب جديد",
+      "updated": "تم تحديث الطلب #{{number}}",
+      "title": "تم إرسال الطلب"
+    },
+    "history": {
+      "search": "طاولة، هاتف، رقم، عنصر",
+      "noMatch": "لا توجد طلبات مطابقة",
+      "noneOngoing": "لا شيء قيد التنفيذ",
+      "noneDone": "لا توجد طلبات منتهية بعد",
+      "ready": "جاهز",
+      "late": "متأخر",
+      "unpaid": "غير مدفوع",
+      "partial": "مدفوع جزئيًا",
+      "print": "طباعة",
+      "cancel": "إلغاء",
+      "table": "طاولة {{table}}",
+      "justNow": "الآن",
+      "minutes": "{{count}} د",
+      "hours": "{{h}} سا {{m}} د"
+    },
+    "milestone": "الطلب رقم {{count}} اليوم!",
+    "itemsCount_zero": "لا عناصر",
+    "itemsCount_one": "عنصر واحد",
+    "itemsCount_two": "عنصران",
+    "itemsCount_few": "{{count}} عناصر",
+    "itemsCount_many": "{{count}} عنصرًا",
+    "itemsCount_other": "{{count}} عنصر",
+    "channel": {
+      "label": "قناة البيع",
+      "direct": "مباشر"
+    }
   }
 }
