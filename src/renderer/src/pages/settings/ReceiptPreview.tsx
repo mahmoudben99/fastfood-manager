@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { AlertCircle, Loader2 } from 'lucide-react'
+import { FileWarning } from 'lucide-react'
+import { EmptyState, Skeleton } from '../../components/ui'
 
 export interface PreviewTemplate {
   name: string
@@ -20,6 +21,7 @@ interface ReceiptPreviewProps {
 /**
  * Shows the exact HTML the receipt printer prints for a sample order (contract C2), rendered in a
  * script-less sandboxed iframe at the paper's width. Debounced so typing does not flood IPC.
+ * The iframe is `.receipt-paper`: always white, whatever the app theme.
  */
 export function ReceiptPreview({ template, paperWidth, refreshKey = 0 }: ReceiptPreviewProps) {
   const { t } = useTranslation()
@@ -53,18 +55,13 @@ export function ReceiptPreview({ template, paperWidth, refreshKey = 0 }: Receipt
   const widthPx = Math.round((paperWidth * 96) / 25.4)
 
   if (failed) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-2 py-16 text-gray-400">
-        <AlertCircle className="h-8 w-8" />
-        <p className="text-sm">{t('receiptEditor.previewUnavailable')}</p>
-      </div>
-    )
+    return <EmptyState compact icon={<FileWarning />} title={t('receiptEditor.previewUnavailable')} />
   }
 
   if (html === null) {
     return (
-      <div className="flex items-center justify-center py-16 text-gray-400">
-        <Loader2 className="h-6 w-6 animate-spin" />
+      <div className="mx-auto max-w-full" style={{ width: widthPx }}>
+        <Skeleton className="h-[480px] rounded-md" />
       </div>
     )
   }
@@ -74,7 +71,7 @@ export function ReceiptPreview({ template, paperWidth, refreshKey = 0 }: Receipt
       title={t('receiptEditor.livePreview')}
       srcDoc={html}
       sandbox=""
-      className="receipt-paper block mx-auto shadow-sm border border-gray-200 flex-1 min-h-[480px]"
+      className="receipt-paper mx-auto block min-h-[480px] flex-1 rounded-sm shadow-e3"
       style={{ width: widthPx, maxWidth: '100%' }}
     />
   )

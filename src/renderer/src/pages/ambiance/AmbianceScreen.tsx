@@ -1,1033 +1,184 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Monitor, Plus, Copy, Check, X, Upload, Image } from 'lucide-react'
+import { Check, ImagePlay, LayoutList, Monitor, Palette, Plus, Trash2 } from 'lucide-react'
 import { useAppStore } from '../../store/appStore'
-import { Button } from '../../components/ui/Button'
-import { Input } from '../../components/ui/Input'
-import { Card } from '../../components/ui/Card'
+import {
+  Badge,
+  Button,
+  Card,
+  ConfirmDialog,
+  PageHeader,
+  Skeleton,
+  SkeletonText,
+  Tabs,
+  toast
+} from '../../components/ui'
+import { GOOGLE_FONTS_URL } from './parts/presets'
+import { useAmbianceProfiles } from './parts/useAmbianceProfiles'
+import { ConnectTvCard } from './parts/ConnectTvCard'
+import { DisplayLinkCard } from './parts/DisplayLinkCard'
+import { AppearanceSection } from './parts/AppearanceSection'
+import { ContentSection } from './parts/ContentSection'
+import { MediaSection } from './parts/MediaSection'
+import { TvPreview } from './parts/TvPreview'
+import { AddDisplayModal } from './parts/AddDisplayModal'
 
-const GRADIENT_PRESETS = [
-  { name: 'Midnight', colors: ['#0f0c29', '#302b63', '#24243e'] },
-  { name: 'Ocean', colors: ['#000428', '#004e92', '#000428'] },
-  { name: 'Sunset', colors: ['#1a0a00', '#b33000', '#ff6a00'] },
-  { name: 'Forest', colors: ['#0a1a0a', '#1b4332', '#2d6a4f'] },
-  { name: 'Royal Purple', colors: ['#1a0033', '#4a0080', '#7b2ff7'] },
-  { name: 'Cherry', colors: ['#1a0000', '#6b0020', '#c0003a'] },
-  { name: 'Coffee', colors: ['#1a0f00', '#3e2723', '#6d4c41'] },
-  { name: 'Arctic', colors: ['#0a1628', '#1a3a5c', '#2e6b8a'] },
-  { name: 'Ember', colors: ['#1a0500', '#8b2500', '#d44500'] },
-  { name: 'Teal Night', colors: ['#001a1a', '#004d4d', '#008080'] },
-  { name: 'Gold', colors: ['#1a1400', '#4a3800', '#8b6914'] },
-  { name: 'Rose', colors: ['#1a0010', '#4a0028', '#8b1460'] },
-  { name: 'Storm', colors: ['#0d0d0d', '#2c2c2c', '#4a4a4a'] },
-  { name: 'Warm Night', colors: ['#1a0a00', '#3d1c00', '#6b3a1f'] },
-  { name: 'Pure Dark', colors: ['#000000', '#0a0a0a', '#111111'] },
-  { name: 'Sunrise', colors: ['#fff1eb', '#ace0f9', '#ffd6a5'] },
-  { name: 'Cotton Candy', colors: ['#fce4ec', '#e8eaf6', '#f3e5f5'] },
-  { name: 'Fresh Mint', colors: ['#e8f5e9', '#b2dfdb', '#c8e6c9'] },
-  { name: 'Peach Cream', colors: ['#fff3e0', '#ffe0b2', '#ffccbc'] },
-  { name: 'Sky Blue', colors: ['#e3f2fd', '#bbdefb', '#b3e5fc'] }
-]
+type SectionId = 'look' | 'content' | 'media'
 
-const FONT_OPTIONS = ['Playfair Display', 'Inter', 'DM Serif Display', 'Cormorant Garamond', 'Montserrat', 'Raleway']
-
-const TEXT_COLOR_OPTIONS = [
-  { color: '#ffffff', label: 'White' },
-  { color: '#f0f0f0', label: 'Off-white' },
-  { color: '#fff8e7', label: 'Warm white' },
-  { color: '#d4d4d4', label: 'Light gray' },
-  { color: '#ffd700', label: 'Gold' },
-  { color: '#fffdd0', label: 'Cream' },
-  { color: '#e0f7fa', label: 'Ice blue' },
-  { color: '#fce4ec', label: 'Light pink' },
-  { color: '#1a1a1a', label: 'Dark' },
-  { color: '#2d2d2d', label: 'Charcoal' },
-  { color: '#4a3728', label: 'Brown' }
-]
-
-const ACCENT_COLOR_OPTIONS = [
-  { color: '#f97316', label: 'Orange' },
-  { color: '#3b82f6', label: 'Blue' },
-  { color: '#22c55e', label: 'Green' },
-  { color: '#ef4444', label: 'Red' },
-  { color: '#a855f7', label: 'Purple' },
-  { color: '#ec4899', label: 'Pink' },
-  { color: '#eab308', label: 'Gold' },
-  { color: '#14b8a6', label: 'Teal' },
-  { color: '#06b6d4', label: 'Cyan' },
-  { color: '#ffffff', label: 'White' }
-]
-
-const PANEL_OPTIONS = [
-  { key: 'welcome', label: 'Welcome (Logo + Name)' },
-  { key: 'social', label: 'Social Media & Contact' },
-  { key: 'promos', label: 'Promotions & Packs' },
-  { key: 'slideshow', label: 'Image Slideshow' },
-  { key: 'orders', label: 'Orders Being Prepared' },
-  { key: 'menu', label: 'Menu Items' }
-]
-
-const GOOGLE_FONTS_URL =
-  'https://fonts.googleapis.com/css2?family=' +
-  FONT_OPTIONS.map((f) => f.replace(/ /g, '+')).join('&family=') +
-  '&display=swap'
-
-interface ProfileSettings {
-  gradientPreset: number
-  fontFamily: string
-  textColor: string
-  accentColor: string
-  textScale: 'small' | 'medium' | 'large'
-  logoScale: number
-  showName: boolean
-  panelToggles: Record<string, boolean>
-  welcomeMode: 'animated' | 'static'
-  welcomeText: string
-  youtubeUrl: string
-  images: string[]
-  tvUrl: string
-}
-
-const DEFAULT_PROFILE_SETTINGS: ProfileSettings = {
-  gradientPreset: 0,
-  fontFamily: 'Playfair Display',
-  textColor: '#ffffff',
-  accentColor: '#f97316',
-  textScale: 'medium',
-  logoScale: 1,
-  showName: true,
-  panelToggles: { welcome: true, social: true, promos: true, slideshow: true, orders: true, menu: true },
-  welcomeMode: 'animated',
-  welcomeText: '',
-  youtubeUrl: 'https://www.youtube.com/watch?v=53nwh1aHCU8&list=RD53nwh1aHCU8&start_radio=1',
-  images: [],
-  tvUrl: ''
-}
-
+/** /admin/ambiance: branded TV displays (one pairing code per POS, one settings set per profile). */
 export function AmbianceScreen() {
   const { t } = useTranslation()
-  const { loadSettings } = useAppStore()
+  const isTouch = useAppStore((s) => s.inputMode) === 'touchscreen'
+  const a = useAmbianceProfiles()
+  const [section, setSection] = useState<SectionId>('look')
+  const [addOpen, setAddOpen] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
-  const [profiles, setProfiles] = useState<string[]>(['default'])
-  const [activeProfile, setActiveProfile] = useState('default')
-  const [settings, setSettings] = useState<Record<string, ProfileSettings>>({})
-  const [saved, setSaved] = useState(false)
-  const [copiedCode, setCopiedCode] = useState<string | null>(null)
-  const [newProfileModal, setNewProfileModal] = useState(false)
-  const [newProfileName, setNewProfileName] = useState('')
-  const [creatingProfile, setCreatingProfile] = useState(false)
-  const [restaurantName, setRestaurantName] = useState('')
-  const [tabletRunning, setTabletRunning] = useState(false)
-  const [tabletUrl, setTabletUrl] = useState('')
-  const [pairingCode, setPairingCode] = useState('')
-  const [firewallState, setFirewallState] = useState<'idle' | 'working' | 'done' | 'failed'>('idle')
+  const labelOf = (profile: string) => (profile === 'default' ? t('ambiance.mainDisplay') : profile)
+  const activeLabel = labelOf(a.activeProfile)
 
-  useEffect(() => {
-    window.api.tablet
-      .getPairingCode()
-      .then((r: any) => setPairingCode(r?.code || ''))
-      .catch(() => {})
-  }, [])
-
-  const allowFirewall = async () => {
-    setFirewallState('working')
+  const doDelete = async () => {
+    if (!confirmDelete) return
+    const name = confirmDelete
+    setDeleting(true)
     try {
-      const r = await window.api.tablet.allowFirewall()
-      setFirewallState(r?.ok ? 'done' : 'failed')
+      await a.deleteProfile(name)
+      toast.success(t('ambiance.profileDeleted', { name }))
+      setConfirmDelete(null)
     } catch {
-      setFirewallState('failed')
+      toast.error(t('common.error'))
+    } finally {
+      setDeleting(false)
     }
-  }
-
-  const flashSaved = () => {
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-  }
-
-  // Build the settings key prefix for a profile
-  const prefix = (profile: string) => (profile === 'default' ? 'display_' : `display_${profile}_`)
-
-  // Cloud TV link for a profile. Default = the bare /tv/<id> (picker chooses a screen);
-  // a named profile = a direct link to THAT screen (?profile=), so each tab's link opens
-  // its own display instead of every tab sharing the picker URL.
-  const buildTvUrl = (mid: string, profile: string) =>
-    !mid
-      ? ''
-      : profile === 'default'
-        ? `fastfood-manager.vercel.app/tv/${mid}`
-        : `fastfood-manager.vercel.app/tv/${mid}?profile=${encodeURIComponent(profile)}`
-
-  // The `?profile=` suffix appended to LAN/cloud targets for named profiles (empty for default).
-  const profileQuery = (profile: string) =>
-    profile === 'default' ? '' : `?profile=${encodeURIComponent(profile)}`
-
-  useEffect(() => {
-    loadAllProfiles()
-  }, [])
-
-  const loadAllProfiles = async () => {
-    const allSettings = await window.api.settings.getAll()
-    setRestaurantName(allSettings.restaurant_name || '')
-
-    // Load profile list
-    let profileList: string[] = ['default']
-    try {
-      const stored = allSettings.display_profiles
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          profileList = parsed
-          if (!profileList.includes('default')) profileList.unshift('default')
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-    setProfiles(profileList)
-
-    // Load machine ID for direct URLs
-    let mid = ''
-    try {
-      mid = await window.api.activation.getMachineId()
-    } catch {
-      /* ignore */
-    }
-
-    // Load tablet status
-    try {
-      const tabletStatus = await window.api.tablet.status()
-      setTabletRunning(tabletStatus.running)
-      setTabletUrl(tabletStatus.url || '')
-    } catch {
-      /* ignore */
-    }
-
-    // Load settings for each profile
-    const settingsMap: Record<string, ProfileSettings> = {}
-    for (const profile of profileList) {
-      const p = profile === 'default' ? 'display_' : `display_${profile}_`
-      let images: string[] = []
-      try {
-        images = (await window.api.tablet.getDisplayImages(profile)) || []
-      } catch {
-        /* ignore */
-      }
-
-      settingsMap[profile] = {
-        gradientPreset: parseInt(allSettings[`${p}gradient_preset`] || '0'),
-        fontFamily: allSettings[`${p}font_family`] || 'Playfair Display',
-        textColor: allSettings[`${p}text_color`] || '#ffffff',
-        accentColor: allSettings[`${p}accent_color`] || '#f97316',
-        textScale: (allSettings[`${p}text_scale`] as 'small' | 'medium' | 'large') || 'medium',
-        logoScale: parseFloat(allSettings[`${p}logo_scale`] || '1'),
-        showName: allSettings[`${p}show_name`] !== 'false',
-        panelToggles: {
-          welcome: allSettings[`${p}panel_welcome`] !== 'false',
-          social: allSettings[`${p}panel_social`] !== 'false',
-          promos: allSettings[`${p}panel_promos`] !== 'false',
-          slideshow: allSettings[`${p}panel_slideshow`] !== 'false',
-          orders: allSettings[`${p}panel_orders`] !== 'false',
-          menu: allSettings[`${p}panel_menu`] !== 'false'
-        },
-        welcomeMode: (allSettings[`${p}welcome_mode`] as 'animated' | 'static') || 'animated',
-        welcomeText: allSettings[`${p}welcome_text`] || '',
-        youtubeUrl:
-          allSettings[`${p}youtube_url`] ||
-          'https://www.youtube.com/watch?v=53nwh1aHCU8&list=RD53nwh1aHCU8&start_radio=1',
-        images,
-        tvUrl: buildTvUrl(mid, profile)
-      }
-    }
-    setSettings(settingsMap)
-  }
-
-  const current = settings[activeProfile] || DEFAULT_PROFILE_SETTINGS
-  const currentGradient = GRADIENT_PRESETS[current.gradientPreset] || GRADIENT_PRESETS[0]
-
-  const updateSetting = async <K extends keyof ProfileSettings>(key: K, value: ProfileSettings[K]) => {
-    const updated = { ...current, [key]: value }
-    setSettings((prev) => ({ ...prev, [activeProfile]: updated }))
-
-    const p = prefix(activeProfile)
-
-    // Map keys to setting keys
-    const keyMap: Record<string, string> = {
-      gradientPreset: `${p}gradient_preset`,
-      fontFamily: `${p}font_family`,
-      textColor: `${p}text_color`,
-      accentColor: `${p}accent_color`,
-      textScale: `${p}text_scale`,
-      logoScale: `${p}logo_scale`,
-      showName: `${p}show_name`,
-      welcomeMode: `${p}welcome_mode`,
-      welcomeText: `${p}welcome_text`,
-      youtubeUrl: `${p}youtube_url`
-    }
-
-    const settingKey = keyMap[key as string]
-    if (settingKey) {
-      const stringValue =
-        typeof value === 'boolean' ? (value ? 'true' : 'false') : String(value)
-      await window.api.settings.set(settingKey, stringValue)
-    }
-
-    // Handle panel toggles specially
-    if (key === 'panelToggles') {
-      const toggles = value as Record<string, boolean>
-      for (const [panelKey, panelValue] of Object.entries(toggles)) {
-        await window.api.settings.set(`${p}panel_${panelKey}`, panelValue ? 'true' : 'false')
-      }
-    }
-
-    flashSaved()
-
-    // Sync to cloud after every change
-    if (window.api.cloud?.syncDisplay) {
-      try {
-        await window.api.cloud.syncDisplay(activeProfile)
-      } catch { /* ignore */ }
-    }
-  }
-
-  const handleAddProfile = async () => {
-    if (!newProfileName.trim()) return
-    setCreatingProfile(true)
-    try {
-      const name = newProfileName.trim()
-
-      // Persist the local profile list FIRST, before the (slow, base64-heavy) cloud create.
-      // The 5-min reconcile job deletes any cloud profile row not in this local list; doing
-      // the cloud insert first opened a window where reconcile could delete the brand-new
-      // row (and its short code) as an "orphan". Local-first closes that race.
-      const updatedProfiles = [...profiles, name]
-      setProfiles(updatedProfiles)
-      await window.api.settings.set('display_profiles', JSON.stringify(updatedProfiles))
-
-      // Then create the profile in the cloud for sync
-      try {
-        await window.api.cloud.createDisplayProfile(name)
-      } catch {
-        /* ignore */
-      }
-
-      // Build this profile's direct TV link (?profile=<name>).
-      let mid = ''
-      try { mid = await window.api.activation.getMachineId() } catch { /* ignore */ }
-      const tvUrl = buildTvUrl(mid, name)
-
-      // Initialize default settings for this profile
-      const newSettings: ProfileSettings = { ...DEFAULT_PROFILE_SETTINGS, tvUrl }
-      setSettings((prev) => ({ ...prev, [name]: newSettings }))
-
-      setActiveProfile(name)
-      setNewProfileName('')
-      setNewProfileModal(false)
-    } catch {
-      /* ignore */
-    }
-    setCreatingProfile(false)
-  }
-
-  const handleDeleteProfile = async (profileName: string) => {
-    if (profileName === 'default') return
-    const updatedProfiles = profiles.filter((p) => p !== profileName)
-    setProfiles(updatedProfiles)
-    await window.api.settings.set('display_profiles', JSON.stringify(updatedProfiles))
-
-    // Delete the Supabase row so the picker page doesn't show it as an orphan
-    try {
-      await window.api.cloud?.deleteDisplayProfile?.(profileName)
-    } catch { /* ignore */ }
-
-    // Remove settings for this profile
-    const p = `display_${profileName}_`
-    const keysToRemove = [
-      'gradient_preset', 'font_family', 'text_color', 'accent_color',
-      'text_scale', 'logo_scale', 'show_name', 'show_menu', /* show_menu: legacy, purge stale rows */
-      'panel_welcome', 'panel_social', 'panel_promos', 'panel_slideshow',
-      'panel_orders', 'panel_menu', 'welcome_mode', 'welcome_text',
-      'youtube_url'
-    ]
-    for (const key of keysToRemove) {
-      await window.api.settings.set(`${p}${key}`, '')
-    }
-
-    setSettings((prev) => {
-      const next = { ...prev }
-      delete next[profileName]
-      return next
-    })
-
-    if (activeProfile === profileName) {
-      setActiveProfile('default')
-    }
-  }
-
-  const getDisplayLabel = (profile: string) =>
-    profile === 'default' ? t('ambiance.mainDisplay', { defaultValue: 'Main Display' }) : profile
-
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text)
-    setCopiedCode(label)
-    setTimeout(() => setCopiedCode(null), 2000)
   }
 
   return (
-    <div className="p-6 max-w-[1400px] mx-auto">
+    <>
+      {/* Preview-only web fonts (the TV loads its own copy); offline falls back to system fonts. */}
       <link href={GOOGLE_FONTS_URL} rel="stylesheet" />
-      <style>{`
-        @keyframes ambiance-gradient {
-          0%, 100% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
+
+      <PageHeader
+        icon={<Monitor />}
+        title={t('nav.ambianceScreen')}
+        actions={
+          <>
+            <span aria-live="polite">
+              {a.saved && (
+                <Badge variant="success" size="md" icon={<Check />} className="animate-fade-in">
+                  {t('ambiance.saved')}
+                </Badge>
+              )}
+            </span>
+            <Button size="lg" icon={<Plus className="h-5 w-5" />} onClick={() => setAddOpen(true)}>
+              {t('ambiance.addDisplay')}
+            </Button>
+          </>
         }
-      `}</style>
+      />
 
-      {/* Saved toast */}
-      {saved && (
-        <div className="fixed top-4 right-4 z-50 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg text-sm font-medium animate-pulse">
-          <Check className="h-4 w-4 inline mr-1" />
-          {t('ambiance.saved', { defaultValue: 'Saved' })}
-        </div>
-      )}
+      <ConnectTvCard
+        pairingCode={a.pairingCode}
+        pairingLoaded={a.pairingLoaded}
+        firewallState={a.firewallState}
+        onAllowFirewall={a.allowFirewall}
+      />
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <Monitor className="h-7 w-7 text-orange-500" />
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{t('nav.ambianceScreen', { defaultValue: 'Ambiance Screen' })}</h1>
-            <p className="text-sm text-gray-500">{t('ambiance.subtitle', { defaultValue: 'Manage branded TV displays for your restaurant' })}</p>
-          </div>
-        </div>
-        <Button onClick={() => setNewProfileModal(true)}>
-          <Plus className="h-4 w-4" />
-          {t('ambiance.addDisplay', { defaultValue: 'Add Display' })}
-        </Button>
+      {/* Which TV profile is being edited */}
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <Tabs
+          variant="pills"
+          className="min-w-0 flex-1"
+          value={a.activeProfile}
+          onChange={a.setActiveProfile}
+          tabs={a.profiles.map((profile) => ({
+            id: profile,
+            label: <bdi>{labelOf(profile)}</bdi>,
+            icon: <Monitor />
+          }))}
+        />
+        {a.activeProfile !== 'default' && (
+          <Button
+            variant="secondary"
+            size="lg"
+            icon={<Trash2 className="h-5 w-5 text-danger-ink" />}
+            onClick={() => setConfirmDelete(a.activeProfile)}
+          >
+            {t('ambiance.deleteProfile')}
+          </Button>
+        )}
       </div>
 
-      {/* Profile Tabs */}
-      <div className="flex items-center gap-1 mb-6 border-b border-gray-200 overflow-x-auto">
-        {profiles.map((profile) => (
-          <div key={profile} className="flex items-center">
-            <button
-              onClick={() => setActiveProfile(profile)}
-              className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                activeProfile === profile
-                  ? 'border-orange-500 text-orange-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              {getDisplayLabel(profile)}
-            </button>
-            {profile !== 'default' && (
-              <button
-                onClick={() => handleDeleteProfile(profile)}
-                className="p-1 text-gray-400 hover:text-red-500 transition-colors"
-                title={t('ambiance.deleteProfile', { defaultValue: 'Delete profile' })}
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(340px,420px)]">
+        <div className="min-w-0 space-y-6">
+          <DisplayLinkCard
+            profile={a.activeProfile}
+            profileLabel={activeLabel}
+            tvUrl={a.current.tvUrl}
+            tabletRunning={a.tabletRunning}
+            tabletUrl={a.tabletUrl}
+          />
 
-      {/* Two-column layout */}
-      <div className="flex gap-6">
-        {/* LEFT COLUMN - Settings (60%) */}
-        <div className="w-[60%] space-y-5">
-          {/* Link Section */}
-          <Card>
-            <div className="space-y-3">
-              {/* TV App pairing code — the easy way: install the TV app, type these 4 digits */}
-              {activeProfile === 'default' && pairingCode && (
-                <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
-                  <p className="text-xs font-semibold text-orange-700 uppercase tracking-wide">
-                    {t('ambiance.tvAppCode', { defaultValue: 'TV App — pairing code' })}
-                  </p>
-                  <div className="flex items-center gap-3 mt-1">
-                    <span className="text-4xl font-bold tracking-[0.3em] text-orange-600 font-mono">
-                      {pairingCode}
-                    </span>
-                    <p className="text-xs text-gray-500 flex-1">
-                      {t('ambiance.tvAppCodeHint', {
-                        defaultValue:
-                          'Install the Fast Food TV app on the television, then type this code once. It connects automatically and remembers it.'
-                      })}
-                    </p>
-                  </div>
-                  <button
-                    onClick={allowFirewall}
-                    disabled={firewallState === 'working'}
-                    className="mt-3 text-xs px-3 py-1.5 rounded-md border border-orange-300 text-orange-700 hover:bg-orange-100 disabled:opacity-50"
-                  >
-                    {firewallState === 'working'
-                      ? t('ambiance.firewallWorking', { defaultValue: 'Allowing…' })
-                      : firewallState === 'done'
-                        ? t('ambiance.firewallDone', { defaultValue: '✓ Firewall allowed' })
-                        : firewallState === 'failed'
-                          ? t('ambiance.firewallFailed', { defaultValue: 'Skipped (still works via internet)' })
-                          : t('ambiance.firewallBtn', { defaultValue: 'Make TV connection faster (allow through firewall)' })}
-                  </button>
-                </div>
-              )}
-
-              {/* Named profiles don't have their own pairing code (it's one code per POS,
-                  shown on Main Display). Explain how to point a TV at this specific screen. */}
-              {activeProfile !== 'default' && (
-                <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
-                  <p className="text-xs text-blue-800 leading-relaxed">
-                    {t('ambiance.extraScreenNote', {
-                      defaultValue:
-                        'This is an extra display screen. Pair the TV once with the 4-digit code on the “Main Display” tab, then open a link below to point a screen at “{{name}}” — or choose it from the on-screen menu on the TV.',
-                      name: getDisplayLabel(activeProfile)
-                    })}
-                  </p>
-                </div>
-              )}
-
-              <h3 className="font-semibold text-sm text-gray-700">{t('ambiance.displayLink', { defaultValue: 'Display Link' })}</h3>
-              {current.tvUrl ? (
-                <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-mono text-gray-800 flex-1 bg-white rounded px-3 py-2 border border-gray-200">
-                      {current.tvUrl}
-                    </span>
-                    <button
-                      onClick={() =>
-                        copyToClipboard(
-                          `https://${current.tvUrl}`,
-                          'cloud'
-                        )
-                      }
-                      className="flex-shrink-0 text-orange-500 hover:text-orange-600 p-2"
-                      title={t('ambiance.copyLink', { defaultValue: 'Copy link' })}
-                    >
-                      {copiedCode === 'cloud' ? (
-                        <Check className="h-4 w-4" />
-                      ) : (
-                        <Copy className="h-4 w-4" />
-                      )}
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-400 mt-1">{t('ambiance.worksAnyDevice', { defaultValue: 'Works from any device with internet' })}</p>
-                </div>
-              ) : (
-                <p className="text-sm text-gray-400">{t('ambiance.urlNotAvailable', { defaultValue: 'TV display URL not available. Restart the app if this persists.' })}</p>
-              )}
-
-              {tabletRunning && (
-                <div className="bg-green-50 rounded-lg p-3 border border-green-200">
-                  <p className="text-xs font-medium text-green-700 mb-1">{t('ambiance.localNetworkUrl', { defaultValue: 'Local Network URL' })}</p>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-mono text-green-800 flex-1">
-                      {tabletUrl.replace(/\/$/, '')}/display{profileQuery(activeProfile)}
-                    </span>
-                    <button
-                      onClick={() =>
-                        copyToClipboard(tabletUrl.replace(/\/$/, '') + '/display' + profileQuery(activeProfile), 'local')
-                      }
-                      className="flex-shrink-0 text-green-600 hover:text-green-700 p-2"
-                    >
-                      {copiedCode === 'local' ? (
-                        <Check className="h-4 w-4" />
-                      ) : (
-                        <Copy className="h-4 w-4" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </Card>
-
-          {/* Background */}
-          <Card>
-            <div className="space-y-3">
-              <h3 className="font-semibold text-sm text-gray-700">{t('ambiance.background', { defaultValue: 'Background' })}</h3>
-              <div className="grid grid-cols-5 gap-2">
-                {GRADIENT_PRESETS.map((preset, idx) => (
-                  <button
-                    key={idx}
-                    title={preset.name}
-                    onClick={() => updateSetting('gradientPreset', idx)}
-                    className={`h-10 rounded-lg transition-all ${
-                      current.gradientPreset === idx
-                        ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-100 scale-105'
-                        : 'hover:scale-105'
-                    }`}
-                    style={{
-                      background: `linear-gradient(135deg, ${preset.colors[0]}, ${preset.colors[1]}, ${preset.colors[2]})`,
-                      animation: 'ambiance-gradient 4s ease infinite',
-                      backgroundSize: '200% 200%'
-                    }}
-                  />
-                ))}
-              </div>
-              <p className="text-xs text-gray-400">
-                {t('ambiance.selected', { defaultValue: 'Selected: {{name}}', name: currentGradient.name })}
-              </p>
-            </div>
-          </Card>
-
-          {/* Font */}
-          <Card>
-            <div className="space-y-3">
-              <h3 className="font-semibold text-sm text-gray-700">{t('ambiance.font', { defaultValue: 'Font' })}</h3>
-              <div className="grid grid-cols-3 gap-2">
-                {FONT_OPTIONS.map((font) => (
-                  <button
-                    key={font}
-                    onClick={() => updateSetting('fontFamily', font)}
-                    className={`px-3 py-2 text-sm rounded-lg border-2 transition-all truncate ${
-                      current.fontFamily === font
-                        ? 'border-orange-500 bg-orange-50 text-orange-700 ring-1 ring-orange-300'
-                        : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-                    }`}
-                    style={{ fontFamily: font }}
-                  >
-                    {font}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </Card>
-
-          {/* Text Color */}
-          <Card>
-            <div className="space-y-3">
-              <h3 className="font-semibold text-sm text-gray-700">{t('ambiance.textColor', { defaultValue: 'Text Color' })}</h3>
-              <div className="flex flex-wrap gap-2">
-                {TEXT_COLOR_OPTIONS.map(({ color, label }) => (
-                  <button
-                    key={color}
-                    title={label}
-                    onClick={() => updateSetting('textColor', color)}
-                    className={`w-9 h-9 rounded-full border-2 transition-all ${
-                      current.textColor === color
-                        ? 'scale-110 ring-2 ring-offset-1 ring-gray-400 border-gray-600'
-                        : 'border-gray-300 hover:scale-105'
-                    }`}
-                    style={{ backgroundColor: color }}
-                  />
-                ))}
-              </div>
-            </div>
-          </Card>
-
-          {/* Accent Color */}
-          <Card>
-            <div className="space-y-3">
-              <h3 className="font-semibold text-sm text-gray-700">{t('ambiance.accentColor', { defaultValue: 'Accent Color' })}</h3>
-              <div className="flex flex-wrap gap-2">
-                {ACCENT_COLOR_OPTIONS.map(({ color, label }) => (
-                  <button
-                    key={color}
-                    title={label}
-                    onClick={() => updateSetting('accentColor', color)}
-                    className={`w-9 h-9 rounded-full border-2 transition-all ${
-                      current.accentColor === color
-                        ? 'scale-110 ring-2 ring-offset-1 ring-gray-400 border-gray-800'
-                        : 'border-gray-300 hover:scale-105'
-                    }`}
-                    style={{ backgroundColor: color }}
-                  />
-                ))}
-              </div>
-            </div>
-          </Card>
-
-          {/* Text Size */}
-          <Card>
-            <div className="space-y-3">
-              <h3 className="font-semibold text-sm text-gray-700">{t('ambiance.textSize', { defaultValue: 'Text Size' })}</h3>
-              <div className="flex gap-2">
-                {([
-                  { value: 'small' as const, label: t('ambiance.sizeSmall', { defaultValue: 'Small' }), scale: '0.8x' },
-                  { value: 'medium' as const, label: t('ambiance.sizeMedium', { defaultValue: 'Medium' }), scale: '1.0x' },
-                  { value: 'large' as const, label: t('ambiance.sizeLarge', { defaultValue: 'Large' }), scale: '1.3x' }
-                ]).map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => updateSetting('textScale', opt.value)}
-                    className={`flex-1 py-2 px-3 text-sm rounded-lg border-2 transition-all font-medium ${
-                      current.textScale === opt.value
-                        ? 'border-orange-500 bg-orange-50 text-orange-700 ring-1 ring-orange-300'
-                        : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-                    }`}
-                  >
-                    {opt.label} <span className="text-xs text-gray-400">({opt.scale})</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </Card>
-
-          {/* Logo Size */}
-          <Card>
-            <div className="space-y-3">
-              <h3 className="font-semibold text-sm text-gray-700">{t('ambiance.logoSize', { defaultValue: 'Logo Size' })}</h3>
-              <div className="flex gap-2">
-                {[
-                  { label: '1x', value: 1 },
-                  { label: '2x', value: 2 },
-                  { label: '3x', value: 3 }
-                ].map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => updateSetting('logoScale', opt.value)}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium ${
-                      current.logoScale === opt.value
-                        ? 'bg-orange-500 text-white'
-                        : 'bg-gray-100 text-gray-600'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </Card>
-
-          {/* Show Restaurant Name */}
-          <Card>
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold text-sm text-gray-700">{t('ambiance.showRestaurantName', { defaultValue: 'Show Restaurant Name' })}</h3>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {t('ambiance.showRestaurantNameHint', { defaultValue: 'Display the restaurant name on the welcome screen (logo still shows)' })}
-                </p>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={current.showName}
-                  onChange={(e) => updateSetting('showName', e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-orange-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500" />
-              </label>
-            </div>
-          </Card>
-
-          {/* Active Panels */}
-          <Card>
-            <div className="space-y-3">
-              <div>
-                <h3 className="font-semibold text-sm text-gray-700">{t('ambiance.activePanels', { defaultValue: 'Active Panels' })}</h3>
-                <p className="text-xs text-gray-400 mt-0.5">{t('ambiance.activePanelsHint', { defaultValue: 'Choose which panels show on the TV. Disabled panels are skipped.' })}</p>
-              </div>
-              <div className="space-y-2">
-                {PANEL_OPTIONS.map((panel) => (
-                  <label key={panel.key} className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={current.panelToggles[panel.key] ?? true}
-                      onChange={(e) => {
-                        const updated = { ...current.panelToggles, [panel.key]: e.target.checked }
-                        updateSetting('panelToggles', updated)
-                      }}
-                      className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
-                    />
-                    <span className="text-sm text-gray-700">{t(`ambiance.panel.${panel.key}`, { defaultValue: panel.label })}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          </Card>
-
-          {/* Welcome Message */}
-          <Card>
-            <div className="space-y-3">
-              <h3 className="font-semibold text-sm text-gray-700">{t('ambiance.welcomeMessage', { defaultValue: 'Welcome Message' })}</h3>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => updateSetting('welcomeMode', 'animated')}
-                  className={`px-3 py-1.5 text-sm rounded-lg font-medium ${
-                    current.welcomeMode === 'animated'
-                      ? 'bg-orange-100 text-orange-700'
-                      : 'bg-gray-100 text-gray-600'
-                  }`}
-                >
-                  {t('ambiance.welcomeAnimated', { defaultValue: 'Animated (3 languages)' })}
-                </button>
-                <button
-                  onClick={() => updateSetting('welcomeMode', 'static')}
-                  className={`px-3 py-1.5 text-sm rounded-lg font-medium ${
-                    current.welcomeMode === 'static'
-                      ? 'bg-orange-100 text-orange-700'
-                      : 'bg-gray-100 text-gray-600'
-                  }`}
-                >
-                  {t('ambiance.welcomeCustom', { defaultValue: 'Custom Text' })}
-                </button>
-              </div>
-              <Input
-                placeholder={t('ambiance.welcomeTextPlaceholder', { defaultValue: 'Custom welcome text...' })}
-                value={current.welcomeText}
-                onChange={(e) => updateSetting('welcomeText', e.target.value)}
-              />
-              <p className="text-xs text-gray-400">
-                {t('ambiance.welcomeAnimatedHint', { defaultValue: 'If "Animated" is selected, welcome cycles through English, French, and Arabic automatically' })}
-              </p>
-            </div>
-          </Card>
-
-          {/* YouTube Music */}
-          <Card>
-            <div className="space-y-3">
-              <h3 className="font-semibold text-sm text-gray-700">{t('ambiance.backgroundMusic', { defaultValue: 'Background Music (YouTube)' })}</h3>
-              <p className="text-xs text-gray-400">
-                {t('ambiance.backgroundMusicHint', { defaultValue: 'Paste a YouTube video or playlist URL. Audio plays in the background on the display.' })}
-              </p>
-              <div className="flex gap-2">
-                <Input
-                  className="flex-1"
-                  placeholder={t('ambiance.youtubeUrlPlaceholder', { defaultValue: 'https://www.youtube.com/watch?v=... or playlist URL' })}
-                  value={current.youtubeUrl}
-                  onChange={(e) => {
-                    // Update local state immediately without saving
-                    setSettings((prev) => ({
-                      ...prev,
-                      [activeProfile]: { ...current, youtubeUrl: e.target.value }
-                    }))
-                  }}
-                />
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => updateSetting('youtubeUrl', current.youtubeUrl)}
-                >
-                  {t('common.save')}
-                </Button>
-                {current.youtubeUrl && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => updateSetting('youtubeUrl', '')}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-            </div>
-          </Card>
-
-          {/* Slideshow Images */}
-          <Card>
-            <div className="space-y-3">
-              <h3 className="font-semibold text-sm text-gray-700">
-                <Image className="h-4 w-4 inline mr-1" />
-                {t('ambiance.slideshowImages', { defaultValue: 'Slideshow Images' })}
-              </h3>
-              <p className="text-xs text-gray-400">{t('ambiance.slideshowImagesHint', { defaultValue: 'Upload food photos or restaurant images. Max 10; cloud copies are resized to 1920×1080 and 750 KiB each.' })}</p>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={current.images.length >= 10}
-                onClick={async () => {
-                  const paths = await window.api.tablet.uploadDisplayImages(activeProfile)
-                  if (paths) {
-                    const boundedPaths = paths.slice(0, 10)
-                    setSettings((prev) => ({
-                      ...prev,
-                      [activeProfile]: { ...current, images: boundedPaths }
-                    }))
-                    // Push the new images to cloud immediately
-                    try { await window.api.cloud?.syncDisplay?.(activeProfile) } catch { /* ignore */ }
-                  }
-                }}
-              >
-                <Upload className="h-4 w-4" />
-                {t('ambiance.uploadImages', { defaultValue: 'Upload Images' })} {current.images.length > 0 && `(${current.images.length}/10)`}
-              </Button>
-              {current.images.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-3">
-                  {current.images.map((imgPath, idx) => (
-                    <div key={idx} className="relative group">
-                      <div className="w-20 h-20 rounded-lg border border-gray-200 overflow-hidden bg-gray-100">
-                        <img
-                          src={'file:///' + imgPath.replace(/\\/g, '/')}
-                          alt=""
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            ;(e.target as HTMLImageElement).style.display = 'none'
-                          }}
-                        />
-                      </div>
-                      <button
-                        onClick={async () => {
-                          const updated = await window.api.tablet.removeDisplayImage(imgPath, activeProfile)
-                          setSettings((prev) => ({
-                            ...prev,
-                            [activeProfile]: { ...current, images: updated || [] }
-                          }))
-                          try { await window.api.cloud?.syncDisplay?.(activeProfile) } catch { /* ignore */ }
-                        }}
-                        className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </Card>
-        </div>
-
-        {/* RIGHT COLUMN - Live Preview (40%) */}
-        <div className="w-[40%]">
-          <div className="sticky top-4">
-            <h4 className="text-sm font-medium text-gray-500 mb-2 uppercase tracking-wide">
-              {t('ambiance.livePreview', { defaultValue: 'Live Preview' })}
-            </h4>
-            <div
-              className="rounded-xl overflow-hidden shadow-2xl border border-gray-700"
-              style={{
-                aspectRatio: '16/9',
-                background: `linear-gradient(135deg, ${currentGradient.colors[0]}, ${currentGradient.colors[1]}, ${currentGradient.colors[2]})`,
-                backgroundSize: '200% 200%',
-                animation: 'ambiance-gradient 6s ease infinite',
-                position: 'relative'
-              }}
-            >
-              <div
-                className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center"
-                style={{
-                  transform: `scale(${
-                    current.textScale === 'small'
-                      ? 0.8
-                      : current.textScale === 'large'
-                        ? 1.3
-                        : 1.0
-                  })`,
-                  transformOrigin: 'center center'
-                }}
-              >
-                {/* Restaurant name */}
-                {current.showName && (
-                  <div
-                    className="text-2xl font-bold mb-2 drop-shadow-lg"
-                    style={{ fontFamily: current.fontFamily, color: current.textColor }}
-                  >
-                    {restaurantName || t('ambiance.restaurantNamePlaceholder', { defaultValue: 'Restaurant Name' })}
-                  </div>
-                )}
-                {/* Welcome text */}
-                <div
-                  className="text-base font-medium drop-shadow-md"
-                  style={{ fontFamily: current.fontFamily, color: current.accentColor }}
-                >
-                  {current.welcomeMode === 'static' && current.welcomeText
-                    ? current.welcomeText
-                    : t('ambiance.welcome', { defaultValue: 'Welcome' })}
-                </div>
-                {/* Thumbnail strip */}
-                {current.images.length > 0 && (
-                  <div className="flex gap-1 mt-4">
-                    {current.images.slice(0, 4).map((imgPath, idx) => (
-                      <div key={idx} className="w-10 h-10 rounded overflow-hidden opacity-70">
-                        <img
-                          src={'file:///' + imgPath.replace(/\\/g, '/')}
-                          alt=""
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            ;(e.target as HTMLImageElement).style.display = 'none'
-                          }}
-                        />
-                      </div>
-                    ))}
-                    {current.images.length > 4 && (
-                      <div
-                        className="w-10 h-10 rounded bg-black/30 flex items-center justify-center text-xs"
-                        style={{ color: current.textColor }}
-                      >
-                        +{current.images.length - 4}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-              {/* Subtle shimmer overlay */}
-              <div
-                className="absolute inset-0 pointer-events-none"
-                style={{
-                  background:
-                    'linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.03) 50%, transparent 60%)',
-                  backgroundSize: '200% 200%',
-                  animation: 'ambiance-gradient 3s ease infinite'
-                }}
-              />
-            </div>
-            <p className="text-xs text-gray-400 mt-2 text-center">
-              {t('ambiance.previewUpdates', { defaultValue: 'Preview updates as you change settings' })}
-            </p>
-
-            {/* Profile info below preview */}
-            <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-              <p className="text-xs text-gray-500">
-                {t('ambiance.profileLabel', { defaultValue: 'Profile:' })} <span className="font-medium text-gray-700">{getDisplayLabel(activeProfile)}</span>
-              </p>
-              {current.tvUrl && (
-                <p className="text-xs text-gray-400 mt-1 truncate" title={current.tvUrl}>
-                  {t('ambiance.urlLabel', { defaultValue: 'URL:' })} <span className="font-mono">{current.tvUrl}</span>
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Add Display Profile Modal */}
-      {newProfileModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">{t('ambiance.addDisplayProfile', { defaultValue: 'Add Display Profile' })}</h3>
-              <button
-                onClick={() => {
-                  setNewProfileModal(false)
-                  setNewProfileName('')
-                }}
-                className="p-1 text-gray-400 hover:text-gray-600"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <p className="text-sm text-gray-500 mb-4">
-              {t('ambiance.addDisplayProfileHint', { defaultValue: 'Create a separate TV display with its own settings and short code.' })}
-            </p>
-            <Input
-              placeholder={t('ambiance.profileNamePlaceholder', { defaultValue: 'Profile name (e.g. "Terrace TV")' })}
-              value={newProfileName}
-              onChange={(e) => setNewProfileName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleAddProfile()
-              }}
+          <Card padding={false}>
+            <Tabs<SectionId>
+              className="px-3"
+              value={section}
+              onChange={setSection}
+              tabs={[
+                { id: 'look', label: t('ambiance.tabAppearance'), icon: <Palette /> },
+                { id: 'content', label: t('ambiance.tabContent'), icon: <LayoutList /> },
+                { id: 'media', label: t('ambiance.tabMedia'), icon: <ImagePlay /> }
+              ]}
             />
-            <div className="flex justify-end gap-2 mt-4">
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setNewProfileModal(false)
-                  setNewProfileName('')
-                }}
-              >
-                {t('common.cancel')}
-              </Button>
-              <Button
-                disabled={!newProfileName.trim() || creatingProfile}
-                onClick={handleAddProfile}
-              >
-                {creatingProfile
-                  ? t('ambiance.creating', { defaultValue: 'Creating...' })
-                  : t('ambiance.create', { defaultValue: 'Create' })}
-              </Button>
+            <div className="p-5">
+              {!a.loaded ? (
+                <SkeletonText lines={8} />
+              ) : section === 'look' ? (
+                <AppearanceSection current={a.current} onChange={a.updateSetting} />
+              ) : section === 'content' ? (
+                <ContentSection
+                  current={a.current}
+                  isTouch={isTouch}
+                  onChange={a.updateSetting}
+                  onWelcomeText={a.setWelcomeText}
+                />
+              ) : (
+                <MediaSection
+                  current={a.current}
+                  isTouch={isTouch}
+                  onEditYoutube={(v) => a.editLocal('youtubeUrl', v)}
+                  onSaveYoutube={(v) => a.updateSetting('youtubeUrl', v)}
+                  onUpload={a.uploadImages}
+                  onRemoveImage={a.removeImage}
+                />
+              )}
             </div>
-          </div>
+          </Card>
         </div>
-      )}
-    </div>
+
+        <aside className="min-w-0 xl:sticky xl:top-0 xl:self-start">
+          {a.loaded ? (
+            <TvPreview current={a.current} restaurantName={a.restaurantName} profileLabel={activeLabel} />
+          ) : (
+            <Card>
+              <Skeleton className="aspect-video w-full" />
+            </Card>
+          )}
+        </aside>
+      </div>
+
+      <AddDisplayModal isOpen={addOpen} isTouch={isTouch} onClose={() => setAddOpen(false)} onCreate={a.addProfile} />
+
+      <ConfirmDialog
+        isOpen={confirmDelete !== null}
+        title={t('ambiance.deleteProfileTitle', { name: confirmDelete ?? '' })}
+        message={t('ambiance.deleteProfileMessage')}
+        confirmLabel={t('common.delete')}
+        tone="danger"
+        busy={deleting}
+        onConfirm={doDelete}
+        onCancel={() => setConfirmDelete(null)}
+      />
+    </>
   )
 }

@@ -1,8 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { ArrowLeft, ArrowRight, Check } from 'lucide-react'
 import { useAppStore } from '../../store/appStore'
 import { Button } from '../../components/ui/Button'
+import { toast } from '../../components/ui/Toast'
+import { ipcErrorMessage } from '../../utils/ipcError'
+import { BrandMark } from './parts/BrandMark'
+import { Stepper } from './parts/Stepper'
 import { LanguageSelect } from './steps/LanguageSelect'
 import { RestaurantInfo } from './steps/RestaurantInfo'
 import { AdminPassword } from './steps/AdminPassword'
@@ -41,9 +46,13 @@ export function SetupWizard() {
   const [currentStep, setCurrentStep] = useState(0)
   const [saving, setSaving] = useState(false)
   const [excelImported, setExcelImported] = useState(false)
+  // PIN confirmation lives here (not in the step) so it survives Back/Next and gates Next.
+  const [passwordConfirm, setPasswordConfirm] = useState('')
 
-  const [data, setData] = useState<SetupData>({
-    language: 'en',
+  const [data, setData] = useState<SetupData>(() => ({
+    // Start from the language already on screen (chosen on the activation page, or the saved one
+    // when setup is re-run) so Finish never silently saves a different language than shown.
+    language: useAppStore.getState().language || 'en',
     foodLanguage: 'fr',
     restaurantName: '',
     phone: '',
@@ -69,7 +78,7 @@ export function SetupWizard() {
       { name: 'Box', name_ar: 'بوكس', name_fr: 'Box', icon: '📦' },
       { name: 'Drinks', name_ar: 'مشروبات', name_fr: 'Boissons', icon: '🥤' }
     ]
-  })
+  }))
 
   // When entering categories step after Excel import, load actual categories from DB
   useEffect(() => {
@@ -103,7 +112,7 @@ export function SetupWizard() {
       case 'restaurant':
         return data.restaurantName.trim() !== '' && data.phone.trim() !== ''
       case 'password':
-        return data.password.length >= 4
+        return data.password.length >= 4 && passwordConfirm === data.password
       case 'schedule':
         return true
       case 'excel':
@@ -165,6 +174,8 @@ export function SetupWizard() {
       navigate('/orders')
     } catch (err) {
       console.error('Setup failed:', err)
+      // Finish used to fail silently (button just stopped spinning).
+      toast.error(t('common.error'), { description: ipcErrorMessage(err) })
     } finally {
       setSaving(false)
     }
@@ -174,61 +185,88 @@ export function SetupWizard() {
     <LanguageSelect key="lang" data={data} updateData={updateData} />,
     <InputModeSelect key="input" data={data} updateData={updateData} />,
     <RestaurantInfo key="rest" data={data} updateData={updateData} />,
-    <AdminPassword key="pass" data={data} updateData={updateData} />,
+    <AdminPassword
+      key="pass"
+      data={data}
+      updateData={updateData}
+      confirm={passwordConfirm}
+      onConfirmChange={setPasswordConfirm}
+    />,
     <WorkSchedule key="sched" data={data} updateData={updateData} />,
     <ExcelSetup key="excel" onImported={() => setExcelImported(true)} />,
     <CategorySetup key="cat" data={data} updateData={updateData} />
   ]
 
   const isLastStep = currentStep === STEPS.length - 1
+  const canGoNext = canProceed()
+  const stepKey = STEPS[currentStep]
+  const blockedHint =
+    stepKey === 'restaurant' || stepKey === 'password' || stepKey === 'categories'
+      ? t(`setup.hint.${stepKey}`)
+      : ''
 
   return (
-    <div className="h-screen bg-gradient-to-br from-orange-50 to-amber-50 flex flex-col">
-      {/* Header */}
-      <div className="text-center pt-8 pb-4">
-        <h1 className="text-3xl font-bold text-gray-900">{t('setup.title')}</h1>
-        <p className="text-gray-500 mt-2">
-          {t('setup.step', { current: currentStep + 1, total: STEPS.length })}
-        </p>
-      </div>
+    <div className="h-screen bg-canvas flex flex-col">
+      {/* Header (one row): brand · stepper (numbered dots + current label) */}
+      <header className="shrink-0 border-b border-line bg-surface">
+        <div className="mx-auto flex w-full max-w-5xl items-center gap-6 px-6 py-3">
+          <BrandMark className="shrink-0" />
+          <div className="min-w-0 flex-1">
+            <Stepper
+              ariaLabel={`${t('setup.title')} · ${t('setup.step', { current: currentStep + 1, total: STEPS.length })}`}
+              current={currentStep}
+              onJump={saving ? undefined : setCurrentStep}
+              steps={STEPS.map((key) => ({ key, label: t(`setup.steps.${key}`) }))}
+            />
+          </div>
+        </div>
+      </header>
 
-      {/* Step indicator */}
-      <div className="flex justify-center gap-2 mb-6">
-        {STEPS.map((_, i) => (
-          <div
-            key={i}
-            className={`h-2 w-12 rounded-full transition-colors ${
-              i <= currentStep ? 'bg-orange-500' : 'bg-gray-300'
-            }`}
-          />
-        ))}
-      </div>
+      {/* Content: one card per step (scrolls; header + footer stay put at 720px height) */}
+      <main className="flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-4xl px-6 py-6">{stepComponents[currentStep]}</div>
+      </main>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto px-4">
-        <div className="max-w-2xl mx-auto">{stepComponents[currentStep]}</div>
-      </div>
+      {/* Navigation: Back (secondary) · why Next is blocked · ONE ember CTA */}
+      <footer className="shrink-0 border-t border-line bg-surface">
+        <div className="mx-auto flex w-full max-w-4xl items-center gap-4 px-6 py-3">
+          {currentStep > 0 ? (
+            <Button
+              variant="secondary"
+              size="xl"
+              onClick={() => setCurrentStep((s) => s - 1)}
+              disabled={saving}
+              icon={<ArrowLeft className="h-5 w-5 rtl:-scale-x-100" />}
+            >
+              {t('setup.previous')}
+            </Button>
+          ) : null}
 
-      {/* Navigation */}
-      <div className="flex justify-between items-center max-w-2xl mx-auto w-full px-4 py-6">
-        <Button
-          variant="secondary"
-          onClick={() => setCurrentStep((s) => s - 1)}
-          disabled={currentStep === 0}
-        >
-          {t('setup.previous')}
-        </Button>
+          <p className="min-w-0 flex-1 text-center text-sm text-muted">{!canGoNext ? blockedHint : ''}</p>
 
-        {isLastStep ? (
-          <Button onClick={handleFinish} loading={saving} disabled={!canProceed()}>
-            {t('setup.finish')}
-          </Button>
-        ) : (
-          <Button onClick={() => setCurrentStep((s) => s + 1)} disabled={!canProceed()}>
-            {t('setup.next')}
-          </Button>
-        )}
-      </div>
+          {isLastStep ? (
+            <Button
+              size="xl"
+              onClick={handleFinish}
+              loading={saving}
+              disabled={!canGoNext}
+              cooldownMs={800}
+              icon={<Check className="h-5 w-5" />}
+            >
+              {t('setup.finish')}
+            </Button>
+          ) : (
+            <Button
+              size="xl"
+              onClick={() => setCurrentStep((s) => s + 1)}
+              disabled={!canGoNext}
+              iconEnd={<ArrowRight className="h-5 w-5 rtl:-scale-x-100" />}
+            >
+              {t('setup.next')}
+            </Button>
+          )}
+        </div>
+      </footer>
     </div>
   )
 }

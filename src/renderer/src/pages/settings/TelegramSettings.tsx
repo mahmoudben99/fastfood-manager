@@ -1,63 +1,48 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Send, Eye, EyeOff, Check, AlertCircle } from 'lucide-react'
-import { useAppStore } from '../../store/appStore'
-import { Button } from '../../components/ui/Button'
-import { Input } from '../../components/ui/Input'
-import { Card } from '../../components/ui/Card'
-import { VirtualKeyboard } from '../../components/VirtualKeyboard'
+import { Bell, ChevronDown, Eye, EyeOff, Power, Send } from 'lucide-react'
+import { Badge, Button, Card, IconButton, Input, Toggle, toast } from '../../components/ui'
+import { InfoNote } from './SettingsFeedback'
+import { useTouchKeyboard } from './useTouchKeyboard'
 
+/**
+ * Settings > Telegram: the owner's bot (order notifications, Z reports, morning prep list,
+ * insights alerts and the admin password reset code all go through it).
+ */
 export function TelegramSettings() {
   const { t } = useTranslation()
-  const { inputMode } = useAppStore()
-  const isTouch = inputMode === 'touchscreen'
+  const kb = useTouchKeyboard()
   const [token, setToken] = useState('')
   const [chatId, setChatId] = useState('')
   const [autoStart, setAutoStart] = useState(false)
   const [orderNotifications, setOrderNotifications] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
   const [showToken, setShowToken] = useState(false)
-  const [saved, setSaved] = useState(false)
   const [startError, setStartError] = useState('')
   const [loading, setLoading] = useState(false)
-
-  // Virtual keyboard
-  const [keyboardTarget, setKeyboardTarget] = useState<{ field: string; type: 'numeric' | 'text' } | null>(null)
-
-  const getKeyboardValue = (): string => {
-    if (!keyboardTarget) return ''
-    switch (keyboardTarget.field) {
-      case 'token': return token
-      case 'chatId': return chatId
-      default: return ''
-    }
-  }
-
-  const handleKeyboardChange = (val: string) => {
-    if (!keyboardTarget) return
-    switch (keyboardTarget.field) {
-      case 'token': setToken(val); break
-      case 'chatId': setChatId(val); break
-    }
-  }
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    loadConfig()
+    void (async () => {
+      const config = await window.api.telegram.getConfig()
+      setToken(config.token)
+      setChatId(config.chatId)
+      setAutoStart(config.autoStart)
+      setOrderNotifications(config.orderNotifications)
+      setIsRunning(config.isRunning)
+    })()
   }, [])
 
-  const loadConfig = async () => {
-    const config = await window.api.telegram.getConfig()
-    setToken(config.token)
-    setChatId(config.chatId)
-    setAutoStart(config.autoStart)
-    setOrderNotifications(config.orderNotifications)
-    setIsRunning(config.isRunning)
-  }
-
   const saveConfig = async () => {
-    await window.api.telegram.saveConfig({ token, chatId, autoStart, orderNotifications })
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+    setSaving(true)
+    try {
+      await window.api.telegram.saveConfig({ token, chatId, autoStart, orderNotifications })
+      toast.success(t('settings.saved'))
+    } catch (err) {
+      toast.error(t('common.error'), { description: err instanceof Error ? err.message : String(err) })
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleStart = async () => {
@@ -67,27 +52,28 @@ export function TelegramSettings() {
     await window.api.telegram.saveConfig({ token, chatId, autoStart, orderNotifications })
     const result = await window.api.telegram.start()
     if (!result.success) {
-      setStartError(result.error || 'Failed to start bot')
+      setStartError(result.error || t('settings.v4.tgStartFailed'))
       setLoading(false)
       return
     }
-
     // start() only means "the bot was constructed" — grammy's connection handshake resolves
-    // later. Showing "Running" here claimed success for a revoked token or an offline machine.
-    // Poll the real status briefly and report what actually happened.
+    // later. Poll the real status briefly and report what actually happened.
     let connected = false
     for (let i = 0; i < 10; i++) {
       await new Promise((r) => setTimeout(r, 500))
       try {
         const status = await window.api.telegram.status()
-        if (status?.isRunning) { connected = true; break }
-      } catch { /* keep polling */ }
+        if (status?.isRunning) {
+          connected = true
+          break
+        }
+      } catch {
+        /* keep polling */
+      }
     }
-
     setIsRunning(connected)
-    if (!connected) {
-      setStartError('Could not connect to Telegram. Check the bot token and your internet connection.')
-    }
+    if (!connected) setStartError(t('settings.v4.tgConnectFailed'))
+    else toast.success(t('settings.v4.tgStarted'))
     setLoading(false)
   }
 
@@ -98,174 +84,114 @@ export function TelegramSettings() {
     setLoading(false)
   }
 
+  const steps: { title: string; lines: string[] }[] = [
+    { title: t('settings.v4.tgStep1'), lines: [t('settings.v4.tgStep1a'), t('settings.v4.tgStep1b'), t('settings.v4.tgStep1c')] },
+    { title: t('settings.v4.tgStep2'), lines: [t('settings.v4.tgStep2a'), t('settings.v4.tgStep2b'), t('settings.v4.tgStep2c')] },
+    { title: t('settings.v4.tgStep3'), lines: [t('settings.v4.tgStep3a'), t('settings.v4.tgStep3b')] }
+  ]
+
   return (
-    <Card>
-      <div className="space-y-5 max-w-xl">
-        <div className="flex items-center gap-2 mb-2">
-          <Send className="h-5 w-5 text-blue-500" />
-          <h3 className="font-semibold">{t('settings.telegram')}</h3>
-          <div className="ms-auto flex items-center gap-2">
-            <div
-              className={`w-2.5 h-2.5 rounded-full ${isRunning ? 'bg-green-500' : 'bg-red-400'}`}
-            />
-            <span className="text-sm text-gray-500">
-              {isRunning
-                ? t('settings.telegramRunning', { defaultValue: 'Running' })
-                : t('settings.telegramStopped', { defaultValue: 'Stopped' })}
-            </span>
-          </div>
-        </div>
-
-        {/* Bot Token */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {t('settings.telegramToken', { defaultValue: 'Bot Token' })}
-          </label>
-          <div className="flex items-center gap-2">
-            <input
+    <div>
+      <div className="space-y-6">
+        <Card
+          title={t('settings.v4.tgBotTitle')}
+          icon={<Send />}
+          actions={
+            <Badge variant={isRunning ? 'success' : 'neutral'} size="md" dot>
+              {isRunning ? t('settings.telegramRunning') : t('settings.telegramStopped')}
+            </Badge>
+          }
+        >
+          <div className="space-y-4">
+            <Input
+              label={t('settings.telegramToken')}
               type={showToken ? 'text' : 'password'}
-              value={token}
-              readOnly={isTouch}
-              onClick={isTouch ? () => setKeyboardTarget({ field: 'token', type: 'text' }) : undefined}
-              onChange={isTouch ? undefined : (e) => setToken(e.target.value)}
-              placeholder={t('settings.telegramTokenPlaceholder', {
-                defaultValue: 'Paste your bot token from @BotFather'
-              })}
-              className="flex-1 border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none"
+              dir="ltr"
+              placeholder={t('settings.telegramTokenPlaceholder')}
+              trailing={
+                <IconButton
+                  icon={showToken ? <EyeOff /> : <Eye />}
+                  label={showToken ? t('settings.v4.hide') : t('settings.v4.show')}
+                  size="sm"
+                  onClick={() => setShowToken(!showToken)}
+                />
+              }
+              {...kb.bind('token', token, setToken, { extended: false })}
             />
-            <button
-              onClick={() => setShowToken(!showToken)}
-              className={`${isTouch ? 'p-3' : 'p-2'} hover:bg-gray-100 rounded-lg`}
-            >
-              {showToken ? (
-                <EyeOff className={`${isTouch ? 'h-5 w-5' : 'h-4 w-4'} text-gray-500`} />
-              ) : (
-                <Eye className={`${isTouch ? 'h-5 w-5' : 'h-4 w-4'} text-gray-500`} />
-              )}
-            </button>
+            <Input
+              label={t('settings.telegramChatId')}
+              dir="ltr"
+              placeholder={t('settings.telegramChatIdPlaceholder')}
+              {...kb.bind('chatId', chatId, setChatId, { extended: false })}
+            />
           </div>
-        </div>
+        </Card>
 
-        {/* Chat ID */}
-        <Input
-          label={t('settings.telegramChatId', { defaultValue: 'Chat ID' })}
-          value={chatId}
-          readOnly={isTouch}
-          onClick={isTouch ? () => setKeyboardTarget({ field: 'chatId', type: 'text' }) : undefined}
-          onChange={isTouch ? undefined : (e) => setChatId(e.target.value)}
-          placeholder={t('settings.telegramChatIdPlaceholder', {
-            defaultValue: 'Your Telegram chat ID'
-          })}
-        />
-
-        {/* Auto-start */}
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={autoStart}
-            onChange={(e) => setAutoStart(e.target.checked)}
-            className={`${isTouch ? 'w-6 h-6' : 'w-4 h-4'} rounded border-gray-300 text-orange-500 focus:ring-orange-500`}
-          />
-          <span className={`${isTouch ? 'text-base' : 'text-sm'} text-gray-700`}>
-            {t('settings.telegramAutoStart', {
-              defaultValue: 'Auto-start bot when app launches'
-            })}
-          </span>
-        </label>
-
-        {/* Order Notifications */}
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={orderNotifications}
-            onChange={(e) => setOrderNotifications(e.target.checked)}
-            className={`${isTouch ? 'w-6 h-6' : 'w-4 h-4'} rounded border-gray-300 text-orange-500 focus:ring-orange-500`}
-          />
-          <div>
-            <span className="text-sm text-gray-700">
-              {t('settings.telegramOrderNotify', {
-                defaultValue: 'Send order notifications'
-              })}
-            </span>
-            <p className="text-xs text-gray-400">
-              {t('settings.telegramOrderNotifyDesc', {
-                defaultValue: 'Get a Telegram message every time a new order is placed'
-              })}
-            </p>
+        <Card title={t('settings.v4.tgBehaviourTitle')} icon={<Bell />}>
+          <div className="divide-y divide-line">
+            <div className="pb-3">
+              <Toggle checked={autoStart} onChange={setAutoStart} label={t('settings.telegramAutoStart')} />
+            </div>
+            <div className="pt-3">
+              <Toggle
+                checked={orderNotifications}
+                onChange={setOrderNotifications}
+                label={t('settings.telegramOrderNotify')}
+              />
+            </div>
           </div>
-        </label>
+        </Card>
 
-        {/* Buttons */}
-        <div className="flex gap-3">
-          <Button onClick={saveConfig} disabled={!token || !chatId}>
-            {t('common.save')}
-          </Button>
+        {startError && <InfoNote tone="danger">{startError}</InfoNote>}
+
+        <div className="flex flex-wrap items-center gap-3">
           {isRunning ? (
-            <Button variant="secondary" onClick={handleStop} loading={loading}>
-              {t('settings.telegramStopBot', { defaultValue: 'Stop Bot' })}
+            <Button variant="secondary" size="lg" icon={<Power className="h-5 w-5" />} onClick={handleStop} loading={loading}>
+              {t('settings.telegramStopBot')}
             </Button>
           ) : (
             <Button
               variant="secondary"
-              onClick={handleStart}
+              size="lg"
+              icon={<Power className="h-5 w-5" />}
+              onClick={() => { void handleStart() }}
               loading={loading}
               disabled={!token || !chatId}
             >
-              {t('settings.telegramStartBot', { defaultValue: 'Start Bot' })}
+              {t('settings.telegramStartBot')}
             </Button>
           )}
+          <Button size="lg" onClick={() => { void saveConfig() }} loading={saving} disabled={!token || !chatId} className="min-w-32">
+            {t('common.save')}
+          </Button>
         </div>
 
-        {/* Status messages */}
-        {saved && (
-          <div className="flex items-center gap-2 p-3 rounded-lg text-sm bg-green-50 text-green-700">
-            <Check className="h-4 w-4" />
-            {t('settings.saved')}
-          </div>
-        )}
-
-        {startError && (
-          <div className="flex items-center gap-2 p-3 rounded-lg text-sm bg-red-50 text-red-700">
-            <AlertCircle className="h-4 w-4" />
-            {startError}
-          </div>
-        )}
-
-        {/* Instructions */}
-        <div className="bg-blue-50 rounded-lg p-4 text-sm text-blue-800 space-y-2">
-          <p className="font-medium">
-            {t('settings.telegramInstructions', { defaultValue: 'How to set up:' })}
-          </p>
-          <div className="space-y-1">
-            <p className="font-medium">Step 1: Create a Bot</p>
-            <p>1. Open Telegram and search for <b>@BotFather</b></p>
-            <p>2. Send <b>/newbot</b> and follow the instructions to name your bot</p>
-            <p>3. BotFather will give you a <b>token</b> — copy and paste it above</p>
-          </div>
-          <div className="space-y-1 pt-1">
-            <p className="font-medium">Step 2: Get your Chat ID</p>
-            <p>1. Search for <b>@userinfobot</b> on Telegram (this is a different bot)</p>
-            <p>2. Send <b>/start</b> to @userinfobot</p>
-            <p>3. It will reply with your <b>Chat ID</b> — copy and paste it above</p>
-          </div>
-          <div className="space-y-1 pt-1">
-            <p className="font-medium">Step 3: Activate</p>
-            <p>1. Go to your new bot on Telegram and send <b>/start</b></p>
-            <p>2. Come back here and click <b>Save</b> then <b>Start Bot</b></p>
-          </div>
-        </div>
+        {/* Setup guide: collapsed by default (only needed once). */}
+        <details className="group rounded-2xl border border-line bg-surface-2">
+          <summary className="tap flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 text-sm font-semibold text-ink [&::-webkit-details-marker]:hidden">
+            {t('settings.telegramInstructions').replace(/[:：]\s*$/, '')}
+            <ChevronDown className="h-4 w-4 text-muted transition-transform group-open:rotate-180" />
+          </summary>
+          <ol className="grid gap-5 border-t border-line p-5 md:grid-cols-3">
+            {steps.map((step, i) => (
+              <li key={i} className="space-y-2">
+                <p className="flex items-center gap-2 font-semibold text-ink">
+                  <span className="num h-7 w-7 shrink-0 rounded-full bg-ember text-on-primary text-sm flex items-center justify-center">
+                    {i + 1}
+                  </span>
+                  {step.title}
+                </p>
+                <ul className="space-y-1.5 ps-9 text-sm text-ink-2 leading-relaxed">
+                  {step.lines.map((line, j) => (
+                    <li key={j}>{line}</li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ol>
+        </details>
       </div>
-
-      {/* Virtual Keyboard for touchscreen mode */}
-      {isTouch && keyboardTarget && (
-        <VirtualKeyboard
-          visible
-          type={keyboardTarget.type}
-          value={getKeyboardValue()}
-          onChange={handleKeyboardChange}
-          onClose={() => setKeyboardTarget(null)}
-        />
-      )}
-    </Card>
+      {kb.keyboard()}
+    </div>
   )
 }

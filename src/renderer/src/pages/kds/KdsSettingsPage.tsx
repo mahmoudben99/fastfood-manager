@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChefHat, Monitor } from 'lucide-react'
-import { Card } from '../../components/ui/Card'
-import { Button } from '../../components/ui/Button'
+import { Bell, ChefHat, Hourglass, Monitor, Printer, Save, Timer, TriangleAlert, Tv } from 'lucide-react'
+import { Button, Card, PageHeader, Select, Skeleton, Toggle, toast } from '../../components/ui'
 import type { KdsDisplayInfo, KdsLanInfo, KdsSettings } from '../../../../shared/kds'
+import { KdsHint } from './KdsHint'
+import { KdsLanCard } from './KdsLanCard'
+import { KdsMinutesField } from './KdsMinutesField'
 
 interface WorkerRow {
   id: number
@@ -19,8 +21,6 @@ export function KdsSettingsPage() {
   const [displays, setDisplays] = useState<KdsDisplayInfo[]>([])
   const [displayId, setDisplayId] = useState<number | undefined>(undefined)
   const [lan, setLan] = useState<KdsLanInfo | null>(null)
-  const [pin, setPin] = useState('')
-  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -33,13 +33,48 @@ export function KdsSettingsPage() {
     void window.api.kds.getLanInfo().then(setLan)
   }, [])
 
-  useEffect(() => {
-    if (!message) return
-    const timer = setTimeout(() => setMessage(null), 3000)
-    return () => clearTimeout(timer)
-  }, [message])
+  async function save(): Promise<void> {
+    if (!settings) return
+    setSaving(true)
+    try {
+      const { pin: _pin, ...patch } = settings
+      const result = await window.api.kds.saveSettings(patch)
+      if (result.ok) {
+        setSettings(result.settings)
+        toast.success(t('kds.saved'))
+      } else {
+        toast.error(result.error === 'invalid_timers' ? t('kds.invalidTimers') : t('kds.actionFailed'))
+      }
+    } catch {
+      toast.error(t('kds.actionFailed'))
+    } finally {
+      setSaving(false)
+    }
+  }
 
-  if (!settings) return <div className="p-6 text-gray-500">…</div>
+  const header = (
+    <PageHeader
+      icon={<ChefHat />}
+      title={t('kds.settingsTitle')}
+      actions={settings && (
+        <Button size="lg" icon={<Save className="h-5 w-5" />} loading={saving} onClick={() => void save()}>
+          {t('kds.save')}
+        </Button>
+      )}
+    />
+  )
+
+  if (!settings) {
+    return (
+      <div className="max-w-5xl">
+        {header}
+        <div className="space-y-6" aria-busy="true">
+          <Skeleton className="h-28 rounded-2xl" />
+          <Skeleton className="h-72 rounded-2xl" />
+        </div>
+      </div>
+    )
+  }
 
   const update = (patch: Partial<KdsSettings>): void => setSettings({ ...settings, ...patch })
   const togglePaper = (station: number): void => {
@@ -49,140 +84,92 @@ export function KdsSettingsPage() {
     update({ paperlessStations: [...set].sort((a, b) => a - b) })
   }
 
-  const save = async (): Promise<void> => {
-    setSaving(true)
-    try {
-      const { pin: _pin, ...patch } = settings
-      const result = await window.api.kds.saveSettings(patch)
-      if (result.ok) {
-        setSettings(result.settings)
-        setMessage({ ok: true, text: t('kds.saved') })
-      } else {
-        setMessage({ ok: false, text: result.error === 'invalid_timers' ? t('kds.invalidTimers') : t('kds.actionFailed') })
-      }
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const changePin = async (): Promise<void> => {
-    const result = await window.api.kds.setPin(pin.trim())
-    if (!result.ok) {
-      setMessage({ ok: false, text: t('kds.pinInvalid') })
-      return
-    }
-    setPin('')
-    setSettings(await window.api.kds.getSettings())
-    setMessage({ ok: true, text: t('kds.saved') })
-  }
-
-  const numberField = (label: string, value: number, onChange: (value: number) => void) => (
-    <label className="flex items-center justify-between gap-4 py-1.5 text-sm text-gray-700">
-      <span>{label}</span>
-      <input
-        type="number"
-        min={1}
-        max={240}
-        value={value}
-        onChange={(event) => onChange(Math.max(1, Math.round(Number(event.target.value) || 1)))}
-        className="w-24 rounded-lg border border-gray-300 px-3 py-1.5 text-end"
-      />
-    </label>
-  )
-  const checkbox = (label: string, checked: boolean, onChange: () => void) => (
-    <label className="flex cursor-pointer items-center gap-3 py-1.5 text-sm text-gray-700">
-      <input type="checkbox" checked={checked} onChange={onChange} className="h-4 w-4 accent-orange-500" />
-      <span>{label}</span>
-    </label>
-  )
-  const link = (label: string, url: string, qr: string | null) => (
-    <div className="flex items-center gap-4">
-      {qr && <img src={qr} alt="" className="h-28 w-28 rounded-lg border border-gray-200" />}
-      <div className="min-w-0">
-        <p className="text-xs font-medium text-gray-500">{label}</p>
-        <p className="break-all font-mono text-sm text-gray-900">{url}</p>
-      </div>
-    </div>
-  )
-
   return (
-    <div className="max-w-4xl space-y-5">
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900"><ChefHat className="h-6 w-6" />{t('kds.settingsTitle')}</h1>
-        <p className="text-sm text-gray-500">{t('kds.settingsSubtitle')}</p>
-      </div>
-
-      <Card title={t('kds.thisPc')}>
-        <div className="flex flex-wrap items-center gap-3">
-          <Monitor className="h-5 w-5 text-gray-500" />
-          <span className="text-sm text-gray-700">{t('kds.displayLabel')}</span>
-          <select
-            value={displayId ?? ''}
-            onChange={(event) => setDisplayId(Number(event.target.value))}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          >
-            {displays.map((display) => (
-              <option key={display.id} value={display.id}>
-                {display.label} — {display.width}×{display.height}{display.primary ? ` (${t('kds.primaryDisplay')})` : ''}
-              </option>
-            ))}
-          </select>
-          <Button onClick={() => void window.api.kds.openWindow(displayId)}>{t('kds.openKds')}</Button>
-          <Button variant="secondary" onClick={() => void window.api.kds.openBoardWindow(displayId)}>{t('kds.openBoard')}</Button>
-        </div>
-      </Card>
-
-      <Card title={t('kds.lanTitle')}>
-        {lan?.running ? (
-          <div className="grid gap-5 md:grid-cols-2">
-            {link(t('kds.lanKds'), lan.kdsUrl, lan.kdsQr)}
-            {link(t('kds.lanBoard'), lan.boardUrl, lan.boardQr)}
+    <div className="max-w-5xl">
+      {header}
+      <div className="space-y-6">
+        <Card icon={<Monitor />} title={t('kds.thisPc')}>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="min-w-[14rem] flex-1">
+              <Select
+                label={t('kds.displayLabel')}
+                selectSize="lg"
+                value={displayId === undefined ? '' : String(displayId)}
+                onChange={(event) => setDisplayId(Number(event.target.value))}
+                options={displays.map((display) => ({
+                  value: String(display.id),
+                  label: `${display.label} — ${display.width}×${display.height}${display.primary ? ` (${t('kds.primaryDisplay')})` : ''}`
+                }))}
+              />
+            </div>
+            <Button size="lg" variant="soft" icon={<ChefHat className="h-5 w-5" />} onClick={() => void window.api.kds.openWindow(displayId)}>
+              {t('kds.openKds')}
+            </Button>
+            <Button size="lg" variant="secondary" icon={<Tv className="h-5 w-5" />} onClick={() => void window.api.kds.openBoardWindow(displayId)}>
+              {t('kds.openBoard')}
+            </Button>
           </div>
-        ) : (
-          <p className="text-sm text-amber-700">{t('kds.lanOff')}</p>
-        )}
-        <div className="mt-5 border-t border-gray-100 pt-4">
-          <p className="text-sm font-medium text-gray-700">{t('kds.pinSetting')}</p>
-          <p className="mb-2 text-xs text-gray-500">{t('kds.pinHint')}</p>
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="rounded-lg bg-gray-100 px-4 py-2 font-mono text-2xl font-bold tracking-[0.3em] text-gray-900">{settings.pin}</span>
-            <input
-              inputMode="numeric"
-              maxLength={6}
-              value={pin}
-              onChange={(event) => setPin(event.target.value.replace(/\D/g, ''))}
-              placeholder="0000"
-              className="w-28 rounded-lg border border-gray-300 px-3 py-2 font-mono"
+        </Card>
+
+        <KdsLanCard lan={lan} pin={settings.pin} onPinChanged={async () => setSettings(await window.api.kds.getSettings())} />
+
+        <div className="grid items-start gap-6 xl:grid-cols-2">
+          <Card icon={<Timer />} title={t('kds.timersShort')}>
+            <KdsMinutesField
+              label={t('kds.warnAfter')}
+              icon={<Hourglass className="h-4 w-4 shrink-0 text-warning-ink" aria-hidden="true" />}
+              value={settings.warnMinutes}
+              onChange={(value) => update({ warnMinutes: value })}
             />
-            <Button variant="secondary" onClick={() => void changePin()} disabled={pin.length < 4}>{t('kds.changePin')}</Button>
-          </div>
+            <KdsMinutesField
+              label={t('kds.lateAfter')}
+              icon={<TriangleAlert className="h-4 w-4 shrink-0 text-danger-ink" aria-hidden="true" />}
+              value={settings.lateMinutes}
+              onChange={(value) => update({ lateMinutes: value })}
+            />
+            {settings.lateMinutes <= settings.warnMinutes && (
+              <p role="alert" className="mt-2 flex items-center gap-2 text-sm font-medium text-danger-ink">
+                <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
+                {t('kds.invalidTimers')}
+              </p>
+            )}
+          </Card>
+
+          <Card icon={<Bell />} title={t('kds.alertsShort')}>
+            <div className="divide-y divide-line">
+              <Toggle label={t('kds.sound')} checked={settings.sound} onChange={(value) => update({ sound: value })} className="py-1" />
+              <Toggle label={t('kds.flashShort')} checked={settings.flash} onChange={(value) => update({ flash: value })} className="py-1" />
+            </div>
+          </Card>
+
+          <Card icon={<Printer />} title={t('kds.paperShort')} actions={<KdsHint text={t('kds.paperHint')} />}>
+            <div className="divide-y divide-line">
+              {workers.map((worker) => (
+                <Toggle
+                  key={worker.id}
+                  label={<bdi>{worker.name}</bdi>}
+                  checked={settings.paperlessStations.includes(worker.id)}
+                  onChange={() => togglePaper(worker.id)}
+                  className="py-1"
+                />
+              ))}
+              <Toggle
+                label={t('kds.paperExpoShort')}
+                checked={settings.paperlessStations.includes(0)}
+                onChange={() => togglePaper(0)}
+                className="py-1"
+              />
+            </div>
+          </Card>
+
+          <Card icon={<Tv />} title={t('kds.boardShort')}>
+            <KdsMinutesField
+              label={t('kds.boardClearShort')}
+              value={settings.boardClearMinutes}
+              onChange={(value) => update({ boardClearMinutes: value })}
+            />
+          </Card>
         </div>
-      </Card>
-
-      <div className="grid gap-5 md:grid-cols-2">
-        <Card title={t('kds.timers')}>
-          {numberField(t('kds.warnMinutes'), settings.warnMinutes, (value) => update({ warnMinutes: value }))}
-          {numberField(t('kds.lateMinutes'), settings.lateMinutes, (value) => update({ lateMinutes: value }))}
-        </Card>
-        <Card title={t('kds.alerts')}>
-          {checkbox(t('kds.soundSetting'), settings.sound, () => update({ sound: !settings.sound }))}
-          {checkbox(t('kds.flashSetting'), settings.flash, () => update({ flash: !settings.flash }))}
-        </Card>
-        <Card title={t('kds.paperTitle')}>
-          <p className="mb-2 text-xs text-gray-500">{t('kds.paperHint')}</p>
-          {workers.map((worker) =>
-            <div key={worker.id}>{checkbox(worker.name, settings.paperlessStations.includes(worker.id), () => togglePaper(worker.id))}</div>
-          )}
-          {checkbox(t('kds.paperExpo'), settings.paperlessStations.includes(0), () => togglePaper(0))}
-        </Card>
-        <Card title={t('kds.boardSettings')}>
-          {numberField(t('kds.boardClear'), settings.boardClearMinutes, (value) => update({ boardClearMinutes: value }))}
-        </Card>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <Button onClick={() => void save()} loading={saving}>{t('kds.save')}</Button>
-        {message && <span className={`text-sm font-medium ${message.ok ? 'text-green-600' : 'text-red-600'}`}>{message.text}</span>}
       </div>
     </div>
   )

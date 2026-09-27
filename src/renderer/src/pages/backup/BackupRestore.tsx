@@ -1,172 +1,276 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { FolderPlus, Trash2, HardDrive, RotateCcw, Check, AlertCircle, Clock } from 'lucide-react'
-import { Button } from '../../components/ui/Button'
-import { Card } from '../../components/ui/Card'
+import {
+  ArchiveRestore,
+  DatabaseBackup,
+  FolderOpen,
+  FolderPlus,
+  HardDrive,
+  RotateCcw,
+  ShieldCheck,
+  Trash2
+} from 'lucide-react'
+import {
+  Badge,
+  Button,
+  Card,
+  ConfirmDialog,
+  EmptyState,
+  IconButton,
+  PageHeader,
+  cn,
+  toast
+} from '../../components/ui'
 
-export function BackupRestore() {
+interface BackupFile {
+  name: string
+  path: string
+  date: string
+  size: number
+}
+
+interface BackupRestoreProps {
+  /** Rendered inside Settings → Data: no page header, cards only. */
+  embedded?: boolean
+}
+
+const formatSize = (bytes: number): string => {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+const formatDate = (iso: string): string => {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    numberingSystem: 'latn'
+  })
+}
+
+/** Backup folders + "Backup now", the always-on live backup, and restore from a .db file. */
+export function BackupRestore({ embedded = false }: BackupRestoreProps) {
   const { t } = useTranslation()
   const [paths, setPaths] = useState<string[]>([])
-  const [backups, setBackups] = useState<any[]>([])
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
-  const [loading, setLoading] = useState(false)
-
-  // Scheduled backup
-  const [schedEnabled, setSchedEnabled] = useState(false)
-  const [schedTime, setSchedTime] = useState('23:00')
-
-  useEffect(() => {
-    loadData()
-  }, [])
+  const [backups, setBackups] = useState<BackupFile[]>([])
+  const [backingUp, setBackingUp] = useState(false)
+  const [restoring, setRestoring] = useState(false)
+  const [confirmRestore, setConfirmRestore] = useState(false)
 
   const loadData = async () => {
-    const [p, b, sched] = await Promise.all([
-      window.api.backup.getPaths(),
-      window.api.backup.listAvailable(),
-      window.api.backup.getSchedule()
-    ])
-    setPaths(p)
-    setBackups(b)
-    setSchedEnabled(sched.enabled)
-    setSchedTime(sched.time)
+    try {
+      const [p, b] = await Promise.all([window.api.backup.getPaths(), window.api.backup.listAvailable()])
+      setPaths(p)
+      setBackups(b)
+    } catch {
+      toast.error(t('common.error'), { id: 'backup-load' })
+    }
   }
 
-  const saveSchedule = async (enabled: boolean, time: string) => {
-    setSchedEnabled(enabled)
-    setSchedTime(time)
-    await window.api.backup.setSchedule({ enabled, time })
-  }
+  useEffect(() => {
+    void loadData()
+  }, [])
 
   const addPath = async () => {
     const result = await window.api.backup.addPath()
-    if (result) setPaths(result)
+    if (result) {
+      setPaths(result)
+      void loadData()
+    }
   }
 
   const removePath = async (path: string) => {
     const result = await window.api.backup.removePath(path)
     setPaths(result)
+    void loadData()
   }
 
   const backupNow = async () => {
-    setLoading(true)
-    setMessage(null)
-    const results = await window.api.backup.createNow()
-    const allSuccess = results.every((r: any) => r.success)
-    setMessage({
-      type: allSuccess ? 'success' : 'error',
-      text: allSuccess ? t('backup.success') : t('backup.someFailed', { defaultValue: 'Some backups failed' })
-    })
-    setLoading(false)
-    loadData()
+    setBackingUp(true)
+    try {
+      const results: Array<{ path: string; success: boolean; error?: string }> =
+        await window.api.backup.createNow()
+      const failed = results.filter((r) => !r.success)
+      if (failed.length === 0) {
+        toast.success(t('backup.createdToast'))
+      } else {
+        toast.error(t('backup.someFailed'), {
+          description: failed.map((r) => `${r.path}: ${r.error ?? ''}`).join(' · ')
+        })
+      }
+    } catch (error) {
+      toast.error(t('backup.someFailed'), { description: error instanceof Error ? error.message : undefined })
+    } finally {
+      setBackingUp(false)
+      void loadData()
+    }
   }
 
+  /** Runs only after the explicit ConfirmDialog; main opens the file picker, validates, then swaps. */
   const restore = async () => {
-    if (!confirm(t('backup.restoreConfirm'))) return
-    setLoading(true)
-    const result = await window.api.backup.restore()
-    setMessage({
-      type: result.success ? 'success' : 'error',
-      text: result.success ? t('backup.restoreSuccess') : result.error || t('backup.restoreFailed', { defaultValue: 'Restore failed' })
-    })
-    setLoading(false)
+    setRestoring(true)
+    try {
+      const result = await window.api.backup.restore()
+      if (result.success) {
+        toast.success(t('backup.restoredToast'))
+      } else if (result.error !== 'Cancelled') {
+        toast.error(t('backup.restoreFailed'), { description: result.error })
+      }
+    } catch (error) {
+      toast.error(t('backup.restoreFailed'), { description: error instanceof Error ? error.message : undefined })
+    } finally {
+      setRestoring(false)
+      setConfirmRestore(false)
+    }
   }
 
-  const formatSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  }
+  const addFolderButton = (
+    <Button variant="secondary" size="lg" icon={<FolderPlus className="h-5 w-5" />} onClick={addPath}>
+      {t('backup.addPath')}
+    </Button>
+  )
 
-  return (
-    <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">{t('backup.title')}</h1>
-
-      {message && (
-        <div className={`flex items-center gap-2 p-3 rounded-lg text-sm mb-4 ${
-          message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
-        }`}>
-          {message.type === 'success' ? <Check className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-          {message.text}
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-6">
-        {/* Backup paths */}
-        <Card title={t('backup.paths')} actions={
-          <Button size="sm" variant="secondary" onClick={addPath}>
-            <FolderPlus className="h-4 w-4" />
-            {t('backup.addPath')}
-          </Button>
-        }>
+  // @container: the embedded Settings → Data column is ~450px even on wide screens, so the grid
+  // follows its own width (2 columns from 48rem), not the viewport.
+  const cards = (
+    <div className="@container">
+      <div className={cn('grid @3xl:grid-cols-2', embedded ? 'gap-4' : 'gap-6')}>
+        {/* Backup folders (USB / second disk) */}
+        <Card
+          title={t('backup.paths')}
+          icon={<FolderOpen />}
+          actions={
+            paths.length > 0 ? (
+              <IconButton icon={<FolderPlus />} label={t('backup.addPath')} variant="secondary" size="lg" onClick={addPath} />
+            ) : undefined
+          }
+        >
           {paths.length === 0 ? (
-            <p className="text-gray-400 text-sm">{t('backup.noPaths')}</p>
+            <div className="rounded-2xl border border-dashed border-line-strong">
+              <EmptyState compact icon={<HardDrive />} title={t('backup.noFoldersTitle')} action={addFolderButton} />
+            </div>
           ) : (
-            <div className="space-y-2">
-              {paths.map((path, i) => (
-                <div key={i} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-                  <span className="text-sm truncate flex-1">{path}</span>
-                  <button onClick={() => removePath(path)} className="p-1 hover:bg-red-100 rounded ms-2">
-                    <Trash2 className="h-4 w-4 text-red-500" />
-                  </button>
-                </div>
-              ))}
+            <div className="space-y-3">
+              <ul className="space-y-2">
+                {paths.map((path) => (
+                  <li key={path} className="flex items-center gap-3 rounded-xl border border-line bg-surface-2 ps-3.5 pe-1 py-1">
+                    <FolderOpen className="h-4 w-4 shrink-0 text-muted" />
+                    <bdi dir="ltr" className="min-w-0 flex-1 truncate font-mono text-sm text-ink" title={path}>
+                      {path}
+                    </bdi>
+                    <IconButton
+                      icon={<Trash2 />}
+                      label={t('backup.removePath')}
+                      variant="danger"
+                      size="lg"
+                      onClick={() => removePath(path)}
+                    />
+                  </li>
+                ))}
+              </ul>
+              <Button
+                size="lg"
+                icon={<DatabaseBackup className="h-5 w-5" />}
+                loading={backingUp}
+                cooldownMs={800}
+                title={t('backup.pathsHint')}
+                onClick={backupNow}
+              >
+                {t('backup.backupNow')}
+              </Button>
             </div>
           )}
+        </Card>
 
-          <div className="mt-4">
-            <Button onClick={backupNow} loading={loading} disabled={paths.length === 0}>
-              <HardDrive className="h-4 w-4" />
-              {t('backup.backupNow')}
+        {/* Automatic live backup (always on, main process) */}
+        <Card
+          title={t('backup.liveBackup')}
+          icon={<ShieldCheck />}
+          actions={
+            <Badge variant="success" dot>
+              {t('backup.liveBadge')}
+            </Badge>
+          }
+        >
+          <p className="text-sm font-medium text-ink-2" title={t('backup.liveHint')}>
+            {t('backup.liveSummary')}
+          </p>
+          <p
+            className="mt-2 flex items-center gap-2 text-xs text-muted"
+            title={`${t('backup.format')}: fastfood-manager-backup-YYYY-MM-DD.db`}
+          >
+            <FolderOpen className="h-4 w-4 shrink-0" aria-label={t('backup.location')} />
+            <bdi dir="ltr" className="min-w-0 truncate font-mono">
+              AppData/fastfood-manager/backups/
+            </bdi>
+          </p>
+        </Card>
+
+        {/* Restore from a backup file */}
+        <Card className="@3xl:col-span-2" title={t('backup.restore')} icon={<ArchiveRestore />}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {backups.length === 0 ? (
+              <p className="text-sm text-muted">{t('backup.noneYet')}</p>
+            ) : (
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm font-semibold text-ink-2">{t('backup.available')}</h4>
+                <Badge variant="neutral">{backups.length}</Badge>
+              </div>
+            )}
+            <Button
+              variant="secondary"
+              size="lg"
+              icon={<RotateCcw className="h-5 w-5 text-danger-ink" />}
+              loading={restoring}
+              title={t('backup.restoreDesc')}
+              onClick={() => setConfirmRestore(true)}
+            >
+              {t('backup.chooseFile')}
             </Button>
           </div>
-        </Card>
-
-        {/* Live Backup Status */}
-        <Card>
-          <div className="flex items-center gap-2 mb-4">
-            <Check className="h-5 w-5 text-green-500" />
-            <h3 className="font-semibold">{t('backup.liveBackup', { defaultValue: 'Live Backup' })}</h3>
-          </div>
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-sm text-gray-700">{t('backup.liveActive', { defaultValue: 'Active - Backing up every 1 minute' })}</span>
-            </div>
-            <div className="text-sm text-gray-600">
-              <p><strong>{t('backup.location', { defaultValue: 'Location' })}:</strong> AppData/fastfood-manager/backups/</p>
-              <p><strong>{t('backup.retention', { defaultValue: 'Retention' })}:</strong> {t('backup.7days', { defaultValue: '7 days' })}</p>
-              <p><strong>{t('backup.format', { defaultValue: 'Format' })}:</strong> fastfood-manager-backup-YYYY-MM-DD.db</p>
-            </div>
-          </div>
-          <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-            <p className="text-xs text-blue-700">
-              💡 {t('backup.liveHint', { defaultValue: 'Your data is automatically backed up every minute. Maximum data loss: 1 minute if PC crashes.' })}
-            </p>
-          </div>
-        </Card>
-
-        {/* Restore */}
-        <Card title={t('backup.restore')}>
-          <Button variant="secondary" onClick={restore} loading={loading}>
-            <RotateCcw className="h-4 w-4" />
-            {t('backup.restore')}
-          </Button>
-
           {backups.length > 0 && (
-            <div className="mt-4">
-              <h4 className="text-sm font-medium text-gray-600 mb-2">{t('backup.available')}</h4>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {backups.slice(0, 20).map((b, i) => (
-                  <div key={i} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg text-sm">
-                    <span className="truncate">{b.name}</span>
-                    <span className="text-gray-400 ms-2 shrink-0">{formatSize(b.size)}</span>
+            <ul className="mt-3 max-h-72 overflow-y-auto divide-y divide-line rounded-xl border border-line">
+              {backups.slice(0, 20).map((b) => (
+                <li key={b.path} className="flex items-center gap-3 px-3.5 py-3 text-sm">
+                  <HardDrive className="h-4 w-4 shrink-0 text-muted" />
+                  <div className="min-w-0 flex-1">
+                    <bdi dir="ltr" className="block truncate font-mono text-ink" title={b.path}>
+                      {b.name}
+                    </bdi>
+                    <span className="num text-xs text-muted">{formatDate(b.date)}</span>
                   </div>
-                ))}
-              </div>
-            </div>
+                  <span className="num shrink-0 text-muted">{formatSize(b.size)}</span>
+                </li>
+              ))}
+            </ul>
           )}
         </Card>
       </div>
     </div>
+  )
+
+  return (
+    <>
+      {!embedded && (
+        <PageHeader icon={<DatabaseBackup />} title={t('backup.title')} />
+      )}
+      {cards}
+      <ConfirmDialog
+        isOpen={confirmRestore}
+        title={t('backup.restoreConfirmTitle')}
+        message={t('backup.restoreConfirmMessage')}
+        confirmLabel={t('backup.chooseFile')}
+        tone="danger"
+        icon={<ArchiveRestore />}
+        busy={restoring}
+        onConfirm={restore}
+        onCancel={() => setConfirmRestore(false)}
+      />
+    </>
   )
 }

@@ -1,8 +1,18 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Download, RefreshCw, X, ArrowDownToLine, AlertCircle } from 'lucide-react'
+import { Button } from './Button'
+import { IconButton } from './IconButton'
+import { cn } from './cn'
 
 type UpdateState = 'available' | 'downloading' | 'ready' | 'error'
+
+const tile: Record<UpdateState, string> = {
+  available: 'bg-primary-soft text-primary-ink',
+  downloading: 'bg-info-soft text-info-ink',
+  ready: 'bg-success-soft text-success-ink',
+  error: 'bg-danger-soft text-danger-ink'
+}
 
 export function UpdateToast() {
   const { t } = useTranslation()
@@ -51,105 +61,106 @@ export function UpdateToast() {
     window.api.updater.install()
   }
 
+  const pct = Math.max(0, Math.min(100, Math.round(progress)))
+
+  const title =
+    state === 'ready'
+      ? t('update.readyTitle')
+      : state === 'downloading'
+        ? t('update.downloading')
+        : state === 'error'
+          ? t('update.errorTitle')
+          : t('update.availableTitle')
+
+  const description =
+    state === 'ready'
+      ? t('update.readyDesc')
+      : state === 'error'
+        ? t('update.errorDesc')
+        : state === 'available'
+          ? t('update.availableDesc', { version })
+          : null
+
   return (
-    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] animate-slide-down">
-      <div className="bg-surface rounded-2xl shadow-e4 border border-line overflow-hidden w-80">
-        {/* Progress bar at top */}
-        {state === 'downloading' && (
-          <div className="h-1 bg-surface-3">
-            <div
-              className="h-full bg-ember transition-[width] duration-300"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-        )}
-
-        <div className="p-4">
-          <div className="flex items-start gap-3">
-            {/* Icon */}
-            <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                state === 'ready'
-                  ? 'bg-success-soft'
-                  : state === 'downloading'
-                    ? 'bg-info-soft'
-                    : state === 'error'
-                      ? 'bg-danger-soft'
-                      : 'bg-primary-soft'
-              }`}
-            >
-              {state === 'ready' ? (
-                <RefreshCw className="h-5 w-5 text-success-ink" />
-              ) : state === 'downloading' ? (
-                <ArrowDownToLine className="h-5 w-5 text-info-ink animate-pulse-soft" />
-              ) : state === 'error' ? (
-                <AlertCircle className="h-5 w-5 text-danger-ink" />
-              ) : (
-                <Download className="h-5 w-5 text-primary-ink" />
-              )}
-            </div>
-
-            {/* Content */}
-            <div className="flex-1 min-w-0">
-              <h4 className="text-sm font-semibold text-ink">
-                {state === 'ready'
-                  ? t('update.readyTitle')
-                  : state === 'downloading'
-                    ? t('update.downloading')
-                    : state === 'error'
-                      ? t('update.errorTitle')
-                      : t('update.availableTitle')}
-              </h4>
-              <p className="num text-xs text-muted mt-0.5">
-                {state === 'ready'
-                  ? t('update.readyDesc')
-                  : state === 'downloading'
-                    ? `${progress}%`
-                    : state === 'error'
-                      ? t('update.errorDesc')
-                      : t('update.availableDesc', { version })}
-              </p>
-            </div>
-
-            {/* Dismiss */}
-            {state !== 'downloading' && (
-              <button
-                onClick={() => setDismissed(true)}
-                className="h-8 w-8 -me-1 -mt-1 rounded-lg flex items-center justify-center text-faint hover:text-ink hover:bg-surface-2 transition-colors"
-              >
-                <X className="h-4 w-4" />
-              </button>
+    // Centred with flex (not translate) so the enter animation can own `transform`.
+    <div className="pointer-events-none fixed inset-x-0 top-4 z-[100] flex justify-center px-4">
+      <div
+        role="status"
+        className="pointer-events-auto w-full max-w-sm rounded-2xl border border-line bg-surface p-4 shadow-e3 animate-pop-in"
+      >
+        <div className="flex items-start gap-3">
+          <div className={cn('h-11 w-11 shrink-0 rounded-xl flex items-center justify-center', tile[state])}>
+            {state === 'ready' ? (
+              <RefreshCw className="h-5 w-5" aria-hidden />
+            ) : state === 'downloading' ? (
+              <ArrowDownToLine className="h-5 w-5" aria-hidden />
+            ) : state === 'error' ? (
+              <AlertCircle className="h-5 w-5" aria-hidden />
+            ) : (
+              <Download className="h-5 w-5" aria-hidden />
             )}
           </div>
 
-          {/* Action button */}
-          {state === 'available' && (
-            <button
-              onClick={handleDownload}
-              className="tap mt-3 w-full min-h-11 rounded-xl bg-ember text-sm font-semibold shadow-glow hover:brightness-110"
-            >
-              {t('update.downloadNow')}
-            </button>
-          )}
+          <div className="min-w-0 flex-1 pt-0.5">
+            <h4 className="text-sm font-semibold text-ink">{title}</h4>
+            {description && <p className="mt-0.5 text-sm text-muted">{description}</p>}
+            {state === 'downloading' && (
+              <div className="mt-2 flex items-center gap-3">
+                <div
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={pct}
+                  className="h-2 flex-1 overflow-hidden rounded-full bg-surface-3"
+                >
+                  {/* scaleX, not width: compositor-only on weak PCs */}
+                  <div
+                    className="h-full w-full origin-left rounded-full bg-primary transition-transform duration-300 rtl:origin-right"
+                    style={{ transform: `scaleX(${pct / 100})` }}
+                  />
+                </div>
+                <span className="num w-10 shrink-0 text-end text-xs font-semibold text-ink-2">{pct}%</span>
+              </div>
+            )}
+          </div>
 
-          {state === 'ready' && (
-            <button
-              onClick={handleInstall}
-              className="tap mt-3 w-full min-h-11 rounded-xl bg-success-strong text-white text-sm font-semibold hover:brightness-110"
-            >
-              {t('update.restartNow')}
-            </button>
-          )}
-
-          {state === 'error' && (
-            <button
+          {/* Dismiss */}
+          {state !== 'downloading' && (
+            <IconButton
+              icon={<X />}
+              label={t('common.close')}
+              size="md"
               onClick={() => setDismissed(true)}
-              className="tap mt-3 w-full min-h-11 rounded-xl bg-surface-2 text-ink-2 text-sm font-semibold hover:bg-surface-3"
-            >
-              {t('common.close')}
-            </button>
+              className="-me-2 -mt-2"
+            />
           )}
         </div>
+
+        {/* Action button */}
+        {state === 'available' && (
+          <Button size="lg" fullWidth className="mt-4" onClick={handleDownload} icon={<Download className="h-5 w-5" />}>
+            {t('update.downloadNow')}
+          </Button>
+        )}
+
+        {state === 'ready' && (
+          <Button
+            variant="success"
+            size="lg"
+            fullWidth
+            className="mt-4"
+            onClick={handleInstall}
+            icon={<RefreshCw className="h-5 w-5" />}
+          >
+            {t('update.restartNow')}
+          </Button>
+        )}
+
+        {state === 'error' && (
+          <Button variant="secondary" size="lg" fullWidth className="mt-4" onClick={() => setDismissed(true)}>
+            {t('common.close')}
+          </Button>
+        )}
       </div>
     </div>
   )

@@ -1,47 +1,48 @@
-import { useState, useEffect } from 'react'
+import { KeyboardEvent, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Search, ArrowUpDown, Phone, ShoppingCart, DollarSign, Star, ArrowLeft, Copy } from 'lucide-react'
-import { formatCurrency } from '../../utils/formatCurrency'
+import { ChevronRight, Phone, Repeat, Search, SearchX, Users, Wallet, X } from 'lucide-react'
+import { Card, EmptyState, IconButton, Input, Money, SegmentedControl, Skeleton, cn } from '../../components/ui'
+import { VirtualKeyboard } from '../../components/VirtualKeyboard'
 import { useAppStore } from '../../store/appStore'
-
-interface Customer {
-  id: number
-  phone: string
-  phone_normalized: string
-  name: string | null
-  total_spent: number
-  order_count: number
-  last_order_date: string | null
-  notes: string | null
-}
+import { StatStrip } from '../orders-history/parts/StatStrip'
+import { CustomerDetail, type Customer, type FavoriteRow } from './parts/CustomerDetail'
+import { formatDay, type MenuItemLite } from './parts/promoTypes'
 
 type SortKey = 'total_spent' | 'order_count' | 'last_order'
 
-export function LoyaltyDashboard() {
+const HEAD = 'sticky top-0 z-10 h-11 whitespace-nowrap border-b border-line bg-surface-2 px-4 text-xs font-semibold text-muted'
+
+export function LoyaltyDashboard({ menuItems = [] }: { menuItems?: MenuItemLite[] }) {
   const { t } = useTranslation()
-  const { foodLanguage } = useAppStore()
+  const isTouch = useAppStore((s) => s.inputMode) === 'touchscreen'
   const [customers, setCustomers] = useState<Customer[]>([])
+  const [allCustomers, setAllCustomers] = useState<Customer[]>([])
   const [search, setSearch] = useState('')
+  const [keyboard, setKeyboard] = useState(false)
   const [sortBy, setSortBy] = useState<SortKey>('total_spent')
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [customerOrders, setCustomerOrders] = useState<any[]>([])
-  const [favoriteItems, setFavoriteItems] = useState<any[]>([])
+  const [favoriteItems, setFavoriteItems] = useState<FavoriteRow[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    loadCustomers()
+    void loadCustomers()
   }, [sortBy])
 
   const loadCustomers = async () => {
     setLoading(true)
-    const data = await window.api.customers.getAll(sortBy)
-    setCustomers(data)
-    setLoading(false)
+    try {
+      const data = await window.api.customers.getAll(sortBy)
+      setCustomers(data)
+      setAllCustomers(data)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleSearch = async () => {
     if (!search.trim()) {
-      loadCustomers()
+      void loadCustomers()
       return
     }
     const results = await window.api.customers.search(search)
@@ -63,191 +64,130 @@ export function LoyaltyDashboard() {
     setFavoriteItems(favorites)
   }
 
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return '—'
-    return new Date(dateStr).toLocaleDateString('en', { day: 'numeric', month: 'short', year: 'numeric' })
-  }
+  const stats = useMemo(() => {
+    const spent = allCustomers.reduce((sum, c) => sum + (Number(c.total_spent) || 0), 0)
+    return {
+      count: allCustomers.length,
+      repeat: allCustomers.filter((c) => c.order_count >= 2).length,
+      spent,
+      average: allCustomers.length ? spent / allCustomers.length : 0
+    }
+  }, [allCustomers])
 
-  const formatTime = (dateStr: string) => {
-    return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  }
-
-  const cycleSortBy = () => {
-    const order: SortKey[] = ['total_spent', 'order_count', 'last_order']
-    const idx = order.indexOf(sortBy)
-    setSortBy(order[(idx + 1) % order.length])
-  }
-
-  const sortLabel =
-    sortBy === 'total_spent'
-      ? t('loyalty.totalSpent', { defaultValue: 'Total Spent' })
-      : sortBy === 'order_count'
-        ? t('loyalty.orders', { defaultValue: 'Orders' })
-        : t('loyalty.lastOrder', { defaultValue: 'Last Order' })
-
-  // Detail view
   if (selectedCustomer) {
     return (
-      <div>
-        <button
-          onClick={() => setSelectedCustomer(null)}
-          className="flex items-center gap-1 text-sm text-orange-600 hover:text-orange-700 font-medium mb-4"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          {t('loyalty.backToCustomers', { defaultValue: 'Back to customers' })}
-        </button>
-
-        {/* Customer header */}
-        <div className="bg-white rounded-xl border p-6 mb-4">
-          <div className="flex items-start justify-between">
-            <div>
-              <h2 className="text-xl font-bold text-gray-900">
-                {selectedCustomer.name || selectedCustomer.phone}
-              </h2>
-              <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
-                <span className="flex items-center gap-1"><Phone className="h-3.5 w-3.5" /> {selectedCustomer.phone}</span>
-                <span className="flex items-center gap-1"><ShoppingCart className="h-3.5 w-3.5" /> {t('loyalty.ordersCount', { defaultValue: '{{count}} orders', count: selectedCustomer.order_count })}</span>
-                <span className="flex items-center gap-1"><DollarSign className="h-3.5 w-3.5" /> {t('loyalty.amountSpent', { defaultValue: '{{amount}} spent', amount: formatCurrency(selectedCustomer.total_spent) })}</span>
-              </div>
-              {selectedCustomer.last_order_date && (
-                <p className="text-xs text-gray-400 mt-1">{t('loyalty.lastOrderLabel', { defaultValue: 'Last order: {{date}}', date: formatDate(selectedCustomer.last_order_date) })}</p>
-              )}
-            </div>
-            <button
-              onClick={() => {
-                // WhatsApp requires an international number without '+' or a domestic
-                // trunk zero. Keep showing the cashier-entered form, but use the canonical
-                // identity supplied by the customer repository for the deep link.
-                const whatsappPhone = (selectedCustomer.phone_normalized || selectedCustomer.phone)
-                  .replace(/[^0-9]/g, '')
-                const url = `https://wa.me/${whatsappPhone}`
-                window.open(url, '_blank')
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600"
-            >
-              {t('loyalty.whatsapp', { defaultValue: 'WhatsApp' })}
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Favorite items */}
-          <div className="bg-white rounded-xl border p-5">
-            <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-              <Star className="h-4 w-4 text-yellow-500" />
-              {t('loyalty.favoriteItems', { defaultValue: 'Favorite Items' })}
-            </h3>
-            {favoriteItems.length === 0 ? (
-              <p className="text-sm text-gray-400">{t('loyalty.noOrderData', { defaultValue: 'No order data yet' })}</p>
-            ) : (
-              <div className="space-y-2">
-                {favoriteItems.map((item: any, i: number) => (
-                  <div key={i} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                        i === 0 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'
-                      }`}>{i + 1}</span>
-                      <span className="text-sm font-medium">{item.name}</span>
-                    </div>
-                    <span className="text-sm text-gray-500">{item.total_quantity}x</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Recent orders */}
-          <div className="bg-white rounded-xl border p-5">
-            <h3 className="font-semibold text-gray-900 mb-3">{t('loyalty.recentOrders', { defaultValue: 'Recent Orders' })}</h3>
-            {customerOrders.length === 0 ? (
-              <p className="text-sm text-gray-400">{t('loyalty.noOrdersYet', { defaultValue: 'No orders yet' })}</p>
-            ) : (
-              <div className="space-y-2 max-h-80 overflow-y-auto">
-                {customerOrders.map((order: any) => (
-                  <div key={order.id} className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg">
-                    <div>
-                      <p className="text-sm font-medium">{t('loyalty.orderNumber', { defaultValue: 'Order #{{n}}', n: order.daily_number })}</p>
-                      <p className="text-xs text-gray-500">
-                        {formatDate(order.order_date)} {formatTime(order.created_at)}
-                      </p>
-                    </div>
-                    <span className="font-bold text-sm text-orange-600">{formatCurrency(order.total)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+      <CustomerDetail
+        customer={selectedCustomer}
+        orders={customerOrders}
+        favorites={favoriteItems}
+        menuItems={menuItems}
+        onBack={() => setSelectedCustomer(null)}
+      />
     )
   }
 
-  // List view
+  const onRowKey = (e: KeyboardEvent<HTMLTableRowElement>, c: Customer) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      void viewCustomer(c)
+    }
+  }
+
   return (
-    <div>
-      <div className="flex items-center gap-3 mb-4">
-        <div className="relative flex-1">
-          <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <input
+    <div className="space-y-4">
+      <StatStrip
+        loading={loading && allCustomers.length === 0}
+        items={[
+          { label: t('loyalty.stats.customers'), value: stats.count, icon: <Users />, tone: 'info' },
+          { label: t('loyalty.stats.repeat'), value: stats.repeat, icon: <Repeat />, tone: 'success' },
+          { label: t('loyalty.totalSpent'), value: <Money value={stats.spent} decimals={0} />, icon: <Wallet /> },
+          { label: t('loyalty.stats.average'), value: <Money value={stats.average} decimals={0} />, icon: <Wallet />, tone: 'neutral' }
+        ]}
+      />
+
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="min-w-[14rem] flex-1">
+          <Input
+            leading={<Search />}
             value={search}
+            readOnly={isTouch}
+            onClick={isTouch ? () => setKeyboard(true) : undefined}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder={t('loyalty.searchPlaceholder', { defaultValue: 'Search by phone or name...' })}
-            className="w-full ps-10 pe-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+            placeholder={t('loyalty.searchPlaceholder')}
+            aria-label={t('loyalty.searchPlaceholder')}
+            trailing={search ? <IconButton icon={<X />} label={t('orderHistory.clearSearch')} size="sm" onClick={() => setSearch('')} /> : undefined}
           />
         </div>
-        <button
-          onClick={cycleSortBy}
-          className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-        >
-          <ArrowUpDown className="h-4 w-4" />
-          {t('loyalty.sortBy', { defaultValue: 'Sort: {{label}}', label: sortLabel })}
-        </button>
+        <SegmentedControl
+          value={sortBy}
+          onChange={setSortBy}
+          ariaLabel={t('loyalty.sortLabel')}
+          options={[
+            { value: 'total_spent', label: t('loyalty.totalSpent') },
+            { value: 'order_count', label: t('loyalty.orders') },
+            { value: 'last_order', label: t('loyalty.lastOrder') }
+          ]}
+        />
       </div>
 
-      {loading ? (
-        <div className="text-center py-16 text-gray-400">{t('common.loading')}</div>
-      ) : customers.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">
-          <Phone className="h-12 w-12 mx-auto mb-3 opacity-50" />
-          <p>{t('loyalty.noCustomers', { defaultValue: 'No customers tracked yet' })}</p>
-          <p className="text-sm mt-1">{t('loyalty.noCustomersHint', { defaultValue: 'Customers are automatically tracked when orders include a phone number' })}</p>
-        </div>
+      {!loading && customers.length === 0 ? (
+        <Card padding={false}>
+          {search.trim() ? (
+            <EmptyState compact icon={<SearchX />} title={t('loyalty.noMatch', { query: search.trim() })} />
+          ) : (
+            <EmptyState icon={<Phone />} title={t('loyalty.noCustomers')} description={t('loyalty.noCustomersShort')} />
+          )}
+        </Card>
       ) : (
-        <div className="bg-white rounded-xl border overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase">
-                <th className="px-4 py-3">{t('loyalty.customer', { defaultValue: 'Customer' })}</th>
-                <th className="px-4 py-3 text-right">{t('loyalty.orders', { defaultValue: 'Orders' })}</th>
-                <th className="px-4 py-3 text-right">{t('loyalty.totalSpent', { defaultValue: 'Total Spent' })}</th>
-                <th className="px-4 py-3 text-right">{t('loyalty.lastOrder', { defaultValue: 'Last Order' })}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {customers.map((c) => (
-                <tr
-                  key={c.id}
-                  onClick={() => viewCustomer(c)}
-                  className="hover:bg-orange-50 cursor-pointer transition-colors"
-                >
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-gray-900 text-sm">{c.name || c.phone}</p>
-                    {c.name && <p className="text-xs text-gray-500">{c.phone}</p>}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <span className="font-bold text-sm text-blue-600">{c.order_count}</span>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <span className="font-bold text-sm text-orange-600">{formatCurrency(c.total_spent)}</span>
-                  </td>
-                  <td className="px-4 py-3 text-right text-sm text-gray-500">
-                    {formatDate(c.last_order_date)}
-                  </td>
+        <Card padding={false} className="overflow-hidden">
+          <div className="max-h-[60vh] overflow-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr>
+                  <th className={cn(HEAD, 'text-start')}>{t('loyalty.customer')}</th>
+                  <th className={cn(HEAD, 'text-end')}>{t('loyalty.orders')}</th>
+                  <th className={cn(HEAD, 'text-end')}>{t('loyalty.totalSpent')}</th>
+                  <th className={cn(HEAD, 'text-end')}>{t('loyalty.lastOrder')}</th>
+                  <th className={cn(HEAD, 'w-10')} aria-hidden="true" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {loading
+                  ? Array.from({ length: 5 }, (_, i) => (
+                      <tr key={i} className="h-12">
+                        <td className="px-4"><Skeleton className="h-4 w-36" /></td>
+                        <td className="px-4"><Skeleton className="ms-auto h-4 w-8" /></td>
+                        <td className="px-4"><Skeleton className="ms-auto h-4 w-20" /></td>
+                        <td className="px-4"><Skeleton className="ms-auto h-4 w-20" /></td>
+                        <td />
+                      </tr>
+                    ))
+                  : customers.map((c) => (
+                      <tr
+                        key={c.id}
+                        tabIndex={0}
+                        onClick={() => void viewCustomer(c)}
+                        onKeyDown={(e) => onRowKey(e, c)}
+                        className="h-12 cursor-pointer outline-none hover:bg-surface-2 focus-visible:bg-surface-2 active:bg-surface-3"
+                      >
+                        <td className="px-4 py-1.5">
+                          <p className="font-semibold text-ink"><bdi>{c.name || c.phone}</bdi></p>
+                          {c.name && <p className="num text-xs text-muted"><bdi dir="ltr">{c.phone}</bdi></p>}
+                        </td>
+                        <td className="num px-4 text-end font-bold text-ink">{c.order_count}</td>
+                        <td className="px-4 text-end font-bold text-ink"><Money value={c.total_spent} /></td>
+                        <td className="num px-4 text-end text-muted">{formatDay(c.last_order_date)}</td>
+                        <td className="pe-3 text-muted"><ChevronRight className="h-4 w-4 rtl:-scale-x-100" /></td>
+                      </tr>
+                    ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {isTouch && keyboard && (
+        <VirtualKeyboard visible type="text" extended value={search} onChange={setSearch} onClose={() => setKeyboard(false)} />
       )}
     </div>
   )

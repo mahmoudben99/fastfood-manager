@@ -7,8 +7,12 @@
  * `WP-G remote inbox mount` line; talks to main via the `remoteInbox` preload
  * bridge (appended block at the end of src/preload/index.ts).
  */
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { AlertTriangle, Bike, Check, Clock, Inbox, Phone, ShoppingBag, StickyNote, Utensils, X } from 'lucide-react'
+import { useAppStore } from '../store/appStore'
+import { Badge, Button, EmptyState, IconButton, Input, Modal, Money, toast } from './ui'
+import { VirtualKeyboard } from './VirtualKeyboard'
 
 interface RemoteRow {
   id: string
@@ -21,7 +25,14 @@ interface RemoteRow {
   quoted_total: number
   created_at: string
   expires_at: string
+  /** Set by main when the request cannot be accepted as sent (e.g. a required option group has no
+   *  default). Accept is hidden then; staff can only reject. Both fields may be absent. */
+  local_issues?: unknown
+  blocked_reason?: string | null
 }
+
+const blockedReason = (row: RemoteRow): string =>
+  typeof row.blocked_reason === 'string' ? row.blocked_reason.trim() : ''
 
 interface RemoteInboxBridge {
   list(): Promise<RemoteRow[]>
@@ -36,22 +47,18 @@ function bridge(): RemoteInboxBridge | null {
 }
 
 const POLL_MS = 5000
+/** Outcome messages stay up as long as the old inline notice did. */
+const NOTICE_MS = 5000
 
 export function RemoteOrderInbox() {
   const { t } = useTranslation()
+  const isTouch = useAppStore((s) => s.inputMode) === 'touchscreen'
   const [rows, setRows] = useState<RemoteRow[]>([])
   const [open, setOpen] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [rejecting, setRejecting] = useState<RemoteRow | null>(null)
   const [rejectReason, setRejectReason] = useState('')
-  const [notice, setNotice] = useState<string | null>(null)
-  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const flash = useCallback((message: string) => {
-    setNotice(message)
-    if (noticeTimer.current) clearTimeout(noticeTimer.current)
-    noticeTimer.current = setTimeout(() => setNotice(null), 5000)
-  }, [])
+  const [keyboardOpen, setKeyboardOpen] = useState(false)
 
   const refresh = useCallback(async () => {
     const api = bridge()
@@ -71,29 +78,33 @@ export function RemoteOrderInbox() {
     return () => {
       unsubscribe()
       clearInterval(interval)
-      if (noticeTimer.current) clearTimeout(noticeTimer.current)
     }
   }, [refresh])
 
   const accept = async (row: RemoteRow) => {
     const api = bridge()
-    if (!api || busyId) return
+    if (!api || busyId || blockedReason(row)) return
     setBusyId(row.id)
     try {
       const result = await api.accept(row.id)
       if (result.outcome === 'accepted') {
-        flash(t('remoteInbox.acceptedToast', { number: result.dailyNumber ?? '—' }))
+        toast.success(t('remoteInbox.acceptedToast', { number: result.dailyNumber ?? '—' }), { duration: NOTICE_MS })
       } else if (result.outcome === 'lost_race') {
-        flash(t('remoteInbox.alreadyDecided'))
+        toast.info(t('remoteInbox.alreadyDecided'), { duration: NOTICE_MS })
       } else if (result.outcome === 'expired' || result.outcome === 'revision_changed') {
-        flash(t('remoteInbox.expiredToast'))
+        toast.warning(t('remoteInbox.expiredToast'), { duration: NOTICE_MS })
       } else {
-        flash(t('remoteInbox.acceptFailed', { message: result.message ?? '' }))
+        toast.error(t('remoteInbox.acceptFailed', { message: result.message ?? '' }))
       }
     } finally {
       setBusyId(null)
       void refresh()
     }
+  }
+
+  const closeReject = () => {
+    setRejecting(null)
+    setKeyboardOpen(false)
   }
 
   const confirmReject = async () => {
@@ -102,19 +113,28 @@ export function RemoteOrderInbox() {
     setBusyId(rejecting.id)
     try {
       await api.reject(rejecting.id, rejectReason.trim() || undefined)
-      flash(t('remoteInbox.rejectedToast'))
+      toast.info(t('remoteInbox.rejectedToast'), { duration: NOTICE_MS })
     } finally {
       setBusyId(null)
       setRejecting(null)
       setRejectReason('')
+      setKeyboardOpen(false)
       void refresh()
     }
   }
 
-  const typeLabel = (row: RemoteRow) => {
-    if (row.order_type === 'local') return `${t('remoteInbox.dineIn')} · ${t('remoteInbox.table')} ${row.table_number ?? '?'}`
-    if (row.order_type === 'delivery') return t('remoteInbox.delivery')
-    return t('remoteInbox.takeout')
+  const typeBadge = (row: RemoteRow) => {
+    if (row.order_type === 'local') {
+      return (
+        <Badge variant="neutral" icon={<Utensils />}>
+          {t('remoteInbox.dineIn')} · {t('remoteInbox.table')} <bdi className="num">{row.table_number ?? '?'}</bdi>
+        </Badge>
+      )
+    }
+    if (row.order_type === 'delivery') {
+      return <Badge variant="info" icon={<Bike />}>{t('remoteInbox.delivery')}</Badge>
+    }
+    return <Badge variant="neutral" icon={<ShoppingBag />}>{t('remoteInbox.takeout')}</Badge>
   }
 
   const minutesLeft = (row: RemoteRow) => {
@@ -129,125 +149,191 @@ export function RemoteOrderInbox() {
       {/* Floating badge — visible whenever remote requests are waiting */}
       {(rows.length > 0 || open) && (
         <button
+          type="button"
           onClick={() => setOpen((v) => !v)}
-          className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-full bg-orange-500 px-4 py-3 text-white shadow-lg hover:bg-orange-600 active:scale-95 transition-transform"
+          aria-expanded={open}
+          className="tap fixed bottom-4 end-4 z-40 flex min-h-14 items-center gap-2.5 rounded-full bg-ember ps-5 pe-3 text-base font-semibold text-on-primary shadow-glow hover:brightness-[1.07]"
         >
-          <span className="text-lg" aria-hidden>📥</span>
-          <span className="font-semibold text-sm">{t('remoteInbox.title')}</span>
+          <Inbox className="h-5 w-5" aria-hidden />
+          <span>{t('remoteInbox.title')}</span>
           {rows.length > 0 && (
-            <span className="ml-1 flex h-6 w-6 items-center justify-center rounded-full bg-white text-xs font-bold text-orange-600">
+            <span className="num flex h-8 min-w-8 items-center justify-center rounded-full bg-surface px-2 text-sm font-bold text-primary-ink">
               {rows.length}
             </span>
           )}
         </button>
       )}
 
-      {notice && (
-        <div className="fixed bottom-20 right-4 z-40 rounded-lg bg-gray-900 px-4 py-2 text-sm text-white shadow-lg">
-          {notice}
-        </div>
-      )}
-
       {open && (
-        <div className="fixed inset-0 z-50 flex items-end justify-end bg-black/40 p-4" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-end justify-end p-4" onClick={() => setOpen(false)}>
+          <div className="absolute inset-0 bg-overlay animate-fade-in" aria-hidden />
           <div
-            className="flex max-h-[80vh] w-full max-w-md flex-col rounded-2xl bg-white shadow-2xl"
+            role="dialog"
+            aria-label={t('remoteInbox.title')}
+            className="relative flex max-h-[85vh] w-full max-w-md flex-col rounded-3xl border border-line bg-surface shadow-e4 animate-pop-in"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b px-4 py-3">
-              <h3 className="font-bold text-gray-900">{t('remoteInbox.title')}</h3>
-              <button onClick={() => setOpen(false)} className="rounded p-1 text-gray-500 hover:bg-gray-100">✕</button>
+            <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="h-10 w-10 shrink-0 rounded-xl bg-primary-soft text-primary-ink flex items-center justify-center">
+                  <Inbox className="h-5 w-5" aria-hidden />
+                </div>
+                <h3 className="truncate text-lg font-bold text-ink">{t('remoteInbox.title')}</h3>
+                {rows.length > 0 && <Badge variant="primary" className="num">{rows.length}</Badge>}
+              </div>
+              <IconButton icon={<X />} label={t('common.close')} size="lg" onClick={() => setOpen(false)} />
             </div>
 
-            <div className="flex-1 overflow-y-auto p-3">
+            <div className="flex-1 space-y-3 overflow-y-auto bg-surface-2/60 p-4">
               {rows.length === 0 ? (
-                <p className="py-10 text-center text-sm text-gray-400">{t('remoteInbox.empty')}</p>
+                <EmptyState compact icon={<Inbox />} title={t('remoteInbox.empty')} />
               ) : (
-                rows.map((row) => (
-                  <div key={row.id} className="mb-3 rounded-xl border border-gray-200 p-3">
-                    <div className="mb-1 flex items-center justify-between">
-                      <span className="font-semibold text-gray-900">{row.customer_name}</span>
-                      <span className="text-xs font-medium text-orange-600">
+                rows.map((row) => {
+                  const blocked = blockedReason(row)
+                  return (
+                  <article
+                    key={row.id}
+                    className={
+                      blocked
+                        ? 'contain-card rounded-2xl border border-danger/50 bg-surface p-4 shadow-e1'
+                        : 'contain-card rounded-2xl border border-line bg-surface p-4 shadow-e1'
+                    }
+                  >
+                    <div className="mb-2 flex items-start justify-between gap-3">
+                      <bdi className="min-w-0 truncate text-base font-bold text-ink">{row.customer_name}</bdi>
+                      <Badge variant="warning" icon={<Clock />} className="num shrink-0">
                         {t('remoteInbox.expiresIn', { minutes: minutesLeft(row) })}
-                      </span>
+                      </Badge>
                     </div>
-                    <div className="mb-2 text-xs text-gray-500">
-                      {typeLabel(row)}
-                      {row.customer_phone ? ` · ${row.customer_phone}` : ''}
+
+                    <div className="mb-3 flex flex-wrap items-center gap-2 text-sm text-muted">
+                      {typeBadge(row)}
+                      {row.customer_phone ? (
+                        <span className="inline-flex items-center gap-1">
+                          <Phone className="h-3.5 w-3.5" aria-hidden />
+                          <bdi dir="ltr" className="num">{row.customer_phone}</bdi>
+                        </span>
+                      ) : null}
                     </div>
-                    <div className="mb-2 space-y-0.5">
+
+                    <ul className="space-y-1">
                       {(row.items || []).map((line, index) => (
-                        <div key={index} className="flex justify-between text-sm text-gray-700">
-                          <span>{line.quantity}× {line.name}</span>
-                          <span>{line.unitPrice * line.quantity}</span>
-                        </div>
+                        <li key={index} className="flex items-baseline justify-between gap-3 text-sm text-ink-2">
+                          <span className="min-w-0">
+                            <span className="num font-semibold text-ink">{line.quantity}×</span> <bdi>{line.name}</bdi>
+                          </span>
+                          <Money value={line.unitPrice * line.quantity} className="shrink-0 text-ink" />
+                        </li>
                       ))}
-                      <div className="flex justify-between border-t pt-1 text-sm font-bold text-gray-900">
-                        <span>{t('remoteInbox.total')}</span>
-                        <span>{row.quoted_total}</span>
-                      </div>
+                    </ul>
+                    <div className="mt-2 flex items-baseline justify-between gap-3 border-t border-dashed border-line-strong pt-2">
+                      <span className="text-sm font-semibold text-ink-2">{t('remoteInbox.total')}</span>
+                      <Money value={row.quoted_total} className="text-lg font-extrabold text-ink" />
                     </div>
+
                     {row.note && (
-                      <div className="mb-2 rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">
-                        {t('remoteInbox.note')}: {row.note}
+                      <div className="mt-3 flex items-start gap-2 rounded-xl bg-warning-soft px-3 py-2 text-sm text-warning-ink">
+                        <StickyNote className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                        <p className="min-w-0 break-words">
+                          <span className="font-semibold">{t('remoteInbox.note')}:</span> <bdi>{row.note}</bdi>
+                        </p>
                       </div>
                     )}
-                    <div className="flex gap-2">
+
+                    {blocked && (
+                      <div role="alert" className="mt-3 flex items-start gap-2.5 rounded-xl bg-danger-soft px-3 py-2.5 text-sm text-danger-ink">
+                        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
+                        <div className="min-w-0">
+                          <p className="font-bold">{t('remoteInbox.blockedTitle')}</p>
+                          <p className="mt-0.5 break-words font-medium">
+                            <bdi>{blocked}</bdi>
+                          </p>
+                          <p className="mt-1 text-xs font-medium">{t('remoteInbox.blockedHint')}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="mt-4 flex gap-2">
+                      {!blocked && (
+                        <Button
+                          variant="success"
+                          size="lg"
+                          className="flex-1"
+                          onClick={() => { void accept(row) }}
+                          disabled={busyId !== null}
+                          loading={busyId === row.id}
+                          icon={<Check className="h-5 w-5" />}
+                        >
+                          {t('remoteInbox.accept')}
+                        </Button>
+                      )}
                       <button
-                        onClick={() => { void accept(row) }}
-                        disabled={busyId !== null}
-                        className="flex-1 rounded-lg bg-green-600 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
-                      >
-                        {busyId === row.id ? '…' : t('remoteInbox.accept')}
-                      </button>
-                      <button
+                        type="button"
                         onClick={() => { setRejecting(row); setRejectReason('') }}
                         disabled={busyId !== null}
-                        className="flex-1 rounded-lg bg-red-50 py-2 text-sm font-semibold text-red-600 hover:bg-red-100 disabled:opacity-50"
+                        className="tap inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl border border-line-strong bg-surface px-5 text-base font-semibold text-danger-ink hover:bg-danger-soft disabled:cursor-not-allowed disabled:opacity-50"
                       >
+                        <X className="h-5 w-5" aria-hidden />
                         {t('remoteInbox.reject')}
                       </button>
                     </div>
-                  </div>
-                ))
+                  </article>
+                  )
+                })
               )}
             </div>
           </div>
         </div>
       )}
 
-      {rejecting && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
-            <h3 className="mb-1 font-bold text-gray-900">{t('remoteInbox.rejectTitle')}</h3>
-            <p className="mb-3 text-xs text-gray-500">
-              {t('remoteInbox.rejectDesc', { name: rejecting.customer_name })}
-            </p>
-            <input
-              type="text"
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-              maxLength={300}
-              placeholder={t('remoteInbox.rejectReasonPlaceholder')}
-              className="mb-4 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={() => setRejecting(null)}
-                className="flex-1 rounded-lg bg-gray-100 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-200"
-              >
-                {t('remoteInbox.cancel')}
-              </button>
-              <button
-                onClick={() => { void confirmReject() }}
-                disabled={busyId !== null}
-                className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
-              >
-                {t('remoteInbox.confirmReject')}
-              </button>
-            </div>
-          </div>
-        </div>
+      <Modal
+        isOpen={rejecting !== null}
+        onClose={closeReject}
+        zIndex={60}
+        size="sm"
+        closeOnBackdrop={false}
+        title={t('remoteInbox.rejectTitle')}
+        description={rejecting ? t('remoteInbox.rejectDesc', { name: rejecting.customer_name }) : undefined}
+        footer={
+          <>
+            <Button variant="secondary" size="lg" onClick={closeReject}>
+              {t('remoteInbox.cancel')}
+            </Button>
+            <Button
+              variant="danger"
+              size="lg"
+              onClick={() => { void confirmReject() }}
+              disabled={busyId !== null}
+              loading={rejecting !== null && busyId === rejecting.id}
+            >
+              {t('remoteInbox.confirmReject')}
+            </Button>
+          </>
+        }
+      >
+        <Input
+          type="text"
+          inputSize="lg"
+          dir="auto"
+          value={rejectReason}
+          readOnly={isTouch}
+          onClick={isTouch ? () => setKeyboardOpen(true) : undefined}
+          onChange={(e) => setRejectReason(e.target.value)}
+          maxLength={300}
+          placeholder={t('remoteInbox.rejectReasonPlaceholder')}
+        />
+      </Modal>
+
+      {/* Touch mode: the reject reason is typed on the on-screen keyboard */}
+      {isTouch && rejecting && keyboardOpen && (
+        <VirtualKeyboard
+          visible
+          type="text"
+          extended
+          value={rejectReason}
+          onChange={(value) => setRejectReason(value.slice(0, 300))}
+          onClose={() => setKeyboardOpen(false)}
+        />
       )}
     </>
   )

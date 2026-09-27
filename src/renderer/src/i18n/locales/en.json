@@ -104,6 +104,18 @@
       "new": "New",
       "search": "Search the menu",
       "allergens": "No onions, extra sauce"
+    },
+    "keyboard": {
+      "label": "On-screen keyboard",
+      "done": "Done",
+      "backspace": "Delete last character",
+      "clear": "Clear",
+      "shift": "Capital letters",
+      "space": "Space",
+      "switchLayout": "Switch keyboard language"
+    },
+    "splash": {
+      "welcome": "Welcome to"
     }
   },
   "update": {
@@ -128,7 +140,12 @@
     "finish": "Finish Setup",
     "language": {
       "title": "Choose Your Language",
-      "subtitle": "Select the language for the application interface"
+      "subtitle": "Select the language for the application interface",
+      "names": {
+        "ar": "Arabic",
+        "en": "English",
+        "fr": "French"
+      }
     },
     "restaurant": {
       "title": "Restaurant Information",
@@ -145,7 +162,9 @@
       "logo": "Restaurant Logo",
       "uploadLogo": "Upload Logo",
       "changeLogo": "Change Logo",
-      "logoOptional": "Optional — shown on receipts. You can change it later in Settings."
+      "logoOptional": "Optional — shown on receipts. You can change it later in Settings.",
+      "logoPick": "Tap to choose an image",
+      "logoShort": "Optional · printed on receipts"
     },
     "password": {
       "title": "Create Admin Password",
@@ -153,7 +172,9 @@
       "password": "Password",
       "confirm": "Confirm Password",
       "mismatch": "Passwords don't match",
-      "tooShort": "Password must be at least 4 characters"
+      "tooShort": "Password must be at least 4 characters",
+      "hint": "Digits only, 4 or more",
+      "match": "PINs match"
     },
     "schedule": {
       "title": "Work Schedule",
@@ -172,7 +193,9 @@
       "namePlaceholder": "Category name",
       "defaults": "Use defaults",
       "foodLanguage": "Food names language",
-      "foodLanguageHint": "Choose which language to display food and item names in (separate from the app UI language)"
+      "foodLanguageHint": "Choose which language to display food and item names in (separate from the app UI language)",
+      "changeIcon": "Tap to change the emoji",
+      "empty": "No categories yet"
     },
     "excel": {
       "uploadTitle": "Upload Menu Images",
@@ -198,7 +221,40 @@
       "uploadOptionDesc": "Send photos of your menu and we'll prepare the data for you",
       "skipOption": "Continue without Excel",
       "skipOptionDesc": "Starter categories will be created. Add your products later from Menu.",
-      "skipNote": "You can edit your menu, stock, and workers later from Settings"
+      "skipNote": "You can edit your menu, stock, and workers later from Settings",
+      "importedCount": "Imported {{count}} items successfully!",
+      "readError": "The selected Excel file could not be read.",
+      "importFailed": "Excel import failed.",
+      "uploadFailed": "Upload failed",
+      "downloadFailed": "Download failed",
+      "markFailed": "The menu was imported, but the online request could not be marked complete. You can continue setup safely.",
+      "imagesSelected": "{{count}} image(s) selected",
+      "importShort": "Categories, menu, stock and workers",
+      "uploadShort": "We build your menu from photos",
+      "skipShort": "Starter categories · add products later",
+      "selectShort": "JPG or PNG photos"
+    },
+    "steps": {
+      "language": "Language",
+      "inputMode": "Device",
+      "restaurant": "Restaurant",
+      "password": "Password",
+      "schedule": "Hours",
+      "excel": "Import",
+      "categories": "Categories",
+      "progress": "Setup progress"
+    },
+    "hint": {
+      "restaurant": "Name and phone required",
+      "password": "4+ digit PIN, entered twice",
+      "categories": "Add a category"
+    },
+    "inputMode": {
+      "title": "How will you use the app?",
+      "keyboard": "Keyboard & mouse",
+      "keyboardDesc": "Best for desktop PCs",
+      "touch": "Touchscreen",
+      "touchDesc": "Big buttons, on-screen keyboard"
     }
   },
   "nav": {
@@ -660,7 +716,25 @@
     "restore": "Restore",
     "restoreDisabledButton": "Restore unavailable",
     "restoreDisabledDesc": "Menu recovery-point restore is temporarily disabled in production because it can replace live menu, stock, and worker data.",
-    "deleteConfirm": "Delete?"
+    "deleteConfirm": "Delete?",
+    "exportDone": "Excel file ready",
+    "exportFailed": "Excel export failed",
+    "manualRecoveryLabel": "Manual recovery point – {{date}}",
+    "recoverySaveFailed": "The recovery point could not be saved.",
+    "beforeRestoreLabel": "Before restore – {{date}}",
+    "beforeRestoreFailed": "The current data could not be saved before restoring.",
+    "restoreVersionFailed": "The recovery point could not be restored.",
+    "deleteVersionFailed": "The recovery point could not be deleted.",
+    "versionDeleted": "Recovery point deleted",
+    "hideHistory": "Hide history",
+    "showHistory": "Show history",
+    "restoreConfirmTitle": "Restore this recovery point?",
+    "restoreConfirmMessage": "Your current menu, stock and workers will be replaced by “{{label}}”. A recovery point of the current data is saved first.",
+    "deleteConfirmTitle": "Delete this recovery point?",
+    "deleteConfirmMessage": "“{{label}}” will be permanently deleted.",
+    "recoveryPointBtn": "Recovery point",
+    "editIn": "Edit in",
+    "restorePaused": "Restore paused"
   },
   "backup": {
     "title": "Backup & Restore",
@@ -680,7 +754,22 @@
     "backupAt": "Backup at",
     "scheduleHint": "Backups will run daily at the scheduled time while the app is open",
     "someFailed": "Some backups failed",
-    "restoreFailed": "Restore failed"
+    "restoreFailed": "Restore failed",
+    "pathsHint": "“Backup now” saves a full copy of your data into each folder below.",
+    "noFoldersTitle": "No backup folder yet",
+    "liveBackup": "Live Backup",
+    "liveBadge": "Active",
+    "location": "Location",
+    "format": "File name",
+    "liveHint": "Your data is backed up automatically every minute. If the PC crashes, at most one minute of data is lost.",
+    "restoreDesc": "Replace all current data with a backup file (.db). A safety copy of the current data is made first.",
+    "chooseFile": "Choose backup file",
+    "restoreConfirmTitle": "Restore from a backup?",
+    "restoreConfirmMessage": "All current data will be replaced by the backup file you choose. Are you sure?",
+    "createdToast": "Backup created",
+    "restoredToast": "Restore completed",
+    "liveSummary": "Every minute · kept 7 days",
+    "noneYet": "No backups yet"
   },
   "activation": {
     "title": "Activate Fast Food Manager",
@@ -704,7 +793,9 @@
     "trialExpired": "Your free trial has expired. Please purchase a license to continue.",
     "trialPaused": "Your trial has been paused by the administrator.",
     "trialStartFailed": "Could not start trial. Please check your internet connection.",
-    "trialConnectFailed": "Could not connect to server. Please check your internet connection."
+    "trialConnectFailed": "Could not connect to server. Please check your internet connection.",
+    "copied": "Copied",
+    "trialLine": "7 days free · all features · internet required"
   },
   "forgotPassword": {
     "link": "Forgot Password?",
@@ -864,7 +955,69 @@
     "unsavedTitle": "Unsaved changes",
     "unsavedMessage": "You have changes that are not saved yet. Save them before leaving?",
     "unsavedSave": "Save",
-    "unsavedDiscard": "Discard"
+    "unsavedDiscard": "Discard",
+    "v4": {
+      "navRestaurant": "Restaurant",
+      "navDevices": "Devices & links",
+      "navSystem": "System",
+      "appearance": "Appearance",
+      "density_comfortable": "Recommended",
+      "profileTitle": "Restaurant profile",
+      "languageTitle": "Language & currency",
+      "posTitle": "Point of sale",
+      "minutesShort": "{{n}} min",
+      "inputTouchDesc": "Big buttons, on-screen keyboard",
+      "platform": "Platform",
+      "opensAt": "Opens at",
+      "closesAt": "Closes at",
+      "printers": "Printers",
+      "addPrinterHint": "Start with the receipt printer.",
+      "receiptEditorDesc": "Logo, texts, QR code, layout",
+      "remoteCloudTitle": "Online ordering",
+      "telegramNav": "Telegram",
+      "tgBotTitle": "Bot connection",
+      "tgBehaviourTitle": "Behaviour",
+      "show": "Show",
+      "hide": "Hide",
+      "tgStartFailed": "Failed to start the bot.",
+      "tgConnectFailed": "Could not connect to Telegram. Check the bot token and your internet connection.",
+      "tgStarted": "Telegram bot is running.",
+      "tgStep1": "Create a bot",
+      "tgStep1a": "Open Telegram and search for @BotFather.",
+      "tgStep1b": "Send /newbot and follow the instructions to name your bot.",
+      "tgStep1c": "BotFather gives you a token: paste it above.",
+      "tgStep2": "Get your chat ID",
+      "tgStep2a": "Search for @userinfobot on Telegram (a different bot).",
+      "tgStep2b": "Send /start to @userinfobot.",
+      "tgStep2c": "It replies with your chat ID: paste it above.",
+      "tgStep3": "Activate",
+      "tgStep3a": "Open your new bot on Telegram and send /start.",
+      "tgStep3b": "Come back here, tap Save, then Start Bot.",
+      "about": "License & updates",
+      "installedVersion": "Installed version",
+      "licenseValid": "Valid on this computer",
+      "logoHint": "On receipts and the TV screen.",
+      "remoteEnableShort": "Requests wait in the POS inbox until you accept them.",
+      "remotePendingShort": "Available with the next update (secure device identity).",
+      "ownerLoginShort": "Log in with the admin password.",
+      "noSocialShort": "No accounts yet"
+    },
+    "more": {
+      "title": "More settings",
+      "desc": "Settings that live with their own screens.",
+      "cash": "Cash & shifts",
+      "cashDesc": "Payments, cash drawer, shifts, Z reports",
+      "delivery": "Delivery",
+      "deliveryDesc": "Zones, fees, drivers",
+      "insights": "Insights & alerts",
+      "insightsDesc": "Forecast, menu profit, alerts",
+      "kds": "Kitchen display",
+      "kdsDesc": "Kitchen screens, ready board, PIN",
+      "compliance": "Compliance",
+      "complianceDesc": "Sales journal, numbering, archive",
+      "receipt": "Receipt editor",
+      "receiptDesc": "Printed customer receipt"
+    }
   },
   "common": {
     "save": "Save",
@@ -957,7 +1110,72 @@
     "firewallBtn": "Make TV connection faster (allow through firewall)",
     "firewallWorking": "Allowing…",
     "firewallDone": "✓ Firewall allowed",
-    "firewallFailed": "Skipped (still works via internet)"
+    "firewallFailed": "Skipped (still works via internet)",
+    "saveFailed": "Couldn't save this change. Please try again.",
+    "connectTitle": "Connect a TV",
+    "pairingUnavailable": "The pairing code isn't available right now. Restart the app if this persists.",
+    "linkCopied": "Link copied",
+    "extraScreenNote": "This is an extra display. Pair the TV once with the 4-digit code above, then open the link below on that screen, or choose “{{name}}” from the TV's on-screen menu.",
+    "internetLink": "Internet link",
+    "clearMusic": "Remove music",
+    "noImagesTitle": "No photos yet",
+    "removeImage": "Remove photo",
+    "imagesFull": "Maximum reached (10 photos). Remove one to add another.",
+    "nameTaken": "A display with this name already exists.",
+    "displayName": "Display name",
+    "tabAppearance": "Appearance",
+    "tabContent": "Content",
+    "tabMedia": "Music & photos",
+    "profileDeleted": "“{{name}}” deleted",
+    "deleteProfileTitle": "Delete “{{name}}”?",
+    "deleteProfileMessage": "Its settings and its online TV link will be removed. A TV showing this display will have to pick another one. This cannot be undone.",
+    "gradientNames": {
+      "midnight": "Midnight",
+      "ocean": "Ocean",
+      "sunset": "Sunset",
+      "forest": "Forest",
+      "royalPurple": "Royal Purple",
+      "cherry": "Cherry",
+      "coffee": "Coffee",
+      "arctic": "Arctic",
+      "ember": "Ember",
+      "tealNight": "Teal Night",
+      "gold": "Gold",
+      "rose": "Rose",
+      "storm": "Storm",
+      "warmNight": "Warm Night",
+      "pureDark": "Pure Dark",
+      "sunrise": "Sunrise",
+      "cottonCandy": "Cotton Candy",
+      "freshMint": "Fresh Mint",
+      "peachCream": "Peach Cream",
+      "skyBlue": "Sky Blue"
+    },
+    "colorNames": {
+      "white": "White",
+      "offWhite": "Off-white",
+      "warmWhite": "Warm white",
+      "lightGray": "Light gray",
+      "gold": "Gold",
+      "cream": "Cream",
+      "iceBlue": "Ice blue",
+      "lightPink": "Light pink",
+      "dark": "Dark",
+      "charcoal": "Charcoal",
+      "brown": "Brown",
+      "orange": "Orange",
+      "blue": "Blue",
+      "green": "Green",
+      "red": "Red",
+      "purple": "Purple",
+      "pink": "Pink",
+      "teal": "Teal",
+      "cyan": "Cyan"
+    },
+    "tvCodeShort": "Type this code in the TV app",
+    "firewallShort": "Allow firewall",
+    "firewallSkipped": "Skipped",
+    "extraScreenShort": "Pair once with the code above, then open this link on the TV."
   },
   "promotions": {
     "title": "Promotions & Loyalty",
@@ -996,7 +1214,33 @@
     "addItem": "Add Item",
     "selectItem": "Select item...",
     "individualTotal": "Individual total: ",
-    "packPriceLabel": " → Pack price: "
+    "packPriceLabel": " → Pack price: ",
+    "tabs": {
+      "discounts": "Discounts",
+      "packs": "Packs"
+    },
+    "status": {
+      "active": "Active",
+      "paused": "Paused"
+    },
+    "deleteDiscountTitle": "Delete discount?",
+    "deleteDiscountBody": "“{{name}}” — past orders keep their prices.",
+    "deletePackTitle": "Delete pack?",
+    "deletePackBody": "“{{name}}” — past orders keep their prices.",
+    "toast": {
+      "discountSaved": "Discount saved",
+      "packSaved": "Pack saved",
+      "deleted": "“{{name}}” deleted",
+      "activated": "“{{name}}” is active",
+      "paused": "“{{name}}” is paused",
+      "failed": "Not saved: {{message}}"
+    },
+    "searchItems": "Search items",
+    "selectedCount": "Selected: {{count}}",
+    "separately": "Bought separately",
+    "customerSaves": "Customer saves",
+    "noItemsInPack": "No items yet",
+    "specificCount": "{{count}} items"
   },
   "loyalty": {
     "totalSpent": "Total Spent",
@@ -1016,7 +1260,15 @@
     "sortBy": "Sort: {{label}}",
     "noCustomers": "No customers tracked yet",
     "noCustomersHint": "Customers are automatically tracked when orders include a phone number",
-    "customer": "Customer"
+    "customer": "Customer",
+    "stats": {
+      "customers": "Customers",
+      "repeat": "Regulars (2+)",
+      "average": "Avg / customer"
+    },
+    "sortLabel": "Sort customers",
+    "noMatch": "No customer matches “{{query}}”",
+    "noCustomersShort": "From orders with a phone number"
   },
   "dayRecap": {
     "title": "Day Recap",
@@ -1042,7 +1294,17 @@
     "lockOnZero": "App will lock when timer reaches zero",
     "enterCode": "Enter Activation Code",
     "showMachineId": "Show Machine ID (for support)",
-    "sendIdHint": "Send this ID to support to get an activation code:"
+    "sendIdHint": "Send this ID to support to get an activation code:",
+    "titleNoInternet": "No internet connection",
+    "checkNow": "Check again",
+    "badgeOffline": "Offline",
+    "badgeLocked": "Locked",
+    "badgeExpired": "Trial ended",
+    "badgePaused": "Paused",
+    "timeLeft": "Time left before the app locks",
+    "shortOffline": "Reconnect to the internet to continue.",
+    "shortPaused": "Paused by the administrator. Contact us to resume.",
+    "shortExpired": "Activate with a serial code to continue."
   },
   "remoteInbox": {
     "title": "Remote Orders",
@@ -1065,7 +1327,9 @@
     "alreadyDecided": "This request was already handled.",
     "expiredToast": "This request expired (or the menu changed) — nothing was created.",
     "rejectedToast": "Request rejected.",
-    "acceptFailed": "Could not accept: {{message}}"
+    "acceptFailed": "Could not accept: {{message}}",
+    "blockedTitle": "Can't be accepted as sent",
+    "blockedHint": "Reject it with a reason so the customer can order again, or fix the item's options in Menu."
   },
   "channels": {
     "names": {
@@ -1342,6 +1606,11 @@
       "minimal": "Minimal",
       "fullFeatured": "Full Featured",
       "bilingual": "Bilingual (AR/FR)"
+    },
+    "v4": {
+      "blocks": "Receipt blocks",
+      "hidden": "Hidden",
+      "qrLink": "QR code link"
     }
   },
   "checkout": {
@@ -2066,5 +2335,171 @@
       "unsaved": "Unsaved changes",
       "nowTitle": "Right now"
     }
+  },
+  "orderHistory": {
+    "subtitle": "Find any order, check how it was paid and reprint its tickets",
+    "period": {
+      "label": "Period",
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "week": "7 days",
+      "month": "30 days",
+      "custom": "Custom",
+      "customAria": "Custom dates"
+    },
+    "from": "From",
+    "to": "To",
+    "searchPlaceholder": "#, phone, name, table",
+    "filter": {
+      "label": "Order status",
+      "all": "All",
+      "ongoing": "Ongoing",
+      "completed": "Completed",
+      "cancelled": "Cancelled",
+      "unpaid": "To collect"
+    },
+    "status": {
+      "pending": "Pending",
+      "preparing": "Preparing",
+      "ready": "Ready",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
+    },
+    "type": {
+      "local": "Dine in",
+      "takeout": "Takeaway",
+      "delivery": "Delivery"
+    },
+    "pay": {
+      "paid": "Paid",
+      "unpaid": "Unpaid",
+      "partial": "Part paid",
+      "void": "Voided",
+      "title": "Payment",
+      "paidAmount": "Paid",
+      "balanceDue": "Balance due",
+      "owed": "Owed to customer",
+      "given": "Given",
+      "change": "Change",
+      "refund": "Refund",
+      "reference": "Ref. {{ref}}",
+      "legacy": "Older order: counted as cash.",
+      "none": "No payments yet",
+      "unavailable": "Unavailable"
+    },
+    "col": {
+      "number": "Order",
+      "time": "Time",
+      "type": "Type",
+      "customer": "Customer",
+      "payment": "Payment",
+      "total": "Total",
+      "status": "Status"
+    },
+    "tableLabel": "Table {{n}}",
+    "walkIn": "Walk-in",
+    "stats": {
+      "orders": "Orders",
+      "revenue": "Revenue",
+      "revenueHint": "Cancelled orders excluded",
+      "avgTicket": "Average ticket",
+      "cancelled": "Cancelled",
+      "toCollect": "{{count}} to collect",
+      "revenueShort": "Revenue"
+    },
+    "empty": {
+      "title": "No orders in this period",
+      "body": "Try another period.",
+      "filteredTitle": "No order matches",
+      "filteredBody": "Check the spelling or clear the filters."
+    },
+    "clearFilters": "Clear filters",
+    "showMore": "Show {{count}} more",
+    "open": "Open order #{{number}}",
+    "detail": {
+      "tabDetails": "Details",
+      "tabReceipt": "Receipt",
+      "items": "Items",
+      "combo": "Combo",
+      "placed": "Placed {{time}}",
+      "cashier": "Cashier: {{name}}",
+      "customer": "Customer",
+      "orderNote": "Order note",
+      "madeBy": "By {{name}}",
+      "discount": "Discount",
+      "deliveryFee": "Delivery fee",
+      "loadFailed": "This order could not be loaded."
+    },
+    "mod": {
+      "extra": "Extra {{name}}",
+      "light": "Light {{name}}",
+      "no": "No {{name}}"
+    },
+    "delivery": {
+      "title": "Delivery",
+      "address": "Address",
+      "zone": "Zone",
+      "eta": "About {{min}} min",
+      "fee": "Fee",
+      "driver": "Driver",
+      "noDriver": "Not assigned yet",
+      "notes": "Delivery note",
+      "none": "No delivery details",
+      "status": {
+        "pending": "Received",
+        "preparing": "Preparing",
+        "out_for_delivery": "Out for delivery",
+        "delivered": "Delivered",
+        "failed": "Failed"
+      },
+      "reason": "Reason: {{reason}}"
+    },
+    "action": {
+      "receipt": "Receipt",
+      "kitchen": "Kitchen",
+      "invoice": "Invoice",
+      "markDone": "Mark as done",
+      "editItems": "Edit items"
+    },
+    "toast": {
+      "done": "Order #{{number}} marked as done",
+      "cancelled": "Order #{{number}} cancelled",
+      "saved": "Order #{{number}} updated",
+      "actionFailed": "That did not work: {{message}}"
+    },
+    "edit": {
+      "title": "Editing order #{{number}}",
+      "each": "each",
+      "comboNote": "Combo items follow their combo.",
+      "decrease": "Decrease quantity",
+      "increase": "Increase quantity",
+      "remove": "Remove {{name}}",
+      "empty": "Keep at least 1 item",
+      "lockedPastDay": "Previous day: no more edits. Ring up extras as a new order."
+    },
+    "receipt": {
+      "unavailable": "No preview available"
+    },
+    "invoice": {
+      "title": "Invoice (facture)",
+      "hint": "Numbered once per order; reprints keep the same number and customer.",
+      "existing": "Invoice {{number}} (reprint)",
+      "name": "Name",
+      "address": "Address",
+      "nif": "NIF",
+      "nis": "NIS",
+      "rc": "RC",
+      "ai": "AI",
+      "format": "Paper",
+      "formatReceipt": "Ticket",
+      "formatA4": "A4",
+      "printer": "Printer",
+      "defaultPrinter": "Default",
+      "print": "Print invoice",
+      "nameRequired": "Enter the customer name",
+      "cancelled": "Cancelled orders can't be invoiced."
+    },
+    "refresh": "Refresh the list",
+    "clearSearch": "Clear search"
   }
 }

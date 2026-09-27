@@ -1,562 +1,144 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle, X, Check, Pencil, Minus, Plus, Trash2, Search, Info } from 'lucide-react'
-import { useAppStore } from '../../store/appStore'
-import { Badge } from '../../components/ui/Badge'
-import { Modal } from '../../components/ui/Modal'
-import { Button } from '../../components/ui/Button'
-import { formatCurrency } from '../../utils/formatCurrency'
-import { localToday, formatDateTime } from '../../utils/localDate'
-import { orderEditRejection, parseOrderEditRejection } from '../../../../shared/order-edit'
+import { RefreshCw } from 'lucide-react'
+import { IconButton, PageHeader, toast } from '../../components/ui'
+import { localToday } from '../../utils/localDate'
+import { HistoryFilters } from './parts/HistoryFilters'
+import { HistoryStats } from './parts/HistoryStats'
+import { OrderDetailDrawer } from './parts/OrderDetailDrawer'
+import { OrdersTable, PAGE_SIZE } from './parts/OrdersTable'
+import { isOngoing, stripIpcPrefix } from './parts/labels'
+import type { HistoryOrder, PeriodPreset, StatusFilter } from './parts/types'
 
-/** Manual prints from history always carry the REPRINT banner. */
-const REPRINT = { reprint: true } as const
+const DAY_MS = 86_400_000
+const PRESET_DAYS: Record<Exclude<PeriodPreset, 'custom'>, number> = { today: 0, yesterday: 1, week: 6, month: 29 }
 
-type PrintResult = { success: boolean; error?: string; printerName?: string }
-
-function stripIpcPrefix(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error)
-  return message.replace(/^Error invoking remote method '[^']+':\s*(Error:\s*)?/, '')
+function matchesStatus(order: HistoryOrder, filter: StatusFilter): boolean {
+  if (filter === 'all') return true
+  if (filter === 'ongoing') return isOngoing(order.status)
+  if (filter === 'unpaid') {
+    return order.status !== 'cancelled' && (order.payment_status === 'unpaid' || order.payment_status === 'partial')
+  }
+  return order.status === filter
 }
 
-/** Paper width declared by the receipt document's own body rule (72mm or 48mm). */
-function receiptPaperWidth(html: string): string {
-  const match = html.match(/body\s*\{[^}]*?(?<![-\w])width\s*:\s*([\d.]+mm)/)
-  return match?.[1] ?? '72mm'
+/** Order number, phone (digits or as typed), customer name or table. */
+function matchesSearch(order: HistoryOrder, raw: string): boolean {
+  const q = raw.trim().toLowerCase().replace(/^#/, '')
+  if (!q) return true
+  const digits = q.replace(/\D/g, '')
+  const phone = order.customer_phone?.toLowerCase() ?? ''
+  return (
+    String(order.daily_number).includes(q) ||
+    phone.includes(q) ||
+    (digits.length >= 3 && phone.replace(/\D/g, '').includes(digits)) ||
+    (order.customer_name?.toLowerCase().includes(q) ?? false) ||
+    (order.table_number?.toLowerCase().includes(q) ?? false)
+  )
 }
 
 export function OrdersHistory() {
   const { t } = useTranslation()
-  const { language } = useAppStore()
-  const [orders, setOrders] = useState<any[]>([])
+  const [orders, setOrders] = useState<HistoryOrder[]>([])
+  const [loading, setLoading] = useState(true)
+  const [period, setPeriod] = useState<PeriodPreset>('today')
   const [startDate, setStartDate] = useState(localToday())
   const [endDate, setEndDate] = useState(localToday())
-  const [selectedOrder, setSelectedOrder] = useState<any>(null)
-  const [cancelConfirm, setCancelConfirm] = useState<any>(null)
-
-  // Search & filter
   const [searchQuery, setSearchQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [visible, setVisible] = useState(PAGE_SIZE)
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const request = useRef(0)
 
-  // Receipt preview
-  const [previewHtml, setPreviewHtml] = useState<string | null>(null)
-  const [printNotice, setPrintNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
-
-  // Edit state
-  const [editMode, setEditMode] = useState(false)
-  const [editItems, setEditItems] = useState<any[]>([])
-  const [savingEdit, setSavingEdit] = useState(false)
-  const [editError, setEditError] = useState('')
+  const loadOrders = useCallback(async () => {
+    const mine = ++request.current
+    try {
+      const data = await window.api.orders.getByDateRange(startDate, endDate)
+      if (mine === request.current) setOrders(Array.isArray(data) ? data : [])
+    } catch (error) {
+      if (mine === request.current) toast.error(t('orderHistory.toast.actionFailed', { message: stripIpcPrefix(error) }))
+    } finally {
+      if (mine === request.current) setLoading(false)
+    }
+  }, [startDate, endDate, t])
 
   useEffect(() => {
-    loadOrders()
-  }, [startDate, endDate])
+    setLoading(true)
+    void loadOrders()
+  }, [loadOrders])
 
-  const loadOrders = async () => {
-    const data = await window.api.orders.getByDateRange(startDate, endDate)
-    setOrders(data)
+  useEffect(() => setVisible(PAGE_SIZE), [startDate, endDate, statusFilter, searchQuery])
+
+  const applyPeriod = (next: PeriodPreset) => {
+    setPeriod(next)
+    if (next === 'custom') return
+    const start = localToday(new Date(Date.now() - PRESET_DAYS[next] * DAY_MS))
+    setStartDate(start)
+    setEndDate(next === 'yesterday' ? start : localToday())
   }
 
-  const viewOrder = async (id: number) => {
-    const order = await window.api.orders.getById(id)
-    setSelectedOrder(order)
-    setEditMode(false)
-    setEditError('')
-    setPrintNotice(null)
-  }
-
-  const markDone = async (id: number) => {
-    await window.api.orders.updateStatus(id, 'completed')
-    loadOrders()
-    if (selectedOrder?.id === id) {
-      const updated = await window.api.orders.getById(id)
-      setSelectedOrder(updated)
+  const searched = useMemo(() => orders.filter((order) => matchesSearch(order, searchQuery)), [orders, searchQuery])
+  const counts = useMemo(() => {
+    const result: Record<StatusFilter, number> = { all: 0, ongoing: 0, completed: 0, cancelled: 0, unpaid: 0 }
+    for (const order of searched) {
+      for (const key of Object.keys(result) as StatusFilter[]) if (matchesStatus(order, key)) result[key]++
     }
+    return result
+  }, [searched])
+  const filteredOrders = useMemo(
+    () => searched.filter((order) => matchesStatus(order, statusFilter)),
+    [searched, statusFilter]
+  )
+
+  const clearFilters = () => {
+    setSearchQuery('')
+    setStatusFilter('all')
   }
-
-  const confirmCancel = async () => {
-    if (!cancelConfirm) return
-    await window.api.orders.cancel(cancelConfirm.id)
-    setCancelConfirm(null)
-    loadOrders()
-    if (selectedOrder?.id === cancelConfirm.id) {
-      const updated = await window.api.orders.getById(cancelConfirm.id)
-      setSelectedOrder(updated)
-    }
-  }
-
-  // Edit helpers
-  const startEdit = () => {
-    if (!selectedOrder?.items) return
-    if (orderEditRejection(selectedOrder)) return
-    setEditError('')
-    setEditItems(
-      selectedOrder.items.map((item: any) => ({
-        order_item_id: item.id,
-        menu_item_id: item.menu_item_id,
-        menu_item_name: item.menu_item_name,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        notes: item.notes,
-        worker_id: item.worker_id
-      }))
-    )
-    setEditMode(true)
-  }
-
-  const updateEditQty = (index: number, qty: number) => {
-    if (qty < 1) {
-      setEditItems(editItems.filter((_: any, i: number) => i !== index))
-      return
-    }
-    const updated = [...editItems]
-    updated[index] = { ...updated[index], quantity: qty }
-    setEditItems(updated)
-  }
-
-  const removeEditItem = (index: number) => {
-    setEditItems(editItems.filter((_: any, i: number) => i !== index))
-  }
-
-  const saveEdit = async () => {
-    if (!selectedOrder || editItems.length === 0) return
-    setSavingEdit(true)
-    setEditError('')
-    try {
-      const updated = await window.api.orders.updateItems(
-        selectedOrder.id,
-        editItems.map((item: any) => ({
-          order_item_id: item.order_item_id,
-          menu_item_id: item.menu_item_id,
-          quantity: item.quantity,
-          notes: item.notes || undefined,
-          worker_id: item.worker_id || undefined,
-          // Keep each line's recorded price (don't silently re-price to current menu)
-          unit_price: item.unit_price
-        })),
-        // Preserve the stored legacy discount; do not apply today's promotion rules.
-        undefined,
-        undefined
-      )
-      setSelectedOrder(updated)
-      setEditMode(false)
-      loadOrders()
-    } catch (err) {
-      // Previously only logged: the dialog looked as if it had saved. Keep the edit on screen
-      // and say why (e.g. the order belongs to a previous business day).
-      console.error('Failed to update order:', err)
-      const rejection = parseOrderEditRejection(err)
-      setEditError(
-        rejection
-          ? t(`orders.editRejected.${rejection}`, { number: selectedOrder.daily_number })
-          : t('orders.editRejected.generic', { message: stripIpcPrefix(err) })
-      )
-    } finally {
-      setSavingEdit(false)
-    }
-  }
-
-  const editSubtotal = editItems.reduce((sum: number, item: any) => sum + item.unit_price * item.quantity, 0)
-  // saveEdit preserves the order's existing discount, so the total shown while editing must
-  // subtract it too — otherwise the admin confirms one number and a smaller one gets stored.
-  const editDiscount = Math.min(Math.max(0, selectedOrder?.discount_amount ?? 0), editSubtotal)
-  const editTotal = editSubtotal - editDiscount
-
-  const statusVariant = (status: string): 'success' | 'warning' | 'danger' | 'info' | 'default' => {
-    const map: Record<string, any> = {
-      pending: 'info',
-      preparing: 'info',
-      ready: 'success',
-      completed: 'success',
-      cancelled: 'danger'
-    }
-    return map[status] || 'default'
-  }
-
-  const previewReceipt = async (orderId: number) => {
-    const html = await window.api.printer.previewReceipt(orderId)
-    if (html) setPreviewHtml(html)
-  }
-
-  const runPrint = async (request: () => Promise<PrintResult>, document: string) => {
-    setPrintNotice(null)
-    try {
-      const result = await request()
-      if (result?.success) {
-        setPrintNotice({
-          kind: 'success',
-          text: result.printerName
-            ? t('orders.reprint.sent', { document, printer: result.printerName })
-            : t('orders.reprint.sentDefault', { document })
-        })
-      } else {
-        setPrintNotice({
-          kind: 'error',
-          text: t('orders.reprint.failed', { document, error: result?.error || t('orders.reprint.failedUnknown') })
-        })
-      }
-    } catch (error) {
-      setPrintNotice({ kind: 'error', text: t('orders.reprint.failed', { document, error: stripIpcPrefix(error) }) })
-    }
-  }
-
-  const isOngoing = (status: string) => status === 'preparing' || status === 'pending'
-
-  const filteredOrders = useMemo(() => {
-    return orders.filter((order) => {
-      // Status filter
-      if (statusFilter !== 'all' && order.status !== statusFilter) return false
-      // Search by order number, phone, or table
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase()
-        const matchesNumber = String(order.daily_number).includes(q)
-        const matchesPhone = order.customer_phone?.toLowerCase().includes(q)
-        const matchesTable = order.table_number?.toLowerCase().includes(q)
-        if (!matchesNumber && !matchesPhone && !matchesTable) return false
-      }
-      return true
-    })
-  }, [orders, searchQuery, statusFilter])
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">{t('nav.ordersHistory')}</h1>
-
-      <div className="flex flex-wrap gap-3 mb-4">
-        <input
-          type="date"
-          value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-          className="border rounded-lg px-3 py-2 text-sm"
-        />
-        <span className="self-center text-gray-400">-</span>
-        <input
-          type="date"
-          value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
-          className="border rounded-lg px-3 py-2 text-sm"
-        />
-
-        <div className="relative">
-          <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={t('orders.searchOrders')}
-            className="ps-10 pe-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 w-48"
+      <PageHeader
+        title={t('nav.ordersHistory')}
+        actions={
+          <IconButton
+            icon={<RefreshCw />}
+            label={t('orderHistory.refresh')}
+            variant="secondary"
+            size="lg"
+            onClick={() => { setLoading(true); void loadOrders() }}
           />
-        </div>
+        }
+      />
 
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="border rounded-lg px-3 py-2 text-sm"
-        >
-          <option value="all">{t('common.all')}</option>
-          <option value="preparing">{t('orders.status.preparing')}</option>
-          <option value="completed">{t('orders.status.completed')}</option>
-          <option value="cancelled">{t('orders.status.cancelled')}</option>
-        </select>
+      <HistoryStats orders={orders} loading={loading} />
 
-        <span className="self-center text-sm text-gray-400">
-          {t('orders.ordersFound', { count: filteredOrders.length })}
-        </span>
-      </div>
+      <HistoryFilters
+        period={period}
+        onPeriod={applyPeriod}
+        startDate={startDate}
+        endDate={endDate}
+        onStartDate={setStartDate}
+        onEndDate={setEndDate}
+        status={statusFilter}
+        onStatus={setStatusFilter}
+        counts={counts}
+        search={searchQuery}
+        onSearch={setSearchQuery}
+      />
 
-      <div className="bg-white rounded-xl border overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b">
-            <tr>
-              <th className="text-start px-4 py-3 font-medium text-gray-600">#</th>
-              <th className="text-start px-4 py-3 font-medium text-gray-600">{t('orders.title')}</th>
-              <th className="text-start px-4 py-3 font-medium text-gray-600">Type</th>
-              <th className="text-start px-4 py-3 font-medium text-gray-600">{t('orders.total')}</th>
-              <th className="text-start px-4 py-3 font-medium text-gray-600">Status</th>
-              <th className="text-end px-4 py-3 font-medium text-gray-600">{t('common.actions')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredOrders.map((order) => (
-              <tr key={order.id} className="border-b last:border-0 hover:bg-gray-50 cursor-pointer" onClick={() => viewOrder(order.id)}>
-                <td className="px-4 py-3 font-medium">#{order.daily_number}</td>
-                {/* created_at is a UTC ISO string; rendering it raw showed an unformatted
-                    timestamp an hour behind the wall clock (Algeria is UTC+1). */}
-                <td className="px-4 py-3 text-gray-500">{formatDateTime(order.created_at)}</td>
-                <td className="px-4 py-3">
-                  <Badge variant={order.order_type === 'delivery' ? 'info' : 'default'}>
-                    {t(`orders.${order.order_type}`)}
-                  </Badge>
-                </td>
-                <td className="px-4 py-3 font-medium">{formatCurrency(order.total)}</td>
-                <td className="px-4 py-3">
-                  <Badge variant={statusVariant(order.status)}>{t(`orders.status.${order.status}`)}</Badge>
-                </td>
-                <td className="px-4 py-3 text-end">
-                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); viewOrder(order.id) }}>
-                    {t('orders.viewReceipt')}
-                  </Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {filteredOrders.length === 0 && (
-          <div className="text-center py-12 text-gray-400">{t('orders.noOrders')}</div>
-        )}
-      </div>
+      <OrdersTable
+        orders={filteredOrders.slice(0, visible)}
+        total={filteredOrders.length}
+        loading={loading}
+        filtered={orders.length > 0}
+        multiDay={startDate !== endDate}
+        selectedId={selectedId}
+        onOpen={(order) => setSelectedId(order.id)}
+        onClearFilters={clearFilters}
+        onShowMore={() => setVisible((v) => v + PAGE_SIZE)}
+      />
 
-      {/* Cancel Confirmation Modal */}
-      {cancelConfirm && (
-        <Modal isOpen onClose={() => setCancelConfirm(null)} title={t('orders.cancelConfirm')} size="sm">
-          <div className="text-center py-4">
-            <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <AlertTriangle className="h-7 w-7 text-red-600" />
-            </div>
-            <p className="text-gray-600 mb-1">
-              {t('orders.orderNumber', { number: cancelConfirm.daily_number })}
-            </p>
-            <p className="text-sm text-gray-500">{t('orders.cancelWarning')}</p>
-          </div>
-          <div className="flex gap-2 pt-4 border-t">
-            <Button variant="secondary" onClick={() => setCancelConfirm(null)} className="flex-1">
-              {t('common.no')}
-            </Button>
-            <Button variant="danger" onClick={confirmCancel} className="flex-1">
-              {t('orders.confirmCancel')}
-            </Button>
-          </div>
-        </Modal>
-      )}
-
-      {/* Order detail modal */}
-      {selectedOrder && (
-        <Modal isOpen onClose={() => { setSelectedOrder(null); setEditMode(false) }} title={t('orders.orderNumber', { number: selectedOrder.daily_number })} size="lg">
-          <div className="space-y-4">
-            {printNotice && (
-              <div
-                className={`flex items-start gap-2 rounded-lg border p-3 ${
-                  printNotice.kind === 'error' ? 'border-red-300 bg-red-50' : 'border-green-300 bg-green-50'
-                }`}
-                role={printNotice.kind === 'error' ? 'alert' : 'status'}
-              >
-                {printNotice.kind === 'error'
-                  ? <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
-                  : <Check className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />}
-                <p className={`min-w-0 flex-1 text-sm font-medium break-words ${
-                  printNotice.kind === 'error' ? 'text-red-800' : 'text-green-800'
-                }`}>
-                  {printNotice.text}
-                </p>
-                <button type="button" onClick={() => setPrintNotice(null)} aria-label={t('orders.reprint.dismiss')}>
-                  <X className={`h-4 w-4 ${printNotice.kind === 'error' ? 'text-red-600' : 'text-green-600'}`} />
-                </button>
-              </div>
-            )}
-            {editError && (
-              <div className="flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 p-3" role="alert">
-                <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-red-800">{t('orders.orderError.updateTitle')}</p>
-                  <p className="text-xs text-red-700 break-words">{editError}</p>
-                </div>
-                <button type="button" onClick={() => setEditError('')} aria-label={t('orders.orderError.dismiss')}>
-                  <X className="h-4 w-4 text-red-600" />
-                </button>
-              </div>
-            )}
-            <div className="flex gap-4 text-sm">
-              <Badge variant={statusVariant(selectedOrder.status)}>
-                {t(`orders.status.${selectedOrder.status}`)}
-              </Badge>
-              <Badge variant={selectedOrder.order_type === 'delivery' ? 'info' : 'default'}>
-                {t(`orders.${selectedOrder.order_type}`)}
-              </Badge>
-              {selectedOrder.table_number && <span className="text-gray-500">{t('orders.tableNumber')}: {selectedOrder.table_number}</span>}
-              {selectedOrder.customer_phone && <span>Tel: {selectedOrder.customer_phone}</span>}
-            </div>
-
-            {editMode ? (
-              <div>
-                <div className="space-y-2 mb-4">
-                  {editItems.map((item: any, i: number) => (
-                    <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex-1 min-w-0">
-                        <span className="text-sm font-medium text-gray-900">{item.menu_item_name}</span>
-                        <p className="text-xs text-gray-500">{formatCurrency(item.unit_price)} each</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => updateEditQty(i, item.quantity - 1)}
-                          className="w-7 h-7 rounded-lg bg-white border flex items-center justify-center hover:bg-gray-100"
-                        >
-                          <Minus className="h-3 w-3" />
-                        </button>
-                        <span className="text-sm font-medium w-6 text-center">{item.quantity}</span>
-                        <button
-                          onClick={() => updateEditQty(i, item.quantity + 1)}
-                          className="w-7 h-7 rounded-lg bg-white border flex items-center justify-center hover:bg-gray-100"
-                        >
-                          <Plus className="h-3 w-3" />
-                        </button>
-                        <button
-                          onClick={() => removeEditItem(i)}
-                          className="p-1 hover:bg-red-100 rounded text-gray-400 hover:text-red-500 ms-1"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {editDiscount > 0 && (
-                  <div className="flex justify-between text-sm text-green-600 mb-1">
-                    <span>{selectedOrder?.discount_details || 'Discount'}</span>
-                    <span>-{formatCurrency(editDiscount)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-lg font-bold mb-4">
-                  <span>{t('orders.total')}</span>
-                  <span className="text-orange-600">{formatCurrency(editTotal)}</span>
-                </div>
-
-                <div className="flex gap-2">
-                  <Button variant="secondary" onClick={() => { setEditMode(false); setEditError('') }} className="flex-1">
-                    {t('common.cancel')}
-                  </Button>
-                  <Button onClick={saveEdit} loading={savingEdit} disabled={editItems.length === 0} className="flex-1">
-                    {t('common.save')}
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="border rounded-lg overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="text-start px-3 py-2">{t('menu.name')}</th>
-                        <th className="text-start px-3 py-2">{t('orders.quantity')}</th>
-                        <th className="text-start px-3 py-2">{t('menu.price')}</th>
-                        <th className="text-start px-3 py-2">{t('orders.notes')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedOrder.items?.map((item: any) => (
-                        <tr key={item.id} className="border-t">
-                          <td className="px-3 py-2">{item.menu_item_name}</td>
-                          <td className="px-3 py-2">{item.quantity}</td>
-                          <td className="px-3 py-2">{formatCurrency(item.total_price)}</td>
-                          <td className="px-3 py-2 text-gray-500">{item.notes || '-'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="flex justify-between text-lg font-bold">
-                  <span>{t('orders.total')}</span>
-                  <span className="text-orange-600">{formatCurrency(selectedOrder.total)}</span>
-                </div>
-
-                <div className="flex gap-2 pt-4 border-t">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => previewReceipt(selectedOrder.id)}
-                  >
-                    {t('orders.previewReceipt')}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => runPrint(
-                      () => window.api.printer.printReceipt(selectedOrder.id, REPRINT),
-                      t('orders.reprint.receipt')
-                    )}
-                  >
-                    {t('orders.printReceipt')}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => runPrint(
-                      () => window.api.printer.printKitchen(selectedOrder.id, REPRINT),
-                      t('orders.reprint.kitchen')
-                    )}
-                  >
-                    {t('orders.printKitchen')}
-                  </Button>
-                </div>
-
-                {isOngoing(selectedOrder.status) && orderEditRejection(selectedOrder) === 'past_day' && (
-                  // Same business rule the main process enforces: only today's orders are
-                  // editable. Explain instead of offering an Edit that can never save.
-                  <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
-                    <Info className="h-4 w-4 mt-0.5 shrink-0" />
-                    <p>{t('orders.editLocked.past_day')}</p>
-                  </div>
-                )}
-                {isOngoing(selectedOrder.status) && (
-                  <div className="flex gap-2 pt-4 border-t">
-                    {orderEditRejection(selectedOrder) === null && (
-                      <Button variant="secondary" size="sm" onClick={startEdit}>
-                        <Pencil className="h-4 w-4" />
-                        {t('orders.editOrder')}
-                      </Button>
-                    )}
-                    <Button size="sm" onClick={() => markDone(selectedOrder.id)}>
-                      <Check className="h-4 w-4" />
-                      {t('orders.markDone')}
-                    </Button>
-                    <Button variant="danger" size="sm" onClick={() => setCancelConfirm(selectedOrder)}>
-                      <X className="h-4 w-4" />
-                      {t('orders.status.cancelled')}
-                    </Button>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </Modal>
-      )}
-
-      {/* Receipt Preview Modal — the receipt is a full document with its own reset CSS and
-          dir attribute, so it renders in an isolated, script-less iframe. Injecting it into the
-          app page collapsed the app's spacing, switched it to Courier, and lost RTL. */}
-      {previewHtml && (
-        <Modal isOpen onClose={() => setPreviewHtml(null)} title={t('orders.previewReceipt')} size="sm">
-          <div className="flex justify-center">
-            <iframe
-              title={t('orders.previewReceipt')}
-              srcDoc={previewHtml}
-              sandbox=""
-              className="receipt-paper border rounded-lg shadow-inner h-[70vh] max-w-full"
-              style={{ width: `calc(${receiptPaperWidth(previewHtml)} + 24px)` }}
-            />
-          </div>
-          <div className="flex gap-2 mt-4">
-            <Button variant="secondary" onClick={() => setPreviewHtml(null)} className="flex-1">
-              {t('common.close')}
-            </Button>
-            {selectedOrder && (
-              <Button
-                onClick={() => {
-                  void runPrint(
-                    () => window.api.printer.printReceipt(selectedOrder.id, REPRINT),
-                    t('orders.reprint.receipt')
-                  )
-                  setPreviewHtml(null)
-                }}
-                className="flex-1"
-              >
-                {t('orders.printReceipt')}
-              </Button>
-            )}
-          </div>
-        </Modal>
-      )}
+      <OrderDetailDrawer orderId={selectedId} onClose={() => setSelectedId(null)} onChanged={() => void loadOrders()} />
     </div>
   )
 }

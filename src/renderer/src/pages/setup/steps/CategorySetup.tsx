@@ -1,16 +1,21 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Plus, X } from 'lucide-react'
+import { Info, LayoutGrid, Plus, X } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
+import { IconButton } from '../../../components/ui/IconButton'
 import { Input } from '../../../components/ui/Input'
+import { SegmentedControl } from '../../../components/ui/SegmentedControl'
+import { EmptyState } from '../../../components/ui/EmptyState'
+import { VirtualKeyboard } from '../../../components/VirtualKeyboard'
+import { StepLayout } from '../parts/StepLayout'
 import type { SetupData } from '../SetupWizard'
 
 const EMOJI_SUGGESTIONS = ['🌮', '🍔', '🥪', '🍕', '🍽️', '📦', '🥤', '🍟', '🥗', '🍗', '🌯', '🧆', '🥙', '🍰', '☕', '🍝', '🥘', '🍲']
 
 const FOOD_LANGUAGES = [
-  { code: 'en', label: 'English', flag: '🇬🇧' },
-  { code: 'fr', label: 'Français', flag: '🇫🇷' },
-  { code: 'ar', label: 'العربية', flag: '🇩🇿' }
+  { value: 'en', label: 'English' },
+  { value: 'fr', label: 'Français' },
+  { value: 'ar', label: 'العربية' }
 ]
 
 interface Props {
@@ -18,9 +23,14 @@ interface Props {
   updateData: (partial: Partial<SetupData>) => void
 }
 
+/** Touch mode: which text the on-screen keyboard is editing (the "new" field or a category row). */
+type KeyboardTarget = { kind: 'new' } | { kind: 'category'; index: number }
+
 export function CategorySetup({ data, updateData }: Props) {
   const { t } = useTranslation()
   const [newName, setNewName] = useState('')
+  const isTouch = data.inputMode === 'touchscreen'
+  const [keyboardTarget, setKeyboardTarget] = useState<KeyboardTarget | null>(null)
 
   const getCatDisplayName = (cat: { name: string; name_ar?: string; name_fr?: string }) => {
     if (data.foodLanguage === 'ar' && cat.name_ar) return cat.name_ar
@@ -37,6 +47,7 @@ export function CategorySetup({ data, updateData }: Props) {
   }
 
   const removeCategory = (index: number) => {
+    setKeyboardTarget(null)
     updateData({
       categories: data.categories.filter((_, i) => i !== index)
     })
@@ -61,89 +72,130 @@ export function CategorySetup({ data, updateData }: Props) {
     updateData({ categories: updated })
   }
 
+  const keyboardValue = (): string => {
+    if (!keyboardTarget) return ''
+    if (keyboardTarget.kind === 'new') return newName
+    const cat = data.categories[keyboardTarget.index]
+    return cat ? getCatDisplayName(cat) : ''
+  }
+
+  const handleKeyboardChange = (value: string) => {
+    if (!keyboardTarget) return
+    if (keyboardTarget.kind === 'new') setNewName(value)
+    else if (data.categories[keyboardTarget.index]) updateCategoryName(keyboardTarget.index, value)
+  }
+
   return (
-    <div className="space-y-6">
-      <div className="text-center">
-        <h2 className="text-2xl font-bold text-gray-900">{t('setup.categories.title')}</h2>
-        <p className="text-gray-500 mt-1">{t('setup.categories.subtitle')}</p>
-      </div>
-
-      {/* Food name language picker */}
-      <div className="bg-white rounded-xl p-4 shadow-sm">
-        <p className="text-sm font-medium text-gray-700 mb-3">{t('setup.categories.foodLanguage')}</p>
-        <div className="flex gap-2">
-          {FOOD_LANGUAGES.map((lang) => (
-            <button
-              key={lang.code}
-              onClick={() => updateData({ foodLanguage: lang.code })}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-medium transition-colors border-2 ${
-                data.foodLanguage === lang.code
-                  ? 'border-orange-500 bg-orange-50 text-orange-700'
-                  : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300'
-              }`}
-            >
-              <span className="text-lg">{lang.flag}</span>
-              {lang.label}
-            </button>
-          ))}
-        </div>
-        <p className="text-xs text-gray-400 mt-2 text-center">{t('setup.categories.foodLanguageHint')}</p>
-      </div>
-
-      <div className="bg-white rounded-xl p-6 shadow-sm">
-        {/* Add new */}
-        <div className="flex gap-2 mb-4">
-          <Input
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder={t('setup.categories.namePlaceholder')}
-            onKeyDown={(e) => e.key === 'Enter' && addCategory()}
+    <StepLayout icon={<LayoutGrid />} title={t('setup.categories.title')}>
+      {/* Food name language picker (the long explanation lives in the info tooltip) */}
+      <section>
+        <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink-2">
+          {t('setup.categories.foodLanguage')}
+          <span
+            role="img"
+            aria-label={t('setup.categories.foodLanguageHint')}
+            title={t('setup.categories.foodLanguageHint')}
+            className="inline-flex text-muted"
+          >
+            <Info className="h-4 w-4" />
+          </span>
+        </p>
+        <div dir="ltr">
+          <SegmentedControl
+            size="lg"
+            fullWidth
+            value={data.foodLanguage}
+            onChange={(value) => updateData({ foodLanguage: value })}
+            options={FOOD_LANGUAGES}
+            ariaLabel={t('setup.categories.foodLanguage')}
           />
-          <Button onClick={addCategory} disabled={!newName.trim()}>
-            <Plus className="h-4 w-4" />
+        </div>
+      </section>
+
+      <section className="mt-5 border-t border-line pt-5">
+        {/* Add new */}
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <Input
+              inputSize="lg"
+              dir="auto"
+              value={newName}
+              readOnly={isTouch}
+              onClick={isTouch ? () => setKeyboardTarget({ kind: 'new' }) : undefined}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder={t('setup.categories.namePlaceholder')}
+              onKeyDown={(e) => e.key === 'Enter' && addCategory()}
+              className={isTouch ? 'cursor-pointer' : undefined}
+            />
+          </div>
+          <Button variant="soft" size="lg" onClick={addCategory} disabled={!newName.trim()} icon={<Plus className="h-5 w-5" />}>
             {t('setup.categories.add')}
           </Button>
         </div>
 
         {/* Category list */}
-        <div className="space-y-2">
-          {data.categories.map((cat, i) => (
-            <div
-              key={i}
-              className="flex items-center gap-3 p-3 bg-gray-100 rounded-lg border border-gray-200 group"
-            >
-              {/* Emoji picker */}
-              <div className="relative">
+        {data.categories.length > 0 ? (
+          <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+            {data.categories.map((cat, i) => (
+              <li
+                key={i}
+                className="contain-card flex items-center gap-2 rounded-2xl border border-line bg-surface-2 p-2 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/15"
+              >
+                {/* Emoji: tap cycles through the suggestions */}
                 <button
-                  className="w-10 h-10 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-xl hover:border-orange-400 transition-colors shrink-0"
+                  type="button"
+                  className="tap h-12 w-12 shrink-0 rounded-xl border border-line bg-surface text-2xl flex items-center justify-center hover:border-primary"
                   onClick={() => {
                     const next = EMOJI_SUGGESTIONS[(EMOJI_SUGGESTIONS.indexOf(cat.icon || '🍽️') + 1) % EMOJI_SUGGESTIONS.length]
                     updateCategoryIcon(i, next)
                   }}
-                  title="Click to change emoji"
+                  aria-label={t('setup.categories.changeIcon')}
+                  title={t('setup.categories.changeIcon')}
                 >
                   {cat.icon || '🍽️'}
                 </button>
-              </div>
-              <input
-                value={getCatDisplayName(cat)}
-                onChange={(e) => updateCategoryName(i, e.target.value)}
-                className="flex-1 bg-transparent border-none focus:outline-none text-sm font-medium text-gray-900"
-              />
-              <button
-                onClick={() => removeCategory(i)}
-                className="p-2 rounded hover:bg-red-100 text-gray-400 hover:text-red-500 transition-opacity"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          ))}
-        </div>
-
-        {data.categories.length === 0 && (
-          <p className="text-center text-gray-400 py-8 text-sm">{t('common.noResults')}</p>
+                <input
+                  data-ui="input"
+                  dir="auto"
+                  value={getCatDisplayName(cat)}
+                  readOnly={isTouch}
+                  onClick={isTouch ? () => setKeyboardTarget({ kind: 'category', index: i }) : undefined}
+                  onChange={(e) => updateCategoryName(i, e.target.value)}
+                  aria-label={t('setup.categories.namePlaceholder')}
+                  className="min-h-12 min-w-0 flex-1 bg-transparent px-2 text-base font-semibold text-ink focus:outline-none"
+                />
+                <IconButton
+                  icon={<X />}
+                  label={t('common.remove')}
+                  variant="danger"
+                  size="lg"
+                  onClick={() => removeCategory(i)}
+                />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <EmptyState
+            compact
+            icon={<LayoutGrid />}
+            title={t('setup.categories.empty')}
+            description={t('setup.hint.categories')}
+          />
         )}
-      </div>
-    </div>
+      </section>
+
+      {/* Virtual Keyboard for touchscreen mode (category names can be Arabic) */}
+      {isTouch && keyboardTarget && (
+        <VirtualKeyboard
+          visible
+          type="text"
+          extended
+          initialLayout={data.foodLanguage === 'ar' ? 'arabic' : 'latin'}
+          value={keyboardValue()}
+          onChange={handleKeyboardChange}
+          onClose={() => setKeyboardTarget(null)}
+        />
+      )}
+    </StepLayout>
   )
 }
