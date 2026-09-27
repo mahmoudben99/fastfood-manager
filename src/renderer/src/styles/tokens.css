@@ -1,0 +1,308 @@
+/*
+ * v4 "Ember" design tokens.
+ * Raw values live in CSS variables (:root = light, .dark = dark) so a theme switch is one class.
+ * @theme inline exposes them as Tailwind utilities: bg-canvas, bg-surface, text-ink, border-line,
+ * bg-primary, text-on-primary, text-primary-ink, bg-cat-3, shadow-e2 ... (see docs/design/DESIGN.md).
+ */
+
+/* dark: variants follow the .dark class on <html> (Tailwind v4 defaults to the OS media query). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces: canvas < surface (cards) ; surface-2/3 = sunken fills, chips, tracks */
+  --canvas: #faf7f2;
+  --surface: #ffffff;
+  --surface-2: #f4efe8;
+  --surface-3: #e9e2d8;
+  --surface-inverse: #1c1917;
+  --overlay: rgb(28 25 23 / 0.5);
+
+  /* Ink (text). muted >= 4.5:1 on surface AND canvas; faint = placeholders/disabled only */
+  --ink: #1c1917;
+  --ink-2: #44403c;
+  --muted: #6f665e;
+  --faint: #a39a91;
+  --on-inverse: #faf7f2;
+
+  /* Lines */
+  --line: #e9e2d8;
+  --line-strong: #d6ccbf;
+
+  /* Primary = ember. Filled buttons use the gradient (white text >= 4:1 at the label). */
+  --primary: #dc4f0d;
+  --primary-hover: #c8470b;
+  --primary-press: #b13e0a;
+  --primary-from: #ea580c;
+  --primary-to: #c2410c;
+  --primary-soft: #fff0e3;
+  --primary-soft-2: #ffdcc0;
+  --primary-ink: #c2410c;
+  --on-primary: #ffffff;
+  --accent: #ff7a1a; /* glows, icons, indicators only; never behind text */
+  --focus: #f26a1f;
+
+  /* Semantic */
+  --success: #16a34a;
+  --success-soft: #e7f6ec;
+  --success-ink: #15803d;
+  --success-strong: #15803d; /* filled, white text >= 4.5:1 */
+  --warning: #d97706;
+  --warning-soft: #fdf2dc;
+  --warning-ink: #a15c07;
+  --danger: #dc2626;
+  --danger-soft: #fdeceb;
+  --danger-ink: #b91c1c;
+  --danger-strong: #c81e1e;
+  --info: #2563eb;
+  --info-soft: #e8effd;
+  --info-ink: #1d4ed8;
+
+  /* Category accents: similar lightness, distinct hue. Use as 4px bars, dots, tinted chips. */
+  --cat-1: #ef5b1b; /* ember */
+  --cat-2: #d99a00; /* saffron */
+  --cat-3: #3c9a4a; /* basil */
+  --cat-4: #0f9790; /* mint */
+  --cat-5: #2f78dc; /* sky */
+  --cat-6: #6b57e0; /* grape */
+  --cat-7: #bf3d9e; /* plum */
+  --cat-8: #dc3f57; /* tomato */
+  --cat-9: #8b6546; /* coffee */
+  --cat-10: #5b7086; /* slate */
+
+  /* Elevation (warm-tinted, layered). Dark mode leans on lightness + hairline borders instead. */
+  --elev-1: 0 1px 2px rgb(41 37 36 / 0.05), 0 1px 3px rgb(41 37 36 / 0.06);
+  --elev-2: 0 1px 2px rgb(41 37 36 / 0.04), 0 4px 14px -2px rgb(41 37 36 / 0.09);
+  --elev-3: 0 2px 4px rgb(41 37 36 / 0.04), 0 14px 32px -8px rgb(41 37 36 / 0.16);
+  --elev-4: 0 24px 56px -12px rgb(41 37 36 / 0.28), 0 4px 12px rgb(41 37 36 / 0.06);
+  --elev-primary: 0 1px 2px rgb(194 65 12 / 0.3), 0 6px 16px -4px rgb(234 88 12 / 0.45);
+  --highlight: inset 0 1px 0 rgb(255 255 255 / 0.22);
+
+  /* Admin navigation rail: warm charcoal in both themes */
+  --nav-bg: #1c1917;
+  --nav-bg-2: #24201d;
+  --nav-ink: #f5efe8;
+  --nav-muted: #b3aaa0;
+  --nav-faint: #7a7169;
+  --nav-hover: rgb(255 255 255 / 0.06);
+  --nav-active: rgb(255 255 255 / 0.1);
+  --nav-line: rgb(255 255 255 / 0.08);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --dur-tap: 100ms;
+  --dur-fast: 150ms;
+  --dur-base: 200ms;
+  --dur-slow: 250ms;
+
+  /* Direction helper for transforms (1 in LTR, -1 in RTL) */
+  --dir: 1;
+}
+
+[dir='rtl'] {
+  --dir: -1;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --canvas: #141110;
+  --surface: #1d1916;
+  --surface-2: #26211d;
+  --surface-3: #312b26;
+  --surface-inverse: #f5efe8;
+  --overlay: rgb(8 6 5 / 0.66);
+
+  --ink: #f5efe8;
+  --ink-2: #ddd4ca;
+  --muted: #aba196;
+  --faint: #7b726a;
+  --on-inverse: #1c1917;
+
+  --line: #2f2925;
+  --line-strong: #403832;
+
+  --nav-bg: #0f0d0c;
+  --nav-bg-2: #171311;
+
+  --primary: #ea5a12;
+  --primary-hover: #f3691f;
+  --primary-press: #d24e0e;
+  --primary-from: #ee6117;
+  --primary-to: #c9440d;
+  --primary-soft: #33211a;
+  --primary-soft-2: #472a1b;
+  --primary-ink: #ff9a52;
+  --on-primary: #ffffff;
+  --accent: #ff8a3d;
+  --focus: #ff8a3d;
+
+  --success: #22c55e;
+  --success-soft: #142a1c;
+  --success-ink: #5ee08e;
+  --success-strong: #178a42;
+  --warning: #f59e0b;
+  --warning-soft: #2f2412;
+  --warning-ink: #fbbf45;
+  --danger: #ef4444;
+  --danger-soft: #361a19;
+  --danger-ink: #fb7d7d;
+  --danger-strong: #d42a2a;
+  --info: #3b82f6;
+  --info-soft: #172338;
+  --info-ink: #86b4ff;
+
+  --cat-1: #ff7433;
+  --cat-2: #f0b429;
+  --cat-3: #5bbf69;
+  --cat-4: #2dbdb4;
+  --cat-5: #5a9cf5;
+  --cat-6: #8f7ef5;
+  --cat-7: #e062c0;
+  --cat-8: #f76a7e;
+  --cat-9: #b58b69;
+  --cat-10: #8a9db2;
+
+  --elev-1: 0 0 0 1px rgb(255 255 255 / 0.035), 0 1px 2px rgb(0 0 0 / 0.4);
+  --elev-2: 0 0 0 1px rgb(255 255 255 / 0.04), 0 4px 14px -2px rgb(0 0 0 / 0.5);
+  --elev-3: 0 0 0 1px rgb(255 255 255 / 0.05), 0 14px 32px -8px rgb(0 0 0 / 0.6);
+  --elev-4: 0 0 0 1px rgb(255 255 255 / 0.06), 0 24px 56px -12px rgb(0 0 0 / 0.7);
+  --elev-primary: 0 0 0 1px rgb(255 138 61 / 0.25), 0 6px 20px -4px rgb(255 106 26 / 0.4);
+  --highlight: inset 0 1px 0 rgb(255 255 255 / 0.14);
+}
+
+/* Performance mode (settings.perf_mode = 'true' -> <html class="perf">): flat, no glow. */
+.perf {
+  --elev-1: 0 0 0 1px var(--line);
+  --elev-2: 0 0 0 1px var(--line);
+  --elev-3: 0 0 0 1px var(--line-strong);
+  --elev-4: 0 0 0 1px var(--line-strong);
+  --elev-primary: 0 0 #0000;
+  --highlight: 0 0 #0000;
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-inverse: var(--surface-inverse);
+  --color-on-inverse: var(--on-inverse);
+  --color-overlay: var(--overlay);
+
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-press: var(--primary-press);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-soft-2: var(--primary-soft-2);
+  --color-primary-ink: var(--primary-ink);
+  --color-on-primary: var(--on-primary);
+  --color-accent: var(--accent);
+  --color-focus: var(--focus);
+
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-ink: var(--success-ink);
+  --color-success-strong: var(--success-strong);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-ink: var(--warning-ink);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-ink: var(--danger-ink);
+  --color-danger-strong: var(--danger-strong);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-info-ink: var(--info-ink);
+
+  --color-cat-1: var(--cat-1);
+  --color-cat-2: var(--cat-2);
+  --color-cat-3: var(--cat-3);
+  --color-cat-4: var(--cat-4);
+  --color-cat-5: var(--cat-5);
+  --color-cat-6: var(--cat-6);
+  --color-cat-7: var(--cat-7);
+  --color-cat-8: var(--cat-8);
+  --color-cat-9: var(--cat-9);
+  --color-cat-10: var(--cat-10);
+
+  --color-nav: var(--nav-bg);
+  --color-nav-2: var(--nav-bg-2);
+  --color-nav-ink: var(--nav-ink);
+  --color-nav-muted: var(--nav-muted);
+  --color-nav-faint: var(--nav-faint);
+  --color-nav-hover: var(--nav-hover);
+  --color-nav-active: var(--nav-active);
+  --color-nav-line: var(--nav-line);
+
+  --shadow-e1: var(--elev-1);
+  --shadow-e2: var(--elev-2);
+  --shadow-e3: var(--elev-3);
+  --shadow-e4: var(--elev-4);
+  --shadow-glow: var(--elev-primary);
+
+  --font-sans: 'FFM Inter', 'FFM Cairo', 'Segoe UI', system-ui, sans-serif, 'Segoe UI Emoji',
+    'Apple Color Emoji', 'Noto Color Emoji';
+  --font-arabic: 'FFM Cairo', 'FFM Inter', 'Segoe UI', system-ui, sans-serif, 'Segoe UI Emoji',
+    'Apple Color Emoji', 'Noto Color Emoji';
+  --font-num: 'FFM Inter', 'Segoe UI', system-ui, sans-serif;
+
+  /* Touch type scale additions (Tailwind's xs..9xl stay available) */
+  --text-display: 2.5rem;
+  --text-display--line-height: 1.1;
+  --text-display--font-weight: 800;
+  --text-total: 2rem;
+  --text-total--line-height: 1.1;
+  --text-total--font-weight: 800;
+  --text-kpi: 1.75rem;
+  --text-kpi--line-height: 1.15;
+  --text-kpi--font-weight: 700;
+
+  --ease-ember: var(--ease-out);
+}
+
+/*
+ * Legacy palette remap: v3 pages use raw gray-* / orange-* utilities. Re-pointing the scales makes
+ * every un-migrated page warm (stone neutrals, ember accents with AA-safer contrast) at once.
+ * orange-500 is now #ea580c (white text 3.6:1), orange-600 #c2410c for prices/links (5.2:1).
+ */
+@theme {
+  --color-gray-50: #faf7f2;
+  --color-gray-100: #f3eee7;
+  --color-gray-200: #e8e1d7;
+  --color-gray-300: #d6ccbf;
+  --color-gray-400: #8e857c;
+  --color-gray-500: #6f665e;
+  --color-gray-600: #574f48;
+  --color-gray-700: #443d37;
+  --color-gray-800: #2b2622;
+  --color-gray-900: #1c1917;
+  --color-gray-950: #0f0d0c;
+
+  --color-orange-50: #fff6ee;
+  --color-orange-100: #ffe9d6;
+  --color-orange-200: #ffd2ae;
+  --color-orange-300: #ffb27c;
+  --color-orange-400: #ff8c45;
+  --color-orange-500: #ea580c;
+  --color-orange-600: #c2410c;
+  --color-orange-700: #a8380b;
+  --color-orange-800: #8a3310;
+  --color-orange-900: #6e2a11;
+  --color-orange-950: #401406;
+
+  --shadow-sm: 0 1px 2px rgb(41 37 36 / 0.05), 0 1px 3px rgb(41 37 36 / 0.07);
+  --shadow-md: 0 1px 2px rgb(41 37 36 / 0.04), 0 4px 12px -2px rgb(41 37 36 / 0.1);
+  --shadow-lg: 0 2px 4px rgb(41 37 36 / 0.04), 0 12px 28px -6px rgb(41 37 36 / 0.16);
+  --shadow-xl: 0 20px 40px -12px rgb(41 37 36 / 0.25);
+}

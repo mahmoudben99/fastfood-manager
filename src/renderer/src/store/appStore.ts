@@ -1,6 +1,15 @@
 import { create } from 'zustand'
 import i18n from '../i18n'
 import { DEFAULT_CURRENCY_SYMBOL } from '../../../shared/settings-rules'
+import {
+  applyDensity,
+  applyPerfMode,
+  applyTheme,
+  parseDensity,
+  parseThemeMode,
+  type Density,
+  type ThemeMode
+} from '../theme/theme'
 
 interface AppState {
   language: string
@@ -11,6 +20,12 @@ interface AppState {
   activated: boolean
   setupComplete: boolean
   darkMode: boolean
+  /** v4: 'system' follows Windows; darkMode is always the resolved value. */
+  themeMode: ThemeMode
+  /** v4 Performance mode: no shadows/animations (settings.perf_mode). */
+  perfMode: boolean
+  /** v4 UI density: root font-size 15/16/18px (settings.ui_density). */
+  density: Density
   inputMode: string
 
   // Trial / license state
@@ -26,6 +41,9 @@ interface AppState {
   setActivated: (activated: boolean) => void
   setSetupComplete: (complete: boolean) => void
   toggleDarkMode: () => void
+  setThemeMode: (mode: ThemeMode) => void
+  setPerfMode: (on: boolean) => void
+  setDensity: (density: Density) => void
   setInputMode: (mode: string) => void
   setActivationType: (type: 'full' | 'trial' | null) => void
   setTrialStatus: (status: 'active' | 'expired' | 'paused' | 'offline-locked' | null) => void
@@ -43,6 +61,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   activated: false,
   setupComplete: false,
   darkMode: false,
+  themeMode: 'light',
+  perfMode: false,
+  density: 'comfortable',
   inputMode: 'keyboard',
 
   activationType: null,
@@ -82,10 +103,27 @@ export const useAppStore = create<AppState>((set, get) => ({
   setTrialOfflineSecondsLeft: (seconds) => set({ trialOfflineSecondsLeft: seconds }),
 
   toggleDarkMode: () => {
-    const newMode = !get().darkMode
-    set({ darkMode: newMode })
-    document.documentElement.classList.toggle('dark', newMode)
-    window.api.settings.set('dark_mode', newMode ? 'true' : 'false').catch(() => {})
+    get().setThemeMode(get().darkMode ? 'light' : 'dark')
+  },
+
+  setThemeMode: (mode) => {
+    const darkMode = applyTheme(mode, (dark) => set({ darkMode: dark }))
+    set({ themeMode: mode, darkMode })
+    window.api.settings.set('theme_mode', mode).catch(() => {})
+    // Keep the v3 key in sync for anything still reading it.
+    window.api.settings.set('dark_mode', darkMode ? 'true' : 'false').catch(() => {})
+  },
+
+  setPerfMode: (on) => {
+    applyPerfMode(on)
+    set({ perfMode: on })
+    window.api.settings.set('perf_mode', on ? 'true' : 'false').catch(() => {})
+  },
+
+  setDensity: (density) => {
+    applyDensity(density)
+    set({ density })
+    window.api.settings.set('ui_density', density).catch(() => {})
   },
 
   loadSettings: async () => {
@@ -94,8 +132,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       const lang = settings.language || 'en'
       i18n.changeLanguage(lang)
 
-      const darkMode = settings.dark_mode === 'true'
-      document.documentElement.classList.toggle('dark', darkMode)
+      const themeMode = parseThemeMode(settings)
+      const darkMode = applyTheme(themeMode, (dark) => set({ darkMode: dark }))
+      const perfMode = settings.perf_mode === 'true'
+      applyPerfMode(perfMode)
+      const density = parseDensity(settings.ui_density)
+      applyDensity(density)
 
       const activationType = (settings.activation_type as 'full' | 'trial' | null) || null
       const trialExpiresAt = settings.trial_expires_at ? new Date(settings.trial_expires_at) : null
@@ -110,6 +152,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         activated: settings.activation_status === 'activated',
         setupComplete: settings.setup_complete === 'true',
         darkMode,
+        themeMode,
+        perfMode,
+        density,
         inputMode: settings.input_mode || 'keyboard',
         activationType,
         trialExpiresAt,

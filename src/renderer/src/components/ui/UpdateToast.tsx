@@ -53,12 +53,12 @@ export function UpdateToast() {
 
   return (
     <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] animate-slide-down">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 overflow-hidden w-80">
+      <div className="bg-surface rounded-2xl shadow-e4 border border-line overflow-hidden w-80">
         {/* Progress bar at top */}
         {state === 'downloading' && (
-          <div className="h-1 bg-gray-100 dark:bg-gray-700">
+          <div className="h-1 bg-surface-3">
             <div
-              className="h-full bg-gradient-to-r from-orange-400 to-orange-500 transition-all duration-300"
+              className="h-full bg-ember transition-[width] duration-300"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -70,28 +70,28 @@ export function UpdateToast() {
             <div
               className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
                 state === 'ready'
-                  ? 'bg-green-100 dark:bg-green-900/30'
+                  ? 'bg-success-soft'
                   : state === 'downloading'
-                    ? 'bg-blue-100 dark:bg-blue-900/30'
+                    ? 'bg-info-soft'
                     : state === 'error'
-                      ? 'bg-red-100 dark:bg-red-900/30'
-                      : 'bg-orange-100 dark:bg-orange-900/30'
+                      ? 'bg-danger-soft'
+                      : 'bg-primary-soft'
               }`}
             >
               {state === 'ready' ? (
-                <RefreshCw className="h-5 w-5 text-green-600" />
+                <RefreshCw className="h-5 w-5 text-success-ink" />
               ) : state === 'downloading' ? (
-                <ArrowDownToLine className="h-5 w-5 text-blue-600 animate-bounce" />
+                <ArrowDownToLine className="h-5 w-5 text-info-ink animate-pulse-soft" />
               ) : state === 'error' ? (
-                <AlertCircle className="h-5 w-5 text-red-600" />
+                <AlertCircle className="h-5 w-5 text-danger-ink" />
               ) : (
-                <Download className="h-5 w-5 text-orange-600" />
+                <Download className="h-5 w-5 text-primary-ink" />
               )}
             </div>
 
             {/* Content */}
             <div className="flex-1 min-w-0">
-              <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+              <h4 className="text-sm font-semibold text-ink">
                 {state === 'ready'
                   ? t('update.readyTitle')
                   : state === 'downloading'
@@ -100,7 +100,7 @@ export function UpdateToast() {
                       ? t('update.errorTitle')
                       : t('update.availableTitle')}
               </h4>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              <p className="num text-xs text-muted mt-0.5">
                 {state === 'ready'
                   ? t('update.readyDesc')
                   : state === 'downloading'
@@ -115,7 +115,7 @@ export function UpdateToast() {
             {state !== 'downloading' && (
               <button
                 onClick={() => setDismissed(true)}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                className="h-8 w-8 -me-1 -mt-1 rounded-lg flex items-center justify-center text-faint hover:text-ink hover:bg-surface-2 transition-colors"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -126,7 +126,7 @@ export function UpdateToast() {
           {state === 'available' && (
             <button
               onClick={handleDownload}
-              className="mt-3 w-full py-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 text-white text-sm font-medium hover:from-orange-600 hover:to-orange-700 transition-all shadow-sm"
+              className="tap mt-3 w-full min-h-11 rounded-xl bg-ember text-sm font-semibold shadow-glow hover:brightness-110"
             >
               {t('update.downloadNow')}
             </button>
@@ -135,7 +135,7 @@ export function UpdateToast() {
           {state === 'ready' && (
             <button
               onClick={handleInstall}
-              className="mt-3 w-full py-2 rounded-xl bg-gradient-to-r from-green-500 to-green-600 text-white text-sm font-medium hover:from-green-600 hover:to-green-700 transition-all shadow-sm"
+              className="tap mt-3 w-full min-h-11 rounded-xl bg-success-strong text-white text-sm font-semibold hover:brightness-110"
             >
               {t('update.restartNow')}
             </button>
@@ -144,7 +144,7 @@ export function UpdateToast() {
           {state === 'error' && (
             <button
               onClick={() => setDismissed(true)}
-              className="mt-3 w-full py-2 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
+              className="tap mt-3 w-full min-h-11 rounded-xl bg-surface-2 text-ink-2 text-sm font-semibold hover:bg-surface-3"
             >
               {t('common.close')}
             </button>

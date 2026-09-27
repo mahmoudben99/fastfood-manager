@@ -1,24 +1,53 @@
 import { ReactNode } from 'react'
+import { cn } from './cn'
+
+export type BadgeVariant = 'success' | 'warning' | 'danger' | 'info' | 'default' | 'neutral' | 'primary' | 'solid'
 
 interface BadgeProps {
-  variant?: 'success' | 'warning' | 'danger' | 'info' | 'default'
+  variant?: BadgeVariant
+  size?: 'sm' | 'md'
+  /** Leading status dot in the variant colour. */
+  dot?: boolean
+  icon?: ReactNode
   children: ReactNode
   className?: string
 }
 
-const variants = {
-  success: 'bg-green-100 text-green-700',
-  warning: 'bg-yellow-100 text-yellow-700',
-  danger: 'bg-red-100 text-red-700',
-  info: 'bg-blue-100 text-blue-700',
-  default: 'bg-gray-100 text-gray-700'
+const variants: Record<BadgeVariant, string> = {
+  success: 'bg-success-soft text-success-ink',
+  warning: 'bg-warning-soft text-warning-ink',
+  danger: 'bg-danger-soft text-danger-ink',
+  info: 'bg-info-soft text-info-ink',
+  default: 'bg-surface-2 text-ink-2 border border-line',
+  neutral: 'bg-surface-2 text-ink-2 border border-line',
+  primary: 'bg-primary-soft text-primary-ink',
+  solid: 'bg-ember text-on-primary'
 }
 
-export function Badge({ variant = 'default', children, className = '' }: BadgeProps) {
+const dots: Record<BadgeVariant, string> = {
+  success: 'bg-success',
+  warning: 'bg-warning',
+  danger: 'bg-danger',
+  info: 'bg-info',
+  default: 'bg-faint',
+  neutral: 'bg-faint',
+  primary: 'bg-accent',
+  solid: 'bg-white'
+}
+
+export function Badge({ variant = 'default', size = 'sm', dot, icon, children, className = '' }: BadgeProps) {
   return (
     <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${variants[variant]} ${className}`}
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full font-semibold whitespace-nowrap',
+        size === 'sm' ? 'px-2.5 py-0.5 text-xs' : 'px-3 py-1 text-sm',
+        '[&_svg]:h-3.5 [&_svg]:w-3.5',
+        variants[variant],
+        className
+      )}
     >
+      {dot && <span className={cn('h-1.5 w-1.5 rounded-full', dots[variant])} />}
+      {icon}
       {children}
     </span>
   )

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAppStore } from './store/appStore'
 import { ActivationPage } from './pages/activation/ActivationPage'
@@ -22,6 +22,10 @@ import './pages/kds/kds-i18n'
 import { KdsScreen } from './pages/kds/KdsScreen'
 import { BoardScreen } from './pages/kds/BoardScreen'
 import { KdsSettingsPage } from './pages/kds/KdsSettingsPage'
+import { Toaster } from './components/ui/Toast'
+
+// v4 design-system reference (admin-only, lazy so it never weighs on POS start-up).
+const StyleGuide = lazy(() => import('./styleguide/StyleGuide').then((m) => ({ default: m.StyleGuide })))
 
 export default function App() {
   const [loading, setLoading] = useState(true)
@@ -124,10 +128,10 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-gray-50">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-500 text-sm">Loading...</p>
+      <div className="h-screen flex items-center justify-center bg-canvas">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-11 h-11 rounded-full border-4 border-primary-soft-2 border-t-primary animate-spin" />
+          <p className="text-muted text-sm font-medium">Loading...</p>
         </div>
       </div>
     )
@@ -136,24 +140,25 @@ export default function App() {
   return (
     <HashRouter>
       <UpdateToast />
+      <Toaster />
 
       {/* Tablet new-order toast */}
       {tabletToast && (
-        <div className="fixed top-4 right-4 z-[999] bg-orange-500 text-white px-4 py-3 rounded-xl shadow-lg text-sm font-semibold animate-bounce">
+        <div className="fixed top-4 end-4 z-[999] bg-ember px-5 py-3.5 rounded-2xl shadow-glow text-sm font-bold animate-slide-in-end">
           {tabletToast}
         </div>
       )}
 
       {/* Trial offline countdown banner */}
       {activated && activationType === 'trial' && trialOfflineSecondsLeft !== null && !lockedReason && (
-        <div className="fixed top-0 left-0 right-0 z-[998] bg-red-500 text-white text-center py-2 text-sm font-semibold shadow-md">
+        <div className="num fixed top-0 inset-x-0 z-[998] bg-danger-strong text-white text-center py-2 text-sm font-semibold shadow-e2">
           ⚠️ No internet — app locks in {Math.floor(trialOfflineSecondsLeft / 60)}:{String(trialOfflineSecondsLeft % 60).padStart(2, '0')}
         </div>
       )}
 
       {/* Internet restored toast */}
       {onlineRestoredToast && (
-        <div className="fixed top-4 right-4 z-[999] bg-green-500 text-white px-4 py-3 rounded-xl shadow-lg text-sm font-semibold">
+        <div className="fixed top-4 end-4 z-[999] bg-success-strong text-white px-5 py-3.5 rounded-2xl shadow-e3 text-sm font-bold animate-slide-in-end">
           ✅ Internet connection restored
         </div>
       )}
@@ -173,6 +178,14 @@ export default function App() {
         {/* Kitchen display + customer board: second-screen windows (src/main/kds-window.ts). */}
         <Route path="/kds" element={<KdsScreen />} />
         <Route path="/board" element={<BoardScreen />} />
+        <Route
+          path="/styleguide"
+          element={
+            <Suspense fallback={<div className="h-screen bg-canvas" />}>
+              <StyleGuide />
+            </Suspense>
+          }
+        />
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<Navigate to="/admin/menu" replace />} />
           <Route path="menu" element={<MenuManagement />} />

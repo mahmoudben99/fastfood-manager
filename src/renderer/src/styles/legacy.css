@@ -1,0 +1,101 @@
+/*
+ * LEGACY dark-mode repaint for v3 pages that still use raw gray/orange utilities.
+ * Retuned for v4 "Ember" (warm charcoal, ember accents). New code must NOT rely on these:
+ * use the semantic tokens (bg-surface, text-ink, border-line, ...) which switch theme by themselves.
+ *
+ * Deletion plan (wave 2): once `grep -rE "bg-white|bg-gray-|text-gray-|border-gray-" src/renderer/src/pages`
+ * returns nothing for a group below, delete that group. Groups are tagged [G1]..[G7].
+ * Inputs opt out with a data-ui attribute (the v4 <Input>/<Select>/<Textarea> set it).
+ */
+
+/* [G1] page + card surfaces */
+.dark body { background-color: var(--canvas) !important; color: var(--ink) !important; }
+.dark .bg-white { background-color: var(--surface) !important; }
+.dark .bg-gray-50 { background-color: var(--canvas) !important; }
+.dark .bg-gray-100 { background-color: var(--surface-2) !important; }
+.dark .h-screen.bg-gray-100,
+.dark .min-h-screen.bg-gray-100 { background-color: var(--canvas) !important; }
+.dark .bg-gray-200 { background-color: var(--surface-3) !important; }
+.dark .bg-gray-300 { background-color: var(--line-strong) !important; }
+/* v3 "dark on light" chips (Admin button on the order screen) would vanish on dark surfaces */
+.dark .bg-gray-900 { background-color: #3a332e !important; }
+
+/* [G2] text */
+.dark .text-gray-900,
+.dark .text-gray-800 { color: var(--ink) !important; }
+.dark .text-gray-700 { color: var(--ink-2) !important; }
+.dark .text-gray-600 { color: #cbc1b7 !important; }
+.dark .text-gray-500 { color: var(--muted) !important; }
+.dark .text-gray-400 { color: #8f857b !important; }
+.dark .text-gray-300 { color: #5f5750 !important; }
+
+/* [G3] borders (un-coloured `border` now defaults to var(--line) in base, both themes) */
+.dark .border-gray-100,
+.dark .border-gray-200 { border-color: var(--line) !important; }
+.dark .border-gray-300 { border-color: var(--line-strong) !important; }
+.dark .border-orange-200 { border-color: var(--primary-soft-2) !important; }
+.dark .border-red-200,
+.dark .border-red-300 { border-color: #5a2826 !important; }
+.dark .border-green-200 { border-color: #1f4a2d !important; }
+.dark .border-blue-200 { border-color: #24406b !important; }
+.dark .border-amber-200,
+.dark .border-amber-300 { border-color: #5a4318 !important; }
+
+/* [G4] form controls */
+.dark input:not([data-ui]):not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']),
+.dark select:not([data-ui]),
+.dark textarea:not([data-ui]) {
+  background-color: var(--surface-2) !important;
+  color: var(--ink) !important;
+  border-color: var(--line-strong) !important;
+}
+
+/* [G5] tinted status fills + their text */
+.dark .bg-green-50 { background-color: var(--success-soft) !important; }
+.dark .bg-green-100 { background-color: #173a22 !important; }
+.dark .bg-red-50 { background-color: var(--danger-soft) !important; }
+.dark .bg-red-100 { background-color: #4a211f !important; }
+.dark .bg-orange-50 { background-color: var(--primary-soft) !important; }
+.dark .bg-orange-100 { background-color: var(--primary-soft-2) !important; }
+.dark .bg-blue-50 { background-color: var(--info-soft) !important; }
+.dark .bg-blue-100 { background-color: #1c2e4d !important; }
+.dark .bg-yellow-50,
+.dark .bg-amber-50 { background-color: var(--warning-soft) !important; }
+.dark .bg-yellow-100,
+.dark .bg-amber-100 { background-color: #3d2e12 !important; }
+.dark .text-orange-600,
+.dark .text-orange-700,
+.dark .text-orange-800 { color: var(--primary-ink) !important; }
+.dark .text-red-600,
+.dark .text-red-700,
+.dark .text-red-800 { color: var(--danger-ink) !important; }
+.dark .text-green-600,
+.dark .text-green-700,
+.dark .text-green-800 { color: var(--success-ink) !important; }
+.dark .text-blue-600,
+.dark .text-blue-700,
+.dark .text-blue-800 { color: var(--info-ink) !important; }
+.dark .text-amber-700,
+.dark .text-amber-800,
+.dark .text-amber-900,
+.dark .text-yellow-700 { color: var(--warning-ink) !important; }
+.dark .from-orange-50 { --tw-gradient-from: var(--primary-soft) !important; }
+.dark .to-amber-50 { --tw-gradient-to: var(--surface-2) !important; }
+
+/* [G6] hover / active states */
+.dark .hover\:bg-gray-50:hover { background-color: var(--surface-2) !important; color: var(--ink) !important; }
+.dark .hover\:bg-gray-100:hover { background-color: var(--surface-3) !important; color: var(--ink) !important; }
+.dark .hover\:bg-gray-200:hover { background-color: #3a332e !important; }
+.dark .hover\:bg-orange-50:hover,
+.dark .hover\:bg-orange-100:hover,
+.dark .active\:bg-orange-50:active { background-color: var(--primary-soft-2) !important; }
+.dark .hover\:bg-blue-50:hover { background-color: var(--info-soft) !important; }
+.dark .hover\:bg-yellow-50:hover { background-color: var(--warning-soft) !important; }
+.dark .hover\:bg-green-50:hover { background-color: var(--success-soft) !important; }
+.dark .hover\:bg-red-50:hover,
+.dark .hover\:bg-red-100:hover { background-color: #4a211f !important; }
+
+/* [G7] tables + scrollbars */
+.dark table thead.bg-gray-50 { background-color: var(--surface-2) !important; }
+.dark table tbody tr { border-color: var(--line) !important; }
+.dark table tbody tr:hover td { background-color: var(--surface-2) !important; color: var(--ink) !important; }
