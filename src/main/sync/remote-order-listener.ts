@@ -27,6 +27,8 @@
  * `node --test`, so the module top level must not import electron/supabase).
  */
 
+import type { RemoteLineIssue, RemotePrecheck } from './remote-order-precheck'
+
 // ── Contract types (mirrors remote-order.contract.d.ts + CONTRACT §3) ──────────
 export interface CreateRemoteOrderInput {
   source: 'remote'
@@ -64,7 +66,12 @@ export interface RemoteOrderListenerDeps {
 
 export type AcceptOutcome =
   | { outcome: 'accepted'; dailyNumber: number; duplicate: boolean }
-  | { outcome: 'lost_race' | 'expired' | 'revision_changed' | 'not_found' | 'failed'; message?: string }
+  | {
+      outcome: 'lost_race' | 'expired' | 'revision_changed' | 'not_found' | 'failed'
+      message?: string
+      /** v4: lines that cannot be accepted as sent (required option without default, sold out…). */
+      issues?: RemoteLineIssue[]
+    }
 
 export interface RemoteOrderListener {
   /** One startup/poll sweep; no timers or network subscriptions are started. */
@@ -422,6 +429,35 @@ let pendingRows: any[] = []
 let lastPendingJson = ''
 let machineIdRef = ''
 let resolvedCreateOrder: ((input: CreateRemoteOrderInput) => CreateRemoteOrderResult) | null = null
+/** v4 catalog precheck (remote-order-precheck.ts), resolved lazily like the order service. */
+let precheckRow: ((row: any) => RemotePrecheck) | null = null
+
+async function resolvePrecheck(): Promise<((row: any) => RemotePrecheck) | null> {
+  if (precheckRow) return precheckRow
+  try {
+    const { precheckRemoteItems } = await import('./remote-order-precheck')
+    const { getDb } = await import('../database/connection')
+    precheckRow = (row: any) => precheckRemoteItems(getDb(), row?.items, { phone: row?.customer_phone ?? null })
+    return precheckRow
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Pending rows as the inbox shows them, plus `local_issues` / `blocked_reason`: why the request
+ * cannot be accepted as sent (a required option group without a default, a sold-out item…) and
+ * what the cashier should do. Rows without problems get `local_issues: []`, `blocked_reason: null`.
+ */
+function annotate(row: any): any {
+  if (!precheckRow || !row) return row
+  try {
+    return { ...row, ...precheckRow(row) }
+  } catch (err) {
+    console.error('[RemoteOrder] precheck failed for', row?.id, err)
+    return row
+  }
+}
 
 /**
  * WP-F order service adapter (red-team finding #6): targets WP-F's
@@ -479,8 +515,9 @@ async function fetchCurrentCatalogRevision(): Promise<number | null> {
 }
 
 function publishPending(rows: any[]): void {
-  pendingRows = rows
-  const json = JSON.stringify(rows.map((row) => row?.id))
+  pendingRows = rows.map(annotate)
+  rows = pendingRows
+  const json = JSON.stringify(rows.map((row) => [row?.id, row?.blocked_reason ?? null]))
   if (json !== lastPendingJson) {
     lastPendingJson = json
     try {
@@ -534,6 +571,7 @@ export function startRemoteOrderListener(win: unknown): void {
       })
       // Warm the adapter so the recovery sweep can converge crashed claims early.
       void resolveCreateOrder()
+      await resolvePrecheck()
       // Swap in a wrapper so each poll gets a clean `present` batch.
       const core = listener
       listener = {
@@ -543,6 +581,16 @@ export function startRemoteOrderListener(win: unknown): void {
           publishPending([...collected])
         },
         accept: async (id: string) => {
+          // v4: a request whose lines cannot be created as sent (required option without a
+          // default, sold-out item…) is refused BEFORE the cloud claim, with an actionable reason.
+          const pending = pendingRows.find((row) => String(row?.id) === id)
+          if (pending) {
+            const check = await resolvePrecheck()
+            const fresh = check ? annotate(pending) : pending
+            if (fresh?.blocked_reason) {
+              return { outcome: 'failed', message: fresh.blocked_reason, issues: fresh.local_issues } as AcceptOutcome
+            }
+          }
           const createOrder = await resolveCreateOrder()
           if (!createOrder) {
             return {

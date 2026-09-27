@@ -3,6 +3,8 @@ import { ordersRepo } from '../database/repositories/orders.repo'
 import { stockRepo } from '../database/repositories/stock.repo'
 import { workersRepo } from '../database/repositories/workers.repo'
 import { analyticsRepo } from '../database/repositories/analytics.repo'
+import { summaryLang } from '../sync/order-summary'
+import { formatOrderNotification } from './order-message'
 
 let bot: any = null
 let isRunning = false
@@ -139,15 +141,20 @@ export async function sendMessageToChat(
   }
 }
 
-/** Strict notification entry point; failures remain pending in the durable outbox. */
+/**
+ * Strict notification entry point; failures remain pending in the durable outbox.
+ * v4: HTML message with each line's options, combo picks, discount and delivery fee
+ * (order-message.ts) — the old Markdown text broke on a stray * or _ in a name.
+ */
 export async function sendOrderNotificationStrict(order: any, eventId: number): Promise<void> {
   if (settingsRepo.get('telegram_order_notifications') === 'false') return
   if (!settingsRepo.get('telegram_bot_token') || !settingsRepo.get('telegram_chat_id')) return
-  const items = (order.items || [])
-    .map((item: any) => `${item.quantity}x ${String(item.menu_item_name || 'Item')}`)
-    .join(', ')
-  const message = `New Order #${order.daily_number}\n${items}\nTotal: ${Number(order.total || 0).toFixed(2)} ${getCurrency()}\nEvent: ${eventId}`
-  const sent = await sendMessageToChat(message)
+  const message = formatOrderNotification(order, {
+    currency: getCurrency(),
+    lang: summaryLang(settingsRepo.get('language')),
+    eventId
+  })
+  const sent = await sendMessageToChat(message, 'HTML')
   if (!sent) throw new Error('Telegram notification failed')
 }
 
@@ -161,22 +168,7 @@ export function sendOrderNotification(order: any): void {
   if (!chatId) return
 
   try {
-    const c = escapeHtml(getCurrency())
-    const items = (order.items || [])
-      .map((i: any) => `  ${i.quantity}x ${escapeHtml(i.menu_item_name)}`)
-      .join('\n')
-
-    const typeEmoji = order.order_type === 'delivery' ? '🛵' : order.order_type === 'takeout' ? '🥡' : '🍽️'
-    const typeName = order.order_type === 'delivery' ? 'Delivery' : order.order_type === 'takeout' ? 'Take Out' : 'At Table'
-
-    let msg = `🔔 <b>New Order #${escapeHtml(order.daily_number)}</b>\n`
-    msg += `${typeEmoji} ${typeName}`
-    if (order.table_number) msg += ` — Table ${escapeHtml(order.table_number)}`
-    if (order.customer_phone) msg += `\n📞 ${escapeHtml(order.customer_phone)}`
-    msg += `\n\n${items}\n\n`
-    msg += `💰 <b>Total: ${Number(order.total || 0).toFixed(2)} ${c}</b>`
-    if (order.notes) msg += `\n📝 ${escapeHtml(order.notes)}`
-
+    const msg = formatOrderNotification(order, { currency: getCurrency(), lang: summaryLang(settingsRepo.get('language')) })
     bot.api.sendMessage(chatId, msg, { parse_mode: 'HTML' }).catch(() => {})
   } catch {
     // Silent fail — don't block order creation
