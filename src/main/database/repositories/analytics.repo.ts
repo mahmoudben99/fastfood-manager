@@ -23,12 +23,14 @@ export const analyticsRepo = {
   getProfitSummary(startDate: string, endDate: string) {
     const revenue = getDb()
       .prepare(
-        `SELECT COALESCE(SUM(total), 0) as total_revenue,
+        // v4: revenue excludes delivery fees (usually the driver's), reported separately.
+        `SELECT COALESCE(SUM(total - delivery_fee), 0) as total_revenue,
+                COALESCE(SUM(delivery_fee), 0) as total_delivery_fees,
                 COUNT(*) as order_count
          FROM orders
          WHERE order_date BETWEEN ? AND ? AND status != 'cancelled'`
       )
-      .get(startDate, endDate) as { total_revenue: number; order_count: number }
+      .get(startDate, endDate) as { total_revenue: number; total_delivery_fees: number; order_count: number }
 
     const stockCost = getDb()
       .prepare(
@@ -50,6 +52,7 @@ export const analyticsRepo = {
 
     return {
       total_revenue: revenue.total_revenue,
+      total_delivery_fees: revenue.total_delivery_fees,
       order_count: revenue.order_count,
       total_stock_cost: stockCost.total_stock_cost,
       total_worker_cost: workerCost.total_worker_cost,
@@ -62,7 +65,7 @@ export const analyticsRepo = {
     return getDb()
       .prepare(
         `SELECT order_date as date,
-                SUM(total) as revenue,
+                SUM(total - delivery_fee) as revenue,
                 COUNT(*) as order_count
          FROM orders
          WHERE order_date BETWEEN ? AND ? AND status != 'cancelled'
@@ -179,7 +182,7 @@ export const analyticsRepo = {
     return getDb()
       .prepare(
         `SELECT strftime('%m', order_date) as month,
-                SUM(total) as revenue,
+                SUM(total - delivery_fee) as revenue,
                 COUNT(*) as order_count
          FROM orders
          WHERE strftime('%Y', order_date) = ? AND status != 'cancelled'
@@ -192,7 +195,8 @@ export const analyticsRepo = {
   getOrderTypeBreakdown(startDate: string, endDate: string) {
     return getDb()
       .prepare(
-        `SELECT order_type, COUNT(*) as count, SUM(total) as revenue
+        `SELECT order_type, COUNT(*) as count, SUM(total - delivery_fee) as revenue,
+                SUM(delivery_fee) as delivery_fees
          FROM orders
          WHERE order_date BETWEEN ? AND ? AND status != 'cancelled'
          GROUP BY order_type`

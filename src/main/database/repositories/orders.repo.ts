@@ -8,6 +8,12 @@ import {
 import { orderEditRejectedMessage } from '../../../shared/order-edit'
 import { attachCatalogDetails } from '../../services/order-catalog-effects'
 import type { OrderLineComboChildInput, OrderLineModifierInput } from '../../services/order-catalog'
+// v4 cash: order-level payments / delivery (see services/order-level.ts).
+import type { OrderPaymentInput, OrderPaymentRow } from '../../../shared/cash'
+import type { OrderDelivery, OrderDeliveryInput } from '../../../shared/delivery'
+import { mapDeliveryInput } from '../../services/order-level'
+import { orderPayments } from '../../services/payments'
+import { getOrderDelivery } from '../../services/delivery'
 
 const ORDER_TYPES = new Set(['local', 'takeout', 'delivery'])
 
@@ -33,6 +39,15 @@ export interface Order {
   notes: string | null
   source: OrderSource
   source_request_id: string | null
+  /** v4: total = subtotal − discount_amount + delivery_fee. */
+  delivery_fee?: number
+  shift_id?: number | null
+  /** v4: NULL = pre-v4 order (paid in cash); unpaid | partial | paid | void. */
+  payment_status?: string | null
+  cashier_name?: string | null
+  /** v4, getById only: the payment ledger and delivery details. */
+  payments?: OrderPaymentRow[]
+  delivery?: OrderDelivery | null
   duplicate?: boolean
   /** create() only: documents the order transaction queued for automatic printing. */
   auto_print_documents?: ('receipt' | 'kitchen')[]
@@ -102,6 +117,10 @@ export interface CreateOrderInput {
   source?: OrderSource
   source_request_id?: string
   operator?: string
+  /** v4: omitted = paid in cash in full (POS); [] = unpaid (pay later / COD). */
+  payments?: OrderPaymentInput[]
+  /** v4: delivery details for order_type 'delivery'. */
+  delivery?: OrderDeliveryInput
   items: {
     menu_item_id: number
     quantity: number
@@ -166,7 +185,9 @@ export const ordersRepo = {
       applyAutoPromotions: input.discount_amount === undefined,
       explicitDiscountAmount: input.discount_amount,
       discountDetails: input.discount_details,
-      operator: input.operator
+      operator: input.operator,
+      payments: input.payments,
+      delivery: mapDeliveryInput(input.delivery) ?? undefined
     })
     if (!result.ok) throw serviceError(result)
     const autoPrintDocuments = (getDb().prepare(
@@ -182,6 +203,7 @@ export const ordersRepo = {
   getById(id: number): Order | undefined {
     const order = getDb().prepare('SELECT * FROM orders WHERE id = ?').get(id) as Order | undefined
     if (order) order.items = this.getOrderItems(id)
+    if (order) Object.assign(order, { payments: orderPayments(getDb(), id), delivery: getOrderDelivery(getDb(), id) }) // v4
     return order
   },
 
@@ -231,11 +253,11 @@ export const ordersRepo = {
     return completed
   },
 
-  updateStatus(id: number, status: string): Order | undefined {
+  updateStatus(id: number, status: string, meta?: { operator?: string; reason?: string }): Order | undefined {
     if (!['pending', 'preparing', 'completed', 'cancelled'].includes(status)) {
       throw new Error('Invalid order status')
     }
-    const result = createOrderService({ db: getDb() }).updateOrderStatus(id, status as OrderStatus)
+    const result = createOrderService({ db: getDb() }).updateOrderStatus(id, status as OrderStatus, meta)
     if (!result.ok) {
       if (result.code === 'not_found') return undefined
       throw serviceError(result)
@@ -243,8 +265,8 @@ export const ordersRepo = {
     return this.getById(id)
   },
 
-  cancelOrder(id: number): Order | undefined {
-    const result = createOrderService({ db: getDb() }).updateOrderStatus(id, 'cancelled')
+  cancelOrder(id: number, meta?: { operator?: string; reason?: string }): Order | undefined {
+    const result = createOrderService({ db: getDb() }).updateOrderStatus(id, 'cancelled', meta)
     if (!result.ok) {
       if (result.code === 'not_found') return undefined
       throw serviceError(result)
@@ -263,7 +285,10 @@ export const ordersRepo = {
       customer_phone?: string | null
       customer_name?: string | null
       notes?: string | null
-    }
+      /** v4: delivery patch (null = none); the fee follows the order type. */
+      delivery?: OrderDeliveryInput | null
+    },
+    operator?: string
   ): Order | undefined {
     // Every refusal is an explicit error (never an unchanged row), so no caller can mistake a
     // rejected edit for a saved one. The renderer maps the token to a translated message.
@@ -302,7 +327,9 @@ export const ordersRepo = {
       })),
       discountAmount,
       discountDetails,
-      header: Object.keys(header).length > 0 ? header : undefined
+      header: Object.keys(header).length > 0 ? header : undefined,
+      delivery: info && 'delivery' in info ? mapDeliveryInput(info.delivery) : undefined,
+      operator
     })
     if (!result.ok) {
       if (result.code === 'not_found' || result.code === 'line_edit_not_allowed') {

@@ -3,6 +3,7 @@ import {
   receiptLang, reprintBannerHTML, type ReceiptLabels
 } from './print-format'
 import { receiptRows, receiptSubLinesHTML } from './print-catalog'
+import { receiptDeliveryHTML, receiptFeeRowsHTML, receiptPaymentsHTML } from './print-cash'
 
 /** Everything about the destination printer / run that is not part of the order or settings. */
 export interface ReceiptContext {
@@ -120,6 +121,7 @@ export async function buildFromTemplate(
           // Customer name + phone: delivery receipts need the phone for the driver.
           if (order.customer_name) body += line(`${esc(L.customer)}: ${esc(order.customer_name)}`)
           if (order.customer_phone) body += line(`${esc(L.phone)}: ${esc(order.customer_phone)}`, 'font-weight:bold;')
+          body += receiptDeliveryHTML(order, settings)
           body += '</div>'
           break
         }
@@ -141,6 +143,7 @@ export async function buildFromTemplate(
           if (Number(order.discount_amount) > 0) {
             body += `<div style="text-align:${align};font-size:${base - 2}px;color:#666;">${esc(order.discount_details || L.discount)}: -${money(order.discount_amount)}</div>`
           }
+          body += `<div style="font-size:${base - 1}px;">${receiptFeeRowsHTML(order, settings, true, 0)}${receiptPaymentsHTML(order, settings)}</div>`
           break
         case 'divider':
           body += dividerHTML(cfg)

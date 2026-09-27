@@ -20,6 +20,7 @@ import { migration018 } from './018_order_effects_hardening'
 import { migration019 } from './019_order_item_name_snapshot'
 import { migration020 } from './020_category_soft_delete'
 import { migration021 } from './021_modifiers_combos'
+import { migration022 } from './022_cash_shifts_delivery'
 import { migration024 } from './024_kds_tickets'
 
 interface Migration {
@@ -50,6 +51,7 @@ const migrations: Migration[] = [
   migration019,
   migration020,
   migration021,
+  migration022,
   migration024
 ]
 

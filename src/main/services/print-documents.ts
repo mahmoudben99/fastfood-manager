@@ -7,6 +7,7 @@ import {
   isComboChild, kitchenCatalogCSS, kitchenComboHeaderHTML, kitchenModifiersHTML, receiptRows, receiptSubLinesHTML
 } from './print-catalog'
 import type { ReceiptContext } from './receipt-template'
+import { kitchenDeliveryHTML, receiptDeliveryHTML, receiptFeeRowsHTML, receiptPaymentsHTML } from './print-cash'
 
 export type PrintEventType = 'new' | 'updated' | 'cancelled' | 'restored'
 
@@ -54,6 +55,7 @@ export function buildDefaultReceiptHTML(order: any, settings: Record<string, str
   <div>${esc(new Date(order.created_at).toLocaleString())}</div>
   ${order.table_number ? `<div>${esc(L.table)}: ${esc(order.table_number)}</div>` : ''}
   ${order.customer_phone ? `<div>${esc(L.phone)}: ${esc(order.customer_phone)}</div>` : ''}
+  ${receiptDeliveryHTML(order, settings)}
   <div class="line"></div>
   ${receiptRows(items).map((item: any) => `
     <div class="item">
@@ -74,10 +76,12 @@ export function buildDefaultReceiptHTML(order: any, settings: Record<string, str
     <span>${esc(order.discount_details || L.discount)}</span>
     <span>-${discount.toFixed(2)} ${currency}</span>
   </div>` : ''}
+  ${receiptFeeRowsHTML(order, settings, discount > 0, subtotal)}
   <div class="row total-row">
     <span>${esc(L.total.toUpperCase())}</span>
     <span>${total.toFixed(2)} ${currency}</span>
   </div>
+  ${receiptPaymentsHTML(order, settings)}
   <div class="line"></div>
   ${order.notes ? `<div>${esc(order.notes)}</div><div class="line"></div>` : ''}
   <div class="center" style="margin-top:4px; font-size:10px">${esc(L.thanks)}</div>
@@ -155,6 +159,7 @@ export function buildKitchenHTML(order: any, items: any[], settings: Record<stri
   <div class="center">${kitchenOrderType(order.order_type)}</div>
   ${order.table_number ? `<div class="center bold big">TABLE ${esc(order.table_number)}</div>` : ''}
   ${order.customer_name ? `<div class="center">${esc(String(order.customer_name).toUpperCase())}</div>` : ''}
+  ${kitchenDeliveryHTML(order)}
   ${ctx.workerName ? `<div class="center"><div class="worker-badge">FOR: ${esc(ctx.workerName.toUpperCase())}</div></div>` : ''}
   <div class="line"></div>
   ${lines.map((item: any, index: number) => `
