@@ -121,6 +121,8 @@ export interface CreateOrderInput {
   payments?: OrderPaymentInput[]
   /** v4: delivery details for order_type 'delivery'. */
   delivery?: OrderDeliveryInput
+  /** v4 fiscal: sales channel ('yassir' / a platform id for delivery orders); default = order_type. */
+  channel?: string
   items: {
     menu_item_id: number
     quantity: number
@@ -187,7 +189,8 @@ export const ordersRepo = {
       discountDetails: input.discount_details,
       operator: input.operator,
       payments: input.payments,
-      delivery: mapDeliveryInput(input.delivery) ?? undefined
+      delivery: mapDeliveryInput(input.delivery) ?? undefined,
+      channel: input.channel // v4 fiscal
     })
     if (!result.ok) throw serviceError(result)
     const autoPrintDocuments = (getDb().prepare(
@@ -287,6 +290,8 @@ export const ordersRepo = {
       notes?: string | null
       /** v4: delivery patch (null = none); the fee follows the order type. */
       delivery?: OrderDeliveryInput | null
+      /** v4 fiscal: sales channel (platform for delivery orders). */
+      channel?: string
     },
     operator?: string
   ): Order | undefined {
@@ -297,6 +302,7 @@ export const ordersRepo = {
 
     const header: {
       orderType?: 'local' | 'takeout' | 'delivery'
+      channel?: string
       tableNumber?: string | null
       note?: string | null
       customer?: { phone?: string | null; name?: string | null }
@@ -305,6 +311,7 @@ export const ordersRepo = {
       if (!ORDER_TYPES.has(info.order_type)) throw new Error('Invalid order type')
       header.orderType = info.order_type as 'local' | 'takeout' | 'delivery'
     }
+    if (info?.channel !== undefined) header.channel = info.channel // v4 fiscal
     if (info && 'table_number' in info) header.tableNumber = info.table_number
     if (info && 'notes' in info) header.note = info.notes
     if (info && ('customer_phone' in info || 'customer_name' in info)) {

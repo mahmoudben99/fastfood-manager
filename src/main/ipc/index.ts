@@ -20,6 +20,8 @@ import { registerCatalogHandlers } from './catalog.ipc'
 import { registerPaymentsHandlers } from './payments.ipc'
 import { registerShiftsHandlers } from './shifts.ipc'
 import { registerDeliveryHandlers } from './delivery.ipc'
+import { registerFiscalHandlers } from './fiscal.ipc'
+import { registerChannelsHandlers } from './channels.ipc'
 
 export function registerAllHandlers(): void {
   registerActivationHandlers()
@@ -45,4 +47,7 @@ export function registerAllHandlers(): void {
   registerPaymentsHandlers()
   registerShiftsHandlers()
   registerDeliveryHandlers()
+  // v4 fiscal compliance (journal, archive, attestation) + sales channels / availability.
+  registerFiscalHandlers()
+  registerChannelsHandlers()
 }
