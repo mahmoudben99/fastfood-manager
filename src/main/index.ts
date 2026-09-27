@@ -23,6 +23,7 @@ import { startRemoteOrderListener, stopRemoteOrderListener } from './sync/remote
 import { stopPrintJobProcessor } from './ipc/printer.ipc'
 import { startOrderEffectsRuntime, stopOrderEffectsRuntime } from './services/order-effects-runtime'
 import { resolveLogoFile } from './services/logo'
+import { startInsightsScheduler, stopInsightsScheduler } from './services/insights/runtime'
 
 // Enhanced logging function
 function log(message: string, isError = false): void {
@@ -387,6 +388,7 @@ function setupAutoUpdater(): void {
     await stopTabletServer()
     await stopPrintJobProcessor()
     await stopOrderEffectsRuntime()
+    await stopInsightsScheduler()
     closeDatabase()
     // Destroy all windows to release file locks on app.asar before the NSIS installer runs.
     BrowserWindow.getAllWindows().forEach((win) => {
@@ -440,6 +442,8 @@ app.whenReady().then(async () => {
     registerAllHandlers()
     registerTabletHandlers(() => mainWindow)
     startOrderEffectsRuntime()
+    // Prep plan, owner alerts, upsell cache warm-up (Telegram only when configured).
+    startInsightsScheduler()
 
     // Allow trial activation page to start the watcher mid-session (after factory reset)
     ipcMain.handle('trial:ensureWatcher', () => {
@@ -675,6 +679,7 @@ app.on('window-all-closed', async () => {
   await stopTabletServer()
   await stopPrintJobProcessor()
   await stopOrderEffectsRuntime()
+  await stopInsightsScheduler()
   closeDatabase()
   app.quit()
 })

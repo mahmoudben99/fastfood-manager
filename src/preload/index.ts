@@ -1,5 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { SetupImportPayload, SetupImportResult } from '../shared/excel-import'
+import type {
+  DashboardSummary, InsightAlert, InsightsPrintResult, InsightsSendResult, InsightsSettings,
+  MenuProfitReport, PrepForecast, RushHoursReport, ShoppingList, UpsellSuggestion
+} from '../shared/insights'
 
 /** Manual print options. reprint=true prints a visible "REPRINT" banner on the ticket. */
 export type PrintOpts = { reprint?: boolean }
@@ -151,6 +155,45 @@ const api = {
       ipcRenderer.invoke('analytics:getMonthlyTrends', year),
     getOrderTypeBreakdown: (startDate: string, endDate: string) =>
       ipcRenderer.invoke('analytics:getOrderTypeBreakdown', startDate, endDate)
+  },
+  /**
+   * Smart insights (v4). Types: src/shared/insights.ts. Dates are local 'YYYY-MM-DD'; omitted
+   * date = today. Invalid input rejects with a readable message.
+   */
+  insights: {
+    /** Expected units per active menu item for a date (same-weekday weighted average). */
+    getForecast: (date?: string, options?: { trend?: boolean }): Promise<PrepForecast> =>
+      ipcRenderer.invoke('insights:getForecast', date, options),
+    /** Ingredient needs vs stock/thresholds → what to buy, with estimated cost. Includes the forecast. */
+    getShoppingList: (date?: string): Promise<ShoppingList> =>
+      ipcRenderer.invoke('insights:getShoppingList', date),
+    /** Printable prep + shopping list HTML, sized for the receipt printer (preview). */
+    getPrepListHtml: (date?: string): Promise<string> =>
+      ipcRenderer.invoke('insights:getPrepListHtml', date),
+    /** Prints the prep + shopping list on the receipt printer. */
+    printPrepList: (date?: string): Promise<InsightsPrintResult> =>
+      ipcRenderer.invoke('insights:printPrepList', date),
+    /** Sends the morning prep message to the owner's Telegram now (manual / test). */
+    sendMorningPrep: (date?: string): Promise<InsightsSendResult> =>
+      ipcRenderer.invoke('insights:sendMorningPrep', date),
+    /** Recipe cost, margin, food-cost %, flags and menu-engineering quadrant over a range. */
+    getMenuProfit: (startDate: string, endDate: string): Promise<MenuProfitReport> =>
+      ipcRenderer.invoke('insights:getMenuProfit', startDate, endDate),
+    /** "62% also take …" for the order screen; cached model, sub-millisecond lookups. */
+    getUpsellSuggestions: (cartMenuItemIds: number[], limit = 3): Promise<UpsellSuggestion[]> =>
+      ipcRenderer.invoke('insights:getUpsellSuggestions', cartMenuItemIds, limit),
+    /** Weekday × hour heatmap, best/worst hours and staffing blocks. */
+    getRushHours: (startDate: string, endDate: string): Promise<RushHoursReport> =>
+      ipcRenderer.invoke('insights:getRushHours', startDate, endDate),
+    /** Alerts detected right now (all kinds), with `sent` = already sent to Telegram today. */
+    getAlerts: (): Promise<InsightAlert[]> => ipcRenderer.invoke('insights:getAlerts'),
+    /** Admin home: today vs last week, 14-day sparkline, top items, low stock, forecast, alerts. */
+    getDashboardSummary: (): Promise<DashboardSummary> =>
+      ipcRenderer.invoke('insights:getDashboardSummary'),
+    getSettings: (): Promise<InsightsSettings> => ipcRenderer.invoke('insights:getSettings'),
+    /** Validates and saves a partial patch; resolves to the full saved settings. */
+    saveSettings: (patch: Partial<InsightsSettings>): Promise<InsightsSettings> =>
+      ipcRenderer.invoke('insights:saveSettings', patch)
   },
   backup: {
     getPaths: () => ipcRenderer.invoke('backup:getPaths'),

@@ -5,6 +5,7 @@ import { registerStockHandlers } from './stock.ipc'
 import { registerWorkersHandlers } from './workers.ipc'
 import { registerOrdersHandlers } from './orders.ipc'
 import { registerAnalyticsHandlers } from './analytics.ipc'
+import { registerInsightsHandlers } from './insights.ipc'
 import { registerBackupHandlers } from './backup.ipc'
 import { registerPrinterHandlers } from './printer.ipc'
 import { registerActivationHandlers } from './activation.ipc'
@@ -26,6 +27,7 @@ export function registerAllHandlers(): void {
   registerWorkersHandlers()
   registerOrdersHandlers()
   registerAnalyticsHandlers()
+  registerInsightsHandlers()
   registerBackupHandlers()
   registerPrinterHandlers()
   registerTelegramHandlers()
