@@ -16,6 +16,8 @@ import { computeAutoDiscount, sanitizeOrderItems } from '../services/order-promo
 import { getLogoDataUrlSync } from '../services/logo'
 import { getDb } from '../database/connection'
 import { closeKdsStreams, handleKdsRequest, isKdsRoute } from './kds-http'
+import { handleTabletApiRequest, isTabletApiRoute, type TabletApiDeps } from './tablet-api'
+import { handleTabletFontRequest, isTabletFontRoute } from './tablet-fonts'
 
 let server: http.Server | null = null
 let currentPort = 3333
@@ -227,6 +229,14 @@ function validateSession(authHeader: string | undefined): boolean {
   return token === expected
 }
 
+// v4 waiter tablet: menu / options / quote / order-status reads (tablet-api.ts).
+const tabletApiDeps: TabletApiDeps = {
+  getDb,
+  isAuthorized: (req) => validateSession(req.headers['authorization']),
+  listMenu: () => ({ categories: categoriesRepo.getAll(), items: menuRepo.getAll() }),
+  currency: () => settingsRepo.get('currency_symbol') || settingsRepo.get('currency') || 'DA'
+}
+
 function sendJSON(res: http.ServerResponse, status: number, data: unknown): void {
   const body = JSON.stringify(data)
   res.writeHead(status, {
@@ -296,12 +306,24 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
     return
   }
 
+  // Waiter tablet API (menu, item options, quote, order status) and its bundled fonts.
+  if (isTabletApiRoute(url.pathname)) {
+    handleTabletApiRequest(req, res, url, tabletApiDeps)
+    return
+  }
+  if (method === 'GET' && isTabletFontRoute(url.pathname)) {
+    handleTabletFontRequest(res, url.pathname)
+    return
+  }
+
   // Serve main tablet UI
   if (method === 'GET' && url.pathname === '/') {
     const lang = settingsRepo.get('language') ?? 'en'
     const pinEnabled = settingsRepo.get('tablet_pin_enabled') === '1'
     const pinVersion = settingsRepo.get('tablet_pin_version') ?? '1'
-    const html = getTabletHTML(lang, pinEnabled, pinVersion)
+    const html = getTabletHTML(lang, pinEnabled, pinVersion, {
+      restaurantName: settingsRepo.get('restaurant_name') || ''
+    })
     res.writeHead(200, {
       'Content-Type': 'text/html; charset=utf-8',
       'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -309,15 +331,6 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
       'Expires': '0'
     })
     res.end(html)
-    return
-  }
-
-  // Menu data (no auth — menu items are not sensitive)
-  if (method === 'GET' && url.pathname === '/api/menu') {
-    const categories = categoriesRepo.getAll()
-    const items = menuRepo.getAll()
-    const currency = settingsRepo.get('currency_symbol') || settingsRepo.get('currency') || 'DA'
-    sendJSON(res, 200, { categories, items, currency })
     return
   }
 
@@ -532,6 +545,9 @@ export async function stopTabletServer(): Promise<void> {
 export function isTabletServerRunning(): boolean {
   return server !== null
 }
+
+/** Test seam: the LAN request handler without binding 0.0.0.0 (tests listen on 127.0.0.1). */
+export const handleTabletHttpRequest = handleRequest
 
 export async function getTabletServerStatus(): Promise<{
   running: boolean
