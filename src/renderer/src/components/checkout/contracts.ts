@@ -32,6 +32,8 @@ export interface DeliveryPanelProps {
   onChange: (value: DeliveryDraft | null) => void
   /** Order subtotal after discount (for the zone minimum check). */
   subtotal: number
+  /** Shows "Repeat last order" in the customer lookup (same as CustomerLookupProps.onRepeatOrder). */
+  onRepeatOrder?: (lines: RepeatLine[]) => void
 }
 
 /** A line to re-add to the cart from a customer's previous order. */
@@ -47,6 +49,10 @@ export interface CustomerPick {
   id?: number
   phone: string
   name?: string | null
+  /** When the customer agreed to keep their phone + addresses (law 18-07); absent/null = no consent on file. */
+  consent_at?: string | null
+  /** Previous orders (visits); absent for a new number. */
+  order_count?: number
 }
 
 export interface CustomerLookupProps {
@@ -55,11 +61,17 @@ export interface CustomerLookupProps {
   onSelect: (customer: CustomerPick) => void
   /** "Repeat last order" — lines of the customer's most recent non-cancelled order. */
   onRepeatOrder?: (lines: RepeatLine[]) => void
+  /** The selection was cleared ("Change customer"). */
+  onClear?: () => void
+  /** Focus the search field on mount (physical keyboard tills). */
+  autoFocus?: boolean
 }
 
 export interface ShiftBarProps {
   /** Compact pill for the order screen header; full panel otherwise. */
   compact?: boolean
+  /** Tab shown first when a shift is open (default 'summary' = X report). */
+  initialTab?: 'summary' | 'cash' | 'close'
 }
 
 /**

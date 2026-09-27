@@ -1,6 +1,8 @@
 import { getDb } from '../connection'
 import { normalizeAlgerianPhone } from '../../domain/customer-phone'
 import { getFavoriteItems as getFavoriteItemsForDb } from '../../services/customer-favorites'
+import { getLastOrder, recordConsent, withdrawConsent } from '../../services/customer-history'
+import type { ConsentInput, CustomerRecord, LastOrderResult } from '../../../shared/customer-lookup'
 
 export interface Customer {
   id: number
@@ -11,6 +13,9 @@ export interface Customer {
   order_count: number
   last_order_date: string | null
   notes: string | null
+  /** v4 (migration 026): personal-data consent (law 18-07); NULL = none on file. */
+  consent_at: string | null
+  consent_version: string | null
   created_at: string
   updated_at: string
 }
@@ -64,6 +69,21 @@ export function createCustomersRepository(database: typeof getDb = getDb) {
 
   getFavoriteItems(customerId: number) {
     return getFavoriteItemsForDb(database(), customerId)
+  },
+
+  /** v4: most recent non-cancelled order as lines that can be ordered again now ("repeat"). */
+  getLastOrder(customerId: number): LastOrderResult {
+    return getLastOrder(database(), Number(customerId))
+  },
+
+  /** v4: the customer agreed to keep their phone + delivery addresses (law 18-07). */
+  recordConsent(input: ConsentInput): CustomerRecord {
+    return recordConsent(database(), input)
+  },
+
+  /** v4: consent withdrawn — saved addresses are deleted and the consent stamp cleared. */
+  withdrawConsent(customerId: number): CustomerRecord {
+    return withdrawConsent(database(), Number(customerId))
   },
 
   upsertFromOrder(phone: string, orderTotal: number, name?: string): number {

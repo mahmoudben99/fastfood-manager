@@ -29,6 +29,7 @@ import type {
 } from '../shared/fiscal'
 import type { ChannelPrices, CustomPlatformInput, SalesChannel } from '../shared/channels'
 import type { AvailabilityEnforce, AvailabilityRule, AvailabilityState, AvailabilityTarget } from '../shared/availability'
+import type { ConsentInput, CustomerRecord, LastOrderResult } from '../shared/customer-lookup'
 
 /** Manual print options. reprint=true prints a visible "REPRINT" banner on the ticket. */
 export type PrintOpts = { reprint?: boolean }
@@ -561,7 +562,13 @@ const api = {
     getById: (id: number) => ipcRenderer.invoke('customers:getById', id),
     getOrders: (customerId: number) => ipcRenderer.invoke('customers:getOrders', customerId),
     getFavorites: (customerId: number) => ipcRenderer.invoke('customers:getFavorites', customerId),
-    update: (id: number, data: any) => ipcRenderer.invoke('customers:update', id, data)
+    update: (id: number, data: any) => ipcRenderer.invoke('customers:update', id, data),
+    /** v4: last non-cancelled order as re-orderable lines + skipped ones (sold out / removed). */
+    getLastOrder: (customerId: number): Promise<LastOrderResult> => ipcRenderer.invoke('customers:getLastOrder', customerId),
+    /** v4: customer agreed to keep phone + addresses (law 18-07); creates the customer by phone if new. */
+    recordConsent: (input: ConsentInput): Promise<CustomerRecord> => ipcRenderer.invoke('customers:recordConsent', input),
+    /** v4: consent withdrawn — deletes saved addresses, clears consent. */
+    withdrawConsent: (customerId: number): Promise<CustomerRecord> => ipcRenderer.invoke('customers:withdrawConsent', customerId)
   },
   promotions: {
     getAll: () => ipcRenderer.invoke('promotions:getAll'),
