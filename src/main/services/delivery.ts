@@ -72,6 +72,19 @@ export function deleteZone(db: Database.Database, id: number): boolean {
 }
 
 // ── Customer addresses ──
+
+/**
+ * Law 18-07 (personal data): an address goes into a customer's address book only when that
+ * customer's consent is recorded (customers.consent_at, migration 026). Without it the address
+ * stays on the order only. Before migration 026 the column does not exist: previous behaviour.
+ */
+export function customerConsentsToAddressBook(db: Database.Database, customerId: number): boolean {
+  const column = db.prepare("SELECT 1 FROM pragma_table_info('customers') WHERE name = 'consent_at'").get()
+  if (!column) return true
+  const row = db.prepare('SELECT consent_at FROM customers WHERE id = ?').get(customerId) as { consent_at: string | null } | undefined
+  return Boolean(row?.consent_at)
+}
+
 export function listAddresses(db: Database.Database, customerId: number): CustomerAddress[] {
   return db.prepare(
     'SELECT * FROM customer_addresses WHERE customer_id = ? ORDER BY is_default DESC, last_used_at DESC, id DESC'
@@ -108,6 +121,9 @@ export function saveAddress(db: Database.Database, input: CustomerAddressInput):
   }
   return db.transaction(() => {
     const customerId = customerIdFor(db, input)
+    if (!customerConsentsToAddressBook(db, customerId)) {
+      throw new CashError('not_allowed', 'CONSENT_REQUIRED: the customer has not agreed to keep their address')
+    }
     if (input.is_default) db.prepare('UPDATE customer_addresses SET is_default = 0 WHERE customer_id = ?').run(customerId)
     const values = [cleanText(input.label, 40), address, zoneId, cleanText(input.notes, 200), input.is_default ? 1 : 0]
     let id = input.id
@@ -197,12 +213,15 @@ export function resolveDelivery(
   }
 }
 
-/** Insert or patch the order's delivery row (status and timeline are kept on an update). */
+/**
+ * Insert or patch the order's delivery row (status and timeline are kept on an update).
+ * `saveAddress` adds the address to the customer's book only with recorded consent.
+ */
 export function writeOrderDelivery(db: Database.Database, orderId: number, resolved: ResolvedDelivery, now: Date): void {
   let addressId = resolved.addressId
   if (resolved.saveAddress && addressId === null) {
     const customer = db.prepare('SELECT customer_id FROM orders WHERE id = ?').get(orderId) as { customer_id: number | null }
-    if (customer?.customer_id) {
+    if (customer?.customer_id && customerConsentsToAddressBook(db, customer.customer_id)) {
       addressId = Number(db.prepare(
         'INSERT INTO customer_addresses (customer_id, address, zone_id, last_used_at) VALUES (?, ?, ?, ?)'
       ).run(customer.customer_id, resolved.address, resolved.zoneId, now.toISOString()).lastInsertRowid)

@@ -226,14 +226,18 @@ export function keepAutoSettled(db: Database.Database, orderId: number, ctx: Pay
   }, { ...ctx, auto: true })
 }
 
-/** Non-cancelled orders with a balance due (pay later / COD), newest first. */
+/**
+ * Non-cancelled orders with a balance due (pay later / COD), newest first. `refunded` = money handed
+ * back by hand (a partial refund keeps the total, so it shows up here as a balance due).
+ */
 export function listUnpaidOrders(db: Database.Database, options: { date?: string; shiftId?: number } = {}): {
   id: number; daily_number: number; order_date: string; order_type: string; customer_name: string | null
-  customer_phone: string | null; total: number; paid: number; balance_due: number; payment_status: string
+  customer_phone: string | null; total: number; paid: number; balance_due: number; payment_status: string; refunded: number
 }[] {
   return db.prepare(
     `SELECT o.id, o.daily_number, o.order_date, o.order_type, o.customer_name, o.customer_phone, o.total,
-            COALESCE(SUM(p.amount), 0) AS paid, o.total - COALESCE(SUM(p.amount), 0) AS balance_due, o.payment_status
+            COALESCE(SUM(p.amount), 0) AS paid, o.total - COALESCE(SUM(p.amount), 0) AS balance_due, o.payment_status,
+            COALESCE(SUM(CASE WHEN p.kind = 'refund' AND p.auto = 0 THEN -p.amount ELSE 0 END), 0) AS refunded
      FROM orders o LEFT JOIN order_payments p ON p.order_id = o.id
      WHERE o.status != 'cancelled' AND o.payment_status IN ('unpaid', 'partial')
        AND (? IS NULL OR o.order_date = ?) AND (? IS NULL OR o.shift_id = ?)

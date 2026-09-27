@@ -408,6 +408,20 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
           id: order.id
         })
       } catch (e) {
+        // v4: "require an open shift" is a normal refusal, not a server fault — answer 409 with a
+        // message the tablet shows as-is (its alert() prints data.error).
+        if (String(e instanceof Error ? e.message : e).includes('NO_OPEN_SHIFT')) {
+          const lang = settingsRepo.get('language')
+          sendJSON(res, 409, {
+            code: 'NO_OPEN_SHIFT',
+            error: lang === 'ar'
+              ? 'الصندوق مغلق حاليًا. يرجى الطلب من الموظفين فتح الوردية ثم إعادة المحاولة.'
+              : lang === 'fr'
+                ? "La caisse est fermée pour le moment. Demandez au personnel d'ouvrir le service, puis réessayez."
+                : 'The till is closed right now. Please ask the staff to open the shift, then try again.'
+          })
+          return
+        }
         sendJSON(res, 500, { error: String(e) })
       }
     })
